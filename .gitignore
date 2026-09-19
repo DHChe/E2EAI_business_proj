@@ -1,0 +1,17 @@
+# graft's local graph cache — regenerable, not committed (run `graft build`).
+/graft/
+
+# oh-my-claudecode runtime state; project-scoped skills are the committable exception.
+/.omc/*
+!/.omc/skills/
+
+# Claude Code per-user settings (.claude/settings.json is shared and committed).
+.claude/settings.local.json
+
+# Secrets
+.env
+.env.*
+!.env.example
+
+# macOS
+.DS_Store
