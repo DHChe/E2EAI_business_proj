@@ -68,9 +68,15 @@ refs: [TRV-3-4]      # 다른 조항 참조
 discretion: true
 discretion_basis: 부득이한 사유        # 재량을 만드는 문구. 본문에 그대로 있어야 한다
 evidence: [초과 금액, 사유, 대체안의 견적]   # 판단에 붙여야 할 것
+facts_to_ask: [대체안을 쓰지 않은 이유]      # 물어볼 사실
+decided_by: 결재권자                      # 판단 책임자
+must_not_auto_decide: [부득이한 사유의 인정]  # 금지된 자동 확정
 ```
 
-에이전트는 `discretion: true`인 조항을 스스로 확정하지 않고, `evidence`를 모아 결재권자에게 올린다.
+에이전트는 `discretion: true`인 조항을 스스로 확정하지 않고, `facts_to_ask`를 묻고 `evidence`를 모아
+`decided_by`에게 올린다. `must_not_auto_decide`에 적힌 것은 에이전트가 어떤 경우에도 값으로 정하지 않는다.
+뒤의 세 칸은 2026-09-21 교차 대조 결정(D-5)으로 더했다 — 재량 조항은 넷(`TRV-7-1` · `TRV-12-1` · `TRV-13-4` · `PRC-13-5`)이고,
+네 블록 모두 이 세 칸을 갖는다.
 
 ### ④ 판(版)은 문서 단위와 조항 단위 둘 다다
 
@@ -92,7 +98,7 @@ evidence: [초과 금액, 사유, 대체안의 견적]   # 판단에 붙여야 �
 | L2 | 조항 식별자는 문서 안에서 유일하다 |
 | L3 | `refs`의 모든 식별자가 실재한다(문서 사이 참조 포함) |
 | L4 | 조항 본문의 아라비아 숫자가 조·항·호 번호와 법령 조문 번호뿐이다 |
-| L5 | `discretion: true`인 블록은 `discretion_basis`를 갖고, 그 문구가 본문에 그대로 있다 |
+| L5 | `discretion: true`인 블록은 `discretion_basis`를 갖고, 그 문구가 본문에 그대로 있다. `facts_to_ask` · `decided_by` · `must_not_auto_decide`도 갖는다 |
 | L6 | 문서 머리 블록에 `edition`과 `effective_from`이 있다 |
 | L7 | `kind: example` 블록의 기대값이 규칙을 실제로 적용한 결과와 같다 |
 
