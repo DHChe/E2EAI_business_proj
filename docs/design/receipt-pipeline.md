@@ -823,9 +823,18 @@ export type MatchKey =
   | "사업자등록번호 보조"
   | "사람 선택";
 
+/**
+ * `대사 불일치`의 차액 칸. 같은 통화면 차액이고, 통화가 다르면 빼지 않는다 —
+ * "통화 다름 — 산출하지 않음"으로 두고 증빙 금액과 카드 줄 원거래 금액을 둘 다 그대로 남긴다.
+ * 원화 환산은 #16 `TRV-14`가 정책 대조에서 한다(§7.4). 0 차액이나 임의 환율로 채우지 않는다.
+ */
+export type AmountDifference =
+  | { kind: "차액"; amount: Money }
+  | { kind: "통화 다름 — 산출하지 않음"; evidenceAmount: Money; cardLineOriginal: Money };
+
 export type ReconciliationOutcome =
   | { kind: "대사 완료"; cardLineId: string; key: MatchKey }
-  | { kind: "대사 불일치"; cardLineId: string; key: MatchKey; difference: Money }
+  | { kind: "대사 불일치"; cardLineId: string; key: MatchKey; difference: AmountDifference }
   | { kind: "짝 없음(증빙)" }
   | { kind: "짝 없음(카드)"; cardLineId: string };
 
@@ -879,6 +888,7 @@ export type PolicyFacts = {
   route: { from: PolicyFact<string>; to: PolicyFact<string> };
   amountKrw: PolicyFact<Money>;
   amountOriginal: PolicyFact<Money>;
+  /** 통화가 다른 `대사 불일치`는 두 원금액을 그대로 넘긴다 — 원화로 맞춰 비교하는 것은 #16 `TRV-14`다. */
   reconciliation: ReconciliationOutcome;
   tripDays: Array<{ date: string; location: string; workday: PolicyFact<boolean> }>;
 };
@@ -1780,6 +1790,7 @@ export function documentDefects(
 
 - **`짝 보류`** 는 후보가 하나지만 자동 확정 조건에 막혀 사람이 확인하는 상태다. 막힌 조건을 함께 남기고,
   막힌 이유가 누구에게 갈지를 정한다(§7.4). `후보 복수`는 그대로 후보가 둘 이상 남은 상태다.
+  다만 짝의 근거(끝4·금액·날짜)에 판독 불가가 있으면 그것을 함께 남긴다(`unresolved`) — 짝을 고르기 전에 추출 문제부터 닫는다(§7.4).
 - 교차 대조의 Codex 레인이 요구한 더 강한 조건 — 독립 원거래 ID, 또는 카드 계정 + 승인번호 + 날짜 + 가맹점 ID의 복합 일치 — 은 **채택하지 않는다.**
   위 세 조건만으로 자동 확정한다.
 
@@ -1833,9 +1844,11 @@ export type AutoConfirmBlock =
 
 export type MatchOutcome =
   | { kind: "대사 완료"; cardLineId: string; key: "승인번호" | "카드·금액·날짜" }
-  | { kind: "후보 복수"; cardLineIds: string[] }
+  /** `unresolved`는 짝의 근거 가운데 판독 불가인 것 — 짝을 고르기 전에 닫는다(§7.4). */
+  | { kind: "후보 복수"; cardLineIds: string[]; unresolved: PairField[] }
   | { kind: "짝 보류"; cardLineId: string; blockedBy: AutoConfirmBlock[] }
-  | { kind: "대사 불일치"; cardLineId: string; difference: Money }
+  /** 자동으로는 같은 통화에서만 난다 — 통화가 다르면 `짝 보류`다. */
+  | { kind: "대사 불일치"; cardLineId: string; difference: AmountDifference }
   | { kind: "짝 없음(증빙)" };
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -1936,7 +1949,13 @@ export function decideMatch(
   }
 
   if (candidates.length > 1) {
-    return { kind: "후보 복수", cardLineIds: candidates.map((line) => line.id) };
+    // 판독 불가는 어느 후보와도 대조하지 못하므로 후보가 여럿이어도 남긴다 — 짝 선택보다 먼저 닫는다(§7.4).
+    // 카드 줄 하나와 대조해야 드러나는 문제는 짝을 고른 뒤 대사를 다시 돌릴 때 본다.
+    return {
+      kind: "후보 복수",
+      cardLineIds: candidates.map((line) => line.id),
+      unresolved: [...evidence.unreadable],
+    };
   }
 
   const line = candidates[0];
@@ -2031,7 +2050,11 @@ export function decideMatch(
 
   if (amountDifference !== null) {
     // 같은 통화에서 금액만 다르다 — 짝은 서고, 차액은 확정된 사실로 남는다(§7.4).
-    return { kind: "대사 불일치", cardLineId: line.id, difference: amountDifference };
+    return {
+      kind: "대사 불일치",
+      cardLineId: line.id,
+      difference: { kind: "차액", amount: amountDifference },
+    };
   }
 
   const byApproval =
@@ -2108,7 +2131,7 @@ export function commonPrefixLength(left: string, right: string): number {
 
 - **닫는다**: 통화 후보, 금액 구분자 후보, 날짜 후보, 그리고 "영수증의 금액이 맞는가" 자체.
   카드 명세는 `시스템 연동` 출처이므로 이 값들의 검증 수준이 `교차 확인`으로 올라간다.
-- **남긴다**: `대사 불일치`(팁·부분취소·실제 차액)와 `짝 없음`. 둘 다 **확정된 사실**이고 #16의 조항이 받는다.
+- **남긴다**: `대사 불일치`(팁·부분취소·실제 차액, 통화가 다르면 차액 대신 두 원금액)와 `짝 없음`. 둘 다 **확정된 사실**이고 #16의 조항이 받는다.
   다만 증빙 쪽 금액이 오독일 가능성이 남아 있으면(검산 불가 + 교차 확인 없음) 먼저 (i)로 사람에게 간다 —
   오독과 실제 차액을 구별할 수단이 그것뿐일 때만 그렇다.
 - **사람이 고른다**: `후보 복수`와 `짝 보류`는 자동으로 묶지 않은 중간 상태다. 누가 확인하는지는 막힌 이유가 정한다 —
@@ -2121,9 +2144,14 @@ export function commonPrefixLength(left: string, right: string): number {
     모순이 있는 짝을 기안자가 스스로 세우지 않게 하는 자기 확인 방지다.
 
   이유가 여럿이면 **추출 문제 → 경쟁·대조 불가 → 값 모순** 순서로 한 단계씩 보낸다 — 추출 문제가 먼저 닫혀야 나머지를 판단할 수 있다.
+  `후보 복수`도 같다 — 짝의 근거에 판독 불가가 남았으면(`unresolved`) 짝 선택보다 재촬영·수기 확정이 먼저이고, 닫히면 대사를 다시 돌린다.
   확인은 그 단계의 이유만 닫고, 남은 이유가 있으면 다음 사람에게 간다.
-  모든 이유가 닫혀 같은 지출이라고 확인되면 짝이 선다 — 금액이 맞으면 `대사 완료`, 같은 통화에서 어긋나면 `대사 불일치`이고
+  모든 이유가 닫혀 같은 지출이라고 확인되면 짝이 선다(아래 `closeAffirmedPair`) — 금액이 맞으면 `대사 완료`, 같은 통화에서 어긋나면 `대사 불일치`(차액)이고
   짝의 근거는 `사람 선택`이다(확인한 사람이 행위자로 남는다). 같은 지출이 아니라고 하면 `짝 없음`이 된다.
+  **통화가 다른 짝**을 재무합의자가 같은 거래로 확인하면 `대사 불일치`로 닫되 차액은 계산하지 않는다 —
+  차액 칸은 "통화 다름 — 산출하지 않음"이고, 증빙 금액과 카드 줄 원거래 금액을 둘 다 그대로 남긴다.
+  원화 환산은 #16 `TRV-14`가 정책 대조에서 한다(`PolicyFacts.reconciliation`으로 넘어간다). 환율 기준일의 값과 이름은 #16이 정한다(§3.9).
+  0 차액, 임의 환율, `대사 완료`로 닫지 않는다. 예: 해외 가맹점이 원화로 청구하는 DCC(증빙 JPY, 카드 줄 원거래 KRW).
   화면은 원본과 카드 줄(`후보 복수`면 후보 줄 전부)을 함께 보이고, `짝 보류`는 막힌 조건(`blockedBy`)도 보인다.
 - **"영수증 없음"** = 증빙이 붙지 않은 카드 줄이다.
 - **#16 연결**: #16이 법정 `판정 불가`의 사내 처리를 `대사 완료` 여부로 가른다(#16 ADR-0007). `대사 완료`의 의미를 바꾸면 #16에 영향이 간다.
@@ -2143,6 +2171,43 @@ export function cardLinesWithoutEvidence(
   }
 
   return lines.filter((line) => !matched.has(line.id));
+}
+
+/**
+ * 사람이 막힌 이유를 모두 닫고 같은 지출이라고 확인한 짝을 닫는다. 짝의 근거는 `사람 선택`이다.
+ * `evidenceAmount`는 추출 문제가 닫힌 뒤 남은 증빙 쪽 금액 하나다.
+ * 통화가 다르면 빼지 않는다 — 두 원금액을 그대로 남기고, 원화 환산은 #16 `TRV-14`가 정책 대조에서 한다.
+ */
+export function closeAffirmedPair(evidenceAmount: Money, line: CardLine): ReconciliationOutcome {
+  if (evidenceAmount.currency !== line.original.currency) {
+    return {
+      kind: "대사 불일치",
+      cardLineId: line.id,
+      key: "사람 선택",
+      difference: {
+        kind: "통화 다름 — 산출하지 않음",
+        evidenceAmount,
+        cardLineOriginal: line.original,
+      },
+    };
+  }
+
+  if (sameMoney(evidenceAmount, line.original)) {
+    return { kind: "대사 완료", cardLineId: line.id, key: "사람 선택" };
+  }
+
+  return {
+    kind: "대사 불일치",
+    cardLineId: line.id,
+    key: "사람 선택",
+    difference: {
+      kind: "차액",
+      amount: {
+        currency: evidenceAmount.currency,
+        minor: evidenceAmount.minor - line.original.minor,
+      },
+    },
+  };
 }
 ```
 
@@ -2265,7 +2330,7 @@ H8이 0건을 보장하는 것은 수취 의무 미충족이고, 판정 불가 0
 | 법인카드 · 국내 (카드전표) | 대사 완료 | 위와 같음 | 증빙 유형, 공급가액, 부가세액, 공급 분류, 기간 | **5** |
 | 현금 등 · 국외 | 짝 없음 | 없음 | 거래일, 통화, 합계, 공급 장소, 공급 분류, 기간 | **6** |
 | 현금 등 · 국내 (세금계산서) | 짝 없음 | 없음 | 위 6개 + 증빙 유형, 공급가액, 부가세액, 공급자 등록번호, 공급받는 자 등록번호 | **11** |
-| 법인카드 · 추출 문제로 막힘 | `짝 보류` | 아직 없음 — 짝이 서기 전이다 | 짝이 없는 건과 같다(H6이면 재촬영, 아니면 수기 확정 1세션). 끝4 판독 불가는 판정 입력이 아니므로 재촬영이다. 닫히면 대사를 다시 돌린다 | 국외 **6** · 국내 **11** |
+| 법인카드 · 추출 문제로 막힘 | `짝 보류` · `후보 복수` | 아직 없음 — 짝이 서기 전이다 | 짝이 없는 건과 같다(H6이면 재촬영, 아니면 수기 확정 1세션). 끝4 판독 불가는 판정 입력이 아니므로 재촬영이다. 닫히면 대사를 다시 돌린다 | 국외 **6** · 국내 **11** |
 | 법인카드 · 경쟁·대조 불가·값 모순으로 막힘 | `짝 보류` · `후보 복수` | 아직 없음 — 짝이 서기 전이다 | 필드가 아니라 **짝 확인**이다 — 경쟁·대조 불가·`후보 복수`는 기안자, 값 모순은 재무합의자. 짝이 서면 대사를 다시 돌려 위 `대사 완료` 행으로 간다 | 필드 **0** + 짝 확인(기안자 1회, 재무합의자 1회까지) |
 
 법인카드가 주 결제 수단인 출장에서 **사람에게 갈 수 있는 필드의 상한이 2~5개**라는 것이 이 설계의 실제 답이다.
@@ -2344,6 +2409,7 @@ function pairCheck(
  * 사람에게 보낼지 정한다. 짝이 서지 않은 건은 짝부터 닫는다 —
  * ① 합계를 읽지 못했고 짝이 서지 않았으면(`짝 보류`·`후보 복수`도 여기 든다) 필드 확정이 아니라 재촬영이다(H6).
  * ② `짝 보류`는 막힌 이유를 추출 문제 → 경쟁·대조 불가 → 값 모순 순서로 한 단계씩 보낸다(§7.4).
+ *    `후보 복수`도 짝의 근거에 추출 문제가 남았으면(`unresolved`) 그것이 짝 선택보다 먼저다.
  *    추출 문제는 짝이 없는 건과 같은 길(①과 수기 확정)이고, 판정 입력이 아닌 끝4를 읽지 못했으면 재촬영이다.
  *    경쟁·대조 불가·`후보 복수`는 기안자의, 값 모순은 재무합의자의 짝 확인이다.
  *    그 단계가 닫히면 대사를 다시 돌리고 이 함수를 다시 부른다.
@@ -2365,12 +2431,17 @@ export function routeToHuman(
     };
   }
 
-  const unresolved =
+  // 짝의 근거에 남은 추출 문제. `후보 복수`도 이것을 남기므로 짝 선택보다 먼저 닫는다.
+  const unresolved: PairField[] =
     reconciliation.kind === "짝 보류"
-      ? reconciliation.blockedBy.filter((block) => block.condition === "미해결 추출 문제")
-      : [];
+      ? reconciliation.blockedBy.flatMap((block) =>
+          block.condition === "미해결 추출 문제" ? [block.field] : [],
+        )
+      : reconciliation.kind === "후보 복수"
+        ? reconciliation.unresolved
+        : [];
 
-  if (unresolved.some((block) => block.field === "카드 끝4")) {
+  if (unresolved.includes("카드 끝4")) {
     return {
       kind: "재촬영 요청",
       reason: "짝의 근거인 카드 끝4를 읽지 못했다 — 판정 입력 필드가 아니어서 수기 확정으로 묻지 않는다(H2)",
@@ -2417,7 +2488,7 @@ export function routeToHuman(
 ```
 
 **H6과 짝 확인의 순서.** H6이 먼저다 — 합계를 읽지 못했으면 `짝 보류`·`후보 복수`여도 짝이 선 것이 아니므로 재촬영이다.
-H6에 걸리지 않은 `짝 보류`는 막힌 이유 순서를 따른다: 추출 문제가 남았으면 기안자의 재촬영·수기 확정이 먼저이고(끝4는 재촬영),
+H6에 걸리지 않은 `짝 보류`·`후보 복수`는 막힌 이유 순서를 따른다: 짝의 근거에 추출 문제가 남았으면(`후보 복수`면 `unresolved`) 기안자의 재촬영·수기 확정이 먼저이고(끝4는 재촬영),
 닫히면 대사를 다시 돌린다. 추출 문제가 없으면 필드보다 짝 확인이 먼저다 — 짝이 서야 시스템 연동이 필드를 닫고(H3),
 남은 필드만 한 세션으로 묻는다(H1). 그래서 `짝 보류`·`후보 복수`는 신호가 없어도 `보내지 않는다`로 끝나지 않는다.
 
