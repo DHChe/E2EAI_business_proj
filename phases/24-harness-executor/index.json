@@ -55,7 +55,9 @@
     {
       "step": 7,
       "name": "review-gate",
-      "status": "pending"
+      "status": "completed",
+      "summary": "scripts/execute.py: REVIEW_CONTRACT, parse_verdict(text: str) -> str | None, Executor.review_argv(reviewer: str, scope: str) -> list[str], run_reviewer(reviewer: str, round_no: int, end_sha: str, scope: str) -> str, run_baseline(specs: list[StepSpec]) -> str | None, review_round(round_no: int, end_sha: str) -> dict[str, str], review_gate(specs: list[StepSpec]) -> int 및 run() 연결. scripts/test_execute.py: ReviewGateTests 12개 추가; 전체 88개, AC 11줄, Bash 가드 54/54 통과.",
+      "completed_at": "2026-09-22T20:54:55+09:00"
     },
     {
       "step": 8,
