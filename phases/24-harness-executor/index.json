@@ -13,7 +13,9 @@
     {
       "step": 1,
       "name": "step-spec",
-      "status": "pending"
+      "status": "completed",
+      "summary": "scripts/execute.py: SpecError(ValueError), frozen StepSpec(step, name, text, allowed, ac), parse_allowed_paths(text: str) -> list[str], path_allowed(path: str, allowed: Sequence[str]) -> bool, parse_ac(text: str) -> list[str], Executor.load_step_specs() -> list[StepSpec] 추가. run()에서 prepare() 직후 HEAD step 전수 검증·오류 수집·self.specs 고정. scripts/test_execute.py: 필수 6개 포함 11개 테스트 추가, 기존 16개 유지. AC 9줄 종료 0, 전체 27개 및 Bash 가드 54/54 통과.",
+      "completed_at": "2026-09-22T20:10:42+09:00"
     },
     {
       "step": 2,
