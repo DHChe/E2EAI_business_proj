@@ -1706,6 +1706,231 @@ if mode == 'exit':
                                f'refs/harness/{PHASE}/review-r1-claude/').stdout.strip())
 
 
+class FixLoopTests(HarnessTestCase):
+    def fixture(self, reviews=None, blocked=None, push=False):
+        ex = self.make_executor(self.make_repo(files={
+            '.claude/commands/review.md': 'Review the changes.\n'}), push=push)
+        os.environ['FIX_REVIEWS'] = json.dumps(reviews or {})
+        os.environ['FIX_BLOCKED'] = blocked or ''
+        self.fake_bin('gh', "print(json.dumps({'labels': [{'name': 'ready-for-human'}]}))\n")
+        self.fake_bin('codex', r"""
+if 'mcp' in sys.argv:
+    print('[]')
+    sys.exit(0)
+last = Path(sys.argv[sys.argv.index('-o') + 1])
+unit = last.name.removesuffix('-last.txt')
+prompt = sys.stdin.read()
+with (Path(os.environ['HARNESS_CALLS_DIR']) / 'prompts').open('a') as log:
+    log.write(json.dumps({'unit': unit, 'prompt': prompt}) + '\n')
+if unit == os.environ['FIX_BLOCKED']:
+    result = {'status': 'blocked', 'blocked_reason': 'human decision'}
+else:
+    target = {'step0': 'alpha', 'step1': 'beta'}.get(unit, unit)
+    Path('src/' + target + '.txt').write_text(unit)
+    result = {'status': 'completed', 'summary': unit + ' output'}
+last.with_name(unit + '-result.json').write_text(json.dumps(result))
+""")
+        for name in ('claude', 'grok'):
+            self.fake_bin(name, r"""
+name = Path(sys.argv[0]).name
+count = len((Path(os.environ['HARNESS_CALLS_DIR']) / name).read_text().splitlines())
+options = json.loads(os.environ['FIX_REVIEWS']).get(name, ['passed'])
+verdict = options[min(count - 1, len(options) - 1)]
+text = name + ' original report ' + str(count)
+if verdict != 'missing':
+    text += '\nREVIEW_RESULT: ' + verdict
+print(json.dumps({'result' if name == 'claude' else 'text': text}))
+""")
+        return ex
+
+    def units(self):
+        path = self.log_dir / 'prompts'
+        return [json.loads(line)['unit'] for line in path.read_text().splitlines()]
+
+    def cli(self, ex, *args):
+        return subprocess.run([sys.executable, str(Path(execute.__file__).resolve()), PHASE, *args],
+                              cwd=ex.root, capture_output=True, text=True, timeout=60)
+
+    def assert_state(self, ex, review, top):
+        self.assertEqual(ex.load_index()['review']['status'], review)
+        self.assertEqual(ex.load_top_index()['phases'][0]['status'], top)
+        self.assertFalse(ex.marker_path.exists())
+
+    def test_failed_review_fix_and_rereview(self):
+        ex = self.fixture({'claude': ['failed', 'passed']})
+        self.assertEqual(ex.run(), 0)
+        self.assert_state(ex, 'passed', 'completed')
+        self.assertEqual([len(self.calls(n)) for n in ('claude', 'grok')], [2, 2])
+        self.assertEqual(self.units(), ['step0', 'step1', 'fix1'])
+        prompts = [json.loads(line) for line in (self.log_dir / 'prompts').read_text().splitlines()]
+        for name in ('claude', 'grok'):
+            self.assertIn(name + ' original report 1', prompts[-1]['prompt'])
+        self.assertIn('fix: 7-sample 리뷰 r1 반영 (#7)',
+                      self.git(ex.root, 'log', '--format=%s').decode())
+
+    def test_two_failed_rounds_exit_3(self):
+        ex = self.fixture({'claude': ['failed']})
+        self.assertEqual(ex.run(), 3)
+        self.assert_state(ex, 'failed', 'error')
+        self.assertEqual(self.units(), ['step0', 'step1', 'fix1', 'fix2'])
+        self.assertEqual([len(self.calls(n)) for n in ('claude', 'grok')], [3, 3])
+        self.assertEqual(ex.load_index()['review']['round'], 3)
+        comments = str(self.calls('gh'))
+        self.assertIn('claude original report 3', comments)
+        self.assertIn('grok original report 3', comments)
+
+    def test_fix_blocked_exits_2(self):
+        ex = self.fixture({'claude': ['failed']}, blocked='fix1')
+        self.assertEqual(ex.run(), 2)
+        self.assert_state(ex, 'blocked', 'blocked')
+        data = ex.load_index()
+        self.assertEqual(data['review']['blocked_reason'], 'human decision')
+        self.assertTrue(any(args[:2] == ['issue', 'edit'] for args in self.calls('gh')))
+        data['review']['status'] = 'pending'
+        del data['review']['blocked_reason']
+        ex.save_index(data)
+        os.environ['FIX_REVIEWS'] = '{}'
+        count = len(self.calls('claude'))
+        ex._lock_file.close()
+        self.assertEqual(self.make_executor(ex.root).run(), 0)
+        self.assertGreater(len(self.calls('claude')), count)
+        self.assert_state(ex, 'passed', 'completed')
+
+    def test_push_no_force(self):
+        ex = self.fixture(push=True)
+        remote = self.temp_dir / 'remote.git'
+        self.git(self.temp_dir, 'init', '--bare', str(remote))
+        self.git(ex.root, 'remote', 'add', 'origin', str(remote))
+        os.environ['GITHUB_TOKEN'] = 'push-only-credential'
+        original = ex.git
+        pushes = []
+        def record(*args, **kwargs):
+            if args[0] == 'push':
+                pushes.append((args, kwargs, os.environ.get('GITHUB_TOKEN')))
+            return original(*args, **kwargs)
+        with mock.patch.object(ex, 'git', side_effect=record):
+            self.assertEqual(ex.run(), 0)
+        self.assertEqual(pushes, [(('push', '-u', 'origin', 'feat-7-sample'),
+                                  {'check': False}, 'push-only-credential')])
+        self.assertEqual(self.git(remote, 'rev-parse', 'refs/heads/feat-7-sample').decode().strip(), ex.head())
+
+    def test_push_failure_exits_1(self):
+        ex = self.fixture(push=True)
+        self.git(ex.root, 'remote', 'add', 'origin', str(self.temp_dir / 'absent.git'))
+        self.assertEqual(ex.run(), 1)
+        self.assert_state(ex, 'passed', 'completed')
+        counts = [len(self.calls(n)) for n in ('codex', 'claude', 'grok')]
+        head = ex.head()
+        ex._lock_file.close()
+        again = self.make_executor(ex.root, push=True)
+        with mock.patch.object(again, 'push_branch', wraps=again.push_branch) as push:
+            self.assertEqual(again.run(), 1)
+            push.assert_called_once_with()
+        again._lock_file.close()
+        result = self.cli(ex, '--push')
+        self.assertEqual(result.returncode, 1)
+        self.assertIn('absent.git', result.stderr)
+        self.assertEqual([len(self.calls(n)) for n in ('codex', 'claude', 'grok')], counts)
+        self.assertEqual(ex.head(), head)
+        self.assert_state(ex, 'passed', 'completed')
+
+    def test_e2e_passed_exit_0(self):
+        ex = self.fixture()
+        result = self.cli(ex)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assert_state(ex, 'passed', 'completed')
+        self.assertEqual([s['status'] for s in ex.load_index()['steps']], ['completed'] * 2)
+        subjects = self.git(ex.root, 'log', '--format=%s').decode().splitlines()
+        self.assertEqual(sum(s.startswith('feat:') for s in subjects), 2)
+        self.assertTrue(any(s.startswith('chore:') for s in subjects))
+        self.assertEqual(self.git(ex.root, 'status', '--porcelain'), b'')
+        counts = [len(self.calls(n)) for n in ('codex', 'claude', 'grok')]
+        self.assertEqual(self.cli(ex).returncode, 0)
+        self.assertEqual([len(self.calls(n)) for n in ('codex', 'claude', 'grok')], counts)
+
+    def test_e2e_blocked_exit_2(self):
+        ex = self.fixture(blocked='step1')
+        result = self.cli(ex)
+        self.assertEqual(result.returncode, 2, result.stderr)
+        self.assertEqual([s['status'] for s in ex.load_index()['steps']], ['completed', 'blocked'])
+        self.assertEqual(ex.load_top_index()['phases'][0]['status'], 'blocked')
+        self.assertTrue(any(args[:2] == ['issue', 'edit'] for args in self.calls('gh')))
+        self.assertFalse(self.calls('claude'))
+
+    def test_e2e_unverifiable_exit_3_no_fix_commit(self):
+        ex = self.fixture({'grok': ['missing']})
+        result = self.cli(ex)
+        self.assertEqual(result.returncode, 3, result.stderr)
+        self.assert_state(ex, 'unverifiable', 'error')
+        self.assertEqual(self.units(), ['step0', 'step1'])
+        self.assertEqual(len(self.calls('grok')), 2)
+        self.assertNotIn('fix:', self.git(ex.root, 'log', '--format=%s').decode())
+
+    def seed_resume(self, ex, k=1, missing=False):
+        ex.prepare()
+        for unit, file in [('step0', 'alpha'), ('step1', 'beta')]:
+            (ex.root / f'src/{file}.txt').write_text(unit)
+        ex.commit_paths(['src/alpha.txt', 'src/beta.txt'], 'fixture outputs')
+        data = ex.load_index()
+        for step in data['steps']:
+            step.update(status='completed', summary='output')
+        reviewed = ex.head()
+        data['review'] = {'status': 'failed', 'round': 1, 'end_sha': reviewed}
+        ex.save_index(data)
+        ex.commit_meta('review failed')
+        ex.run_dir.mkdir(parents=True, exist_ok=True)
+        for name in ('claude', 'grok'):
+            if not missing or name == 'claude':
+                (ex.run_dir / f'review-r1-{name}.txt').write_text(name + ' saved report')
+        ex.save_marker({'unit': 'fix1', 'k': k, 'stage': 'running', 'pre_sha': ex.head(),
+                        'feat_sha': None, 'pgid': None})
+        return reviewed
+
+    def test_fix_running_recovery_uses_recorded_scope(self):
+        ex = self.fixture()
+        reviewed = self.seed_resume(ex)
+        self.assertEqual(ex.run(), 0)
+        self.assertEqual(self.units(), ['fix1'])
+        prompt = json.loads((self.log_dir / 'prompts').read_text().splitlines()[0])['prompt']
+        self.assertIn(ex.load_index()['base_commit'] + '..' + reviewed, prompt)
+        self.assertIn('claude saved report', prompt)
+        self.assertEqual(len(self.calls('claude')), 1)
+        self.assert_state(ex, 'passed', 'completed')
+
+    def test_fix_resume_exhausted_and_missing_reports(self):
+        for exhausted in (True, False):
+            with self.subTest(exhausted=exhausted):
+                ex = self.fixture()
+                self.seed_resume(ex, k=3 if exhausted else 1, missing=True)
+                self.assertEqual(ex.run(), 3 if exhausted else 0)
+                self.assertFalse(ex.marker_path.exists())
+                self.assertFalse(self.calls('codex'))
+                self.assertEqual(ex.load_index()['review']['status'], 'failed' if exhausted else 'passed')
+
+    def test_fix_feat_done_recovery_only_commits_metadata(self):
+        ex = self.fixture()
+        self.seed_resume(ex)
+        (ex.root / 'src/fix1.txt').write_text('fixed')
+        execute.write_json_atomic(ex.result_path('fix1'), {'status': 'completed', 'summary': 'fixed'})
+        ex.commit_feat('fix: interrupted', ex.head())
+        self.assertEqual(ex.run(), 0)
+        self.assertFalse(self.calls('codex'))
+        self.assert_state(ex, 'passed', 'completed')
+        self.assertEqual((ex.root / 'src/fix1.txt').read_text(), 'fixed')
+
+    def test_fix_attempt_exhaustion_clears_marker(self):
+        ex = self.fixture({'claude': ['failed']})
+        original = ex.run_fix
+        def fail(round_no, specs, scope, **kwargs):
+            self.fake_bin('codex', "print('[]') if 'mcp' in sys.argv else sys.exit(9)\n")
+            return original(round_no, specs, scope, **kwargs)
+        with mock.patch.object(ex, 'run_fix', side_effect=fail):
+            self.assertEqual(ex.run(), 3)
+        self.assert_state(ex, 'failed', 'error')
+        self.assertEqual(sum('exec' in args for args in self.calls('codex')), 5)
+        self.assertIn('수정 실패', str(self.calls('gh')))
+
+
 if __name__ == "__main__":
     program = unittest.main(exit=False)
     sys.exit(0 if program.result.testsRun and program.result.wasSuccessful() else 1)

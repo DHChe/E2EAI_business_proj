@@ -23,6 +23,7 @@ EXIT_ERROR = 1
 EXIT_BLOCKED = 2
 EXIT_REVIEW = 3
 MAX_ATTEMPTS = 3
+MAX_FIX_ROUNDS = 2
 GH_ATTEMPTS = 3
 REVIEW_CONTRACT: str = (
     "이 리뷰에서 파일을 고치거나 커밋, push, `gh` 쓰기, 외부 게시, 원격 DB 변경을 하지 마라. "
@@ -321,14 +322,14 @@ class Executor:
                     or (marker["pgid"] is not None and type(marker["pgid"]) is not int)):
                 raise ValueError("marker 필드가 잘못되었다")
             if marker.get("stage") == "feat_done":
-                match = re.fullmatch(r"step(\d+)", marker["unit"])
+                match = re.fullmatch(r"(step|fix)(\d+)", marker["unit"])
                 result = self.read_result(marker["unit"])
                 if (self.head() != marker["feat_sha"] or match is None
                         or result is None or result["status"] != "completed"
                         or not isinstance(result.get("summary"), str)
                         or not result["summary"].strip()
-                        or not any(s["step"] == int(match[1])
-                                   for s in self.load_index()["steps"])):
+                        or (match[1] == "step" and not any(s["step"] == int(match[2])
+                                   for s in self.load_index()["steps"]))):
                     raise ValueError("feat_done의 HEAD, unit 또는 result가 무효다")
             elif marker.get("stage") != "running":
                 raise ValueError(f"지원하지 않는 stage: {marker.get('stage')!r}")
@@ -338,7 +339,15 @@ class Executor:
             raise HarnessExit(EXIT_ERROR, f"복구 거부 {self.marker_path}: {exc}") from exc
         self.marker = marker
         if marker["stage"] == "feat_done":
-            self.confirm_step(int(match[1]), "completed", result["summary"])
+            if match[1] == "fix":
+                data = self.load_index()
+                data["review"]["status"] = "pending"
+                data["review"].pop("blocked_reason", None)
+                self.save_index(data)
+                self.commit_meta(f"{marker['unit']} 반영")
+                self.clear_marker()
+            else:
+                self.confirm_step(int(match[2]), "completed", result["summary"])
             return
         self._kill_stale_codex(marker["pgid"])
         self.rollback(marker["unit"], marker["k"], marker["pre_sha"])
@@ -1028,36 +1037,122 @@ class Executor:
             verdicts[reviewer] = self.run_reviewer(reviewer, round_no, end_sha, scope)
         return verdicts
 
+    def run_fix(self, round_no: int, specs: list[StepSpec], scope: str,
+                *, start_k: int = 1) -> AttemptOutcome:
+        ordered = sorted(specs, key=lambda spec: spec.step)
+        allowed = list(dict.fromkeys(path for spec in ordered for path in spec.allowed))
+        ac = [line for spec in ordered for line in spec.ac]
+        reports = self.review_reports(round_no)
+        task_text = ("리뷰가 지적한 결함만 고친다. 모든 AC가 계속 통과해야 한다.\n"
+                     f"리뷰 범위: {scope}\n{reports}\n모든 step AC:\n" + "\n".join(ac))
+        return self.attempt_unit(f"fix{round_no}", task_text, allowed, ac, start_k=start_k)
+
+    def review_reports(self, round_no: int) -> str:
+        reports = []
+        for reviewer in ("claude", "grok"):
+            path = self.run_dir / f"review-r{round_no}-{reviewer}.txt"
+            body = path.read_text(encoding="utf-8") if path.exists() else "리뷰 원문 없음"
+            reports.append(f"{reviewer}:\n{body}")
+        return "\n\n".join(reports)
+
+    def finish_fix(self, round_no: int, outcome: AttemptOutcome) -> int | None:
+        data = self.load_index()
+        review = data["review"]
+        review.pop("blocked_reason", None)
+        if outcome.status == "completed":
+            self.commit_feat(f"fix: {self.phase_dir} 리뷰 r{round_no} 반영 (#{self.issue})",
+                             outcome.pre_sha)
+            review["status"] = "pending"
+        elif outcome.status == "blocked":
+            review.update(status="blocked", blocked_reason=outcome.reason)
+            self.set_top_status("blocked")
+        else:
+            review["status"] = "failed"
+            self.set_top_status("error")
+        self.save_index(data)
+        self.commit_meta(f"fix{round_no} 반영" if outcome.status == "completed"
+                         else f"fix{round_no} {outcome.status}")
+        self.clear_marker()
+        if outcome.status == "completed":
+            return None
+        if outcome.status == "blocked":
+            self.issue_blocked(outcome.reason)
+            return EXIT_BLOCKED
+        self.issue_comment(self.review_reports(round_no) + f"\n수정 실패: {outcome.reason}")
+        return EXIT_REVIEW
+
     def review_gate(self, specs: list[StepSpec]) -> int:
         data = self.load_index()
         if (any(step["status"] != "completed" for step in data["steps"])
                 or data.get("review", {}).get("status") == "passed"):
             raise HarnessExit(EXIT_ERROR, "리뷰 관문 진입 조건 불일치")
-        end_sha, round_no = self.head(), 1
-        failure = self.run_baseline(specs)
-        if failure is not None:
-            self.set_top_status("error")
-            self.commit_meta("review baseline error")
-            self.issue_comment(f"review baseline error: {failure}")
+        round_no, fixes_used = 1, 0
+        if self.resume and re.fullmatch(r"fix[1-9]\d*", self.resume["unit"]):
+            round_no = int(self.resume["unit"][3:])
+            start_k = self.resume["next_k"]
+            self.resume = None
+            scope = f"{data['base_commit']}..{data['review']['end_sha']}"
+            if start_k > MAX_ATTEMPTS:
+                return self.finish_fix(round_no, AttemptOutcome("error", reason="재개 시 시도 소진"))
+            if all((self.run_dir / f"review-r{round_no}-{name}.txt").is_file()
+                   for name in ("claude", "grok")):
+                outcome = self.run_fix(round_no, specs, scope, start_k=start_k)
+                fixes_used += 1
+                code = self.finish_fix(round_no, outcome)
+                if code is not None:
+                    return code
+                round_no += 1
+            else:
+                self.commit_meta(f"fix{round_no} 재개 버림")
+                self.clear_marker()
+                round_no = 1
+        while True:
+            end_sha = self.head()
+            failure = self.run_baseline(specs)
+            if failure is not None:
+                self.set_top_status("error")
+                self.commit_meta("review baseline error")
+                self.issue_comment(f"review baseline error: {failure}")
+                return EXIT_ERROR
+            verdicts = self.review_round(round_no, end_sha)
+            status = ("unverifiable" if "unverifiable" in verdicts.values() else
+                      "passed" if all(v == "passed" for v in verdicts.values()) else "failed")
+            data = self.load_index()
+            data["review"] = {"status": status, "end_sha": end_sha, "round": round_no}
+            if status == "passed":
+                data["completed_at"] = now_kst()
+            self.save_index(data)
+            if status != "failed":
+                self.set_top_status("completed" if status == "passed" else "error")
+            self.commit_meta("phase completed" if status == "passed" else f"review {status}")
+            if status != "failed":
+                if status == "passed":
+                    self.issue_comment(f"{self.phase_dir} completed\n" + "\n".join(
+                        f"step{s['step']}: {s.get('summary', '')}" for s in data["steps"]))
+                for reviewer, verdict in verdicts.items():
+                    report = self.run_dir / f"review-r{round_no}-{reviewer}.txt"
+                    body = report.read_text(encoding="utf-8") if report.exists() else "리뷰 원문 없음"
+                    self.issue_comment(f"{reviewer}: {verdict}\n{body}")
+                return EXIT_OK if status == "passed" else EXIT_REVIEW
+            if fixes_used >= MAX_FIX_ROUNDS:
+                self.set_top_status("error")
+                self.commit_meta("review failed")
+                self.issue_comment(self.review_reports(round_no))
+                return EXIT_REVIEW
+            scope = f"{data['base_commit']}..{end_sha}"
+            outcome = self.run_fix(round_no, specs, scope)
+            fixes_used += 1
+            code = self.finish_fix(round_no, outcome)
+            if code is not None:
+                return code
+            round_no += 1
+
+    def push_branch(self) -> int:
+        result = self.git("push", "-u", "origin", self.branch, check=False)
+        if result.returncode:
+            print(result.stderr.decode(errors="replace"), file=sys.stderr)
             return EXIT_ERROR
-        verdicts = self.review_round(round_no, end_sha)
-        status = ("unverifiable" if "unverifiable" in verdicts.values() else
-                  "passed" if all(v == "passed" for v in verdicts.values()) else "failed")
-        data = self.load_index()
-        data["review"] = {"status": status, "end_sha": end_sha, "round": round_no}
-        if status == "passed":
-            data["completed_at"] = now_kst()
-        self.save_index(data)
-        self.set_top_status("completed" if status == "passed" else "error")
-        self.commit_meta("phase completed" if status == "passed" else f"review {status}")
-        if status == "passed":
-            self.issue_comment(f"{self.phase_dir} completed\n" + "\n".join(
-                f"step{s['step']}: {s.get('summary', '')}" for s in data["steps"]))
-        for reviewer, verdict in verdicts.items():
-            report = self.run_dir / f"review-r{round_no}-{reviewer}.txt"
-            body = report.read_text(encoding="utf-8") if report.exists() else "리뷰 원문 없음"
-            self.issue_comment(f"{reviewer}: {verdict}\n{body}")
-        return EXIT_OK if status == "passed" else EXIT_REVIEW
+        return EXIT_OK
 
     def run(self) -> int:
         try:
@@ -1072,8 +1167,9 @@ class Executor:
             data = self.load_index()
             if (all(s["status"] == "completed" for s in data["steps"])
                     and data.get("review", {}).get("status") == "passed"):
-                return EXIT_OK
-            return self.review_gate(specs)
+                return self.push_branch() if self.push else EXIT_OK
+            code = self.review_gate(specs)
+            return self.push_branch() if code == EXIT_OK and self.push else code
         except HarnessExit as exc:
             print(exc.message, file=sys.stderr)
             return exc.code
