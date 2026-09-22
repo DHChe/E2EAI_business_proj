@@ -27,7 +27,9 @@
     {
       "step": 3,
       "name": "rollback",
-      "status": "pending"
+      "status": "completed",
+      "summary": "scripts/execute.py: HarnessInterrupted(BaseException), Executor.worktree_tree(base_sha: str) -> str, snapshot(unit: str, k: int, base_sha: str) -> str, rollback(unit: str, k: int, target_sha: str) -> str, marker_path property, save_marker(marker: dict) -> None, load_marker() -> dict | None, clear_marker() -> None, recover() -> None, install_signal_handlers()/restore_signal_handlers() -> None 추가. run() 기동 순서 및 신호 복원 연결. scripts/test_execute.py: RollbackTests 9개 추가, 복구는 fake ps와 실제 프로세스 그룹 종료로 검증. AC 10줄 모두 종료 0; 전체 44개 및 Bash 가드 54/54 통과.",
+      "completed_at": "2026-09-22T20:32:49+09:00"
     },
     {
       "step": 4,
