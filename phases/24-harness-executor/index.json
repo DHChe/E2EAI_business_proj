@@ -62,7 +62,9 @@
     {
       "step": 8,
       "name": "fix-loop",
-      "status": "pending"
+      "status": "completed",
+      "summary": "scripts/execute.py: MAX_FIX_ROUNDS=2, run_fix(round_no, specs, scope, *, start_k=1)->AttemptOutcome, review_reports, finish_fix, push_branch()->int 추가; fix running/feat_done 복구 및 marker 정리; run 순서 잠금→신호→복구→gh 대기열→prepare/라벨 복원→spec 검증→step→리뷰/최대 2회 수정→선택 push, 종료 0/1/2/3. scripts/test_execute.py: 필수 8개와 복구 4개 추가, 전체 100개 및 AC 11줄 종료 0, Bash 가드 54/54 통과.",
+      "completed_at": "2026-09-22T21:03:02+09:00"
     },
     {
       "step": 9,
