@@ -25,6 +25,13 @@ Single-context: 저장소 루트에 `CONTEXT.md` 하나와 `docs/adr/`를 둔다
 `git clean -f` 대신 `git stash -u`, `git push --force` 대신 `--force-with-lease`.
 가드를 고쳐야 한다면 `.claude/hooks/test_guard_bash.py`에 케이스를 먼저 추가한다.
 
+실행기 롤백 예외: `git reset --hard`와 `git clean -fd`는 실행기(`scripts/execute.py`)
+프로세스만, 반드시 `refs/harness/` 스냅샷을 남긴 뒤 실행한다. 세션과 사람에게는 여전히 금지다.
+Codex 세션은 `.codex/hooks.json`으로 같은 `guard-bash.py`를 받는다.
+`--ignore-user-config`는 이 훅을 끄므로 쓰지 않는다.
+Grok은 이 가드를 실행하지 않는다(가드 밖). Grok 리뷰어의 보호는 사후 HEAD·트리 검사와
+되돌림, 자격 증명 제거, 계약문뿐이다.
+
 <!-- graft:start -->
 ## Graft — repo context graph
 
