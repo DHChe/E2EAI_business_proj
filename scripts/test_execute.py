@@ -447,7 +447,9 @@ class StepSpecTests(HarnessTestCase):
         executor = self.make_executor(root)
         (root / f"phases/{PHASE}/step0.md").write_text(
             step_md(0, "alpha", ["src/"], ["touch ran.txt"]))
-        self.assertEqual(executor.run(), 0)
+        with mock.patch.object(executor, 'run_steps') as run_steps:
+            self.assertEqual(executor.run(), 0)
+            run_steps.assert_called_once_with(executor.specs)
         self.assertEqual(executor.specs[0].ac, ("touch ran.txt",))
         self.assertFalse((root / "ran.txt").exists())
 
@@ -854,14 +856,15 @@ finally:
         with mock.patch.object(ex, 'acquire_lock', side_effect=lambda: record('lock')), \
                 mock.patch.object(ex, 'recover', side_effect=lambda: record('recover')), \
                 mock.patch.object(ex, 'prepare', side_effect=lambda: record('prepare')), \
-                mock.patch.object(ex, 'load_step_specs', side_effect=lambda: record('specs')):
+                mock.patch.object(ex, 'load_step_specs', side_effect=lambda: record('specs')), \
+                mock.patch.object(ex, 'run_steps', side_effect=lambda specs: record('steps')):
             install = ex.install_signal_handlers
             def installed():
                 record('signals')
                 install()
             with mock.patch.object(ex, 'install_signal_handlers', side_effect=installed):
                 self.assertEqual(ex.run(), 0)
-        self.assertEqual(events, ['lock', 'signals', 'recover', 'prepare', 'specs'])
+        self.assertEqual(events, ['lock', 'signals', 'recover', 'prepare', 'specs', 'steps'])
         for exception in (execute.HarnessInterrupted(), KeyboardInterrupt()):
             with mock.patch.object(ex, 'recover', side_effect=exception):
                 self.assertEqual(ex.run(), 1)
@@ -1100,6 +1103,209 @@ sys.exit(scenario.get('exit', 0))
         self.assertIn('timeout', ex.run_ac(['echo AC-TIMEOUT; sleep 60']))
         self.assertIn('⑦', ex.run_ac(['git commit --allow-empty -qm ac-change']))
 
+
+
+class ScopedCommitTests(HarnessTestCase):
+    def fixture(self, scenarios=None, steps=None, files=None):
+        ex = self.make_executor(self.make_repo(
+            steps=steps or [{'name': 'alpha', 'ac': ['true']}], files=files))
+        ex.prepare()
+        os.environ['UNIT_SCENARIOS'] = json.dumps(scenarios or {})
+        self.fake_bin('codex', r"""
+if 'mcp' in sys.argv:
+    print('[]')
+    sys.exit(0)
+prompt = sys.stdin.read()
+last = Path(sys.argv[sys.argv.index('-o') + 1])
+unit = last.name.removesuffix('-last.txt')
+scenario = json.loads(os.environ['UNIT_SCENARIOS']).get(unit, {})
+for name, content in scenario.get('files', {}).items():
+    path = Path(name)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(content)
+for name in scenario.get('delete', []):
+    Path(name).unlink()
+if scenario.get('rename'):
+    import subprocess
+    subprocess.run(['git', 'mv', *scenario['rename']], check=True)
+last.with_name(unit + '-result.json').write_text(json.dumps(scenario.get(
+    'result', {'status': 'completed', 'summary': unit + ' output'})))
+""")
+        return ex
+
+    def exec_calls(self):
+        return [args for args in self.calls('codex') if args and args[0] == 'exec']
+
+    def commit_files(self, ex, ref='HEAD'):
+        return set(self.git(ex.root, 'diff-tree', '--no-commit-id', '--name-only',
+                            '--no-renames', '-r', ref).decode().splitlines())
+
+    def test_feat_commit_exact_paths_with_decoy(self):
+        ex = self.fixture({'step0': {'files': {
+            'src/keep.txt': 'changed', 'src/__pycache__/x.pyc': 'cache',
+            f'phases/{PHASE}/.run/extra.txt': 'artifact'}}})
+        (ex.root / '.env').write_text('existing fixture value')
+        self.assertEqual(ex.run(), 0)
+        self.assertEqual(self.commit_files(ex, 'HEAD~1'), {'src/keep.txt'})
+        self.assertEqual(self.git(ex.root, 'log', '-1', '--format=%s', 'HEAD~1').strip(),
+                         b'feat: 7-sample step0 alpha (#7)')
+        self.assertEqual((ex.root / '.env').read_text(), 'existing fixture value')
+        self.assertFalse(ex.marker_path.exists())
+        self.assertEqual(len(self.exec_calls()), 1)
+
+    def test_delete_and_rename_committed(self):
+        ex = self.fixture({'step0': {'delete': ['src/delete.txt'],
+                                    'rename': ['src/keep.txt', 'src/moved.txt']}},
+                          files={'src/delete.txt': 'delete me'})
+        self.assertEqual(ex.run(), 0)
+        changes = self.git(ex.root, 'diff-tree', '--no-commit-id', '--name-status',
+                           '--no-renames', '-r', 'HEAD~1').decode().splitlines()
+        self.assertEqual(set(changes), {'D\tsrc/delete.txt', 'D\tsrc/keep.txt',
+                                        'A\tsrc/moved.txt'})
+
+    def test_no_change_skips_feat(self):
+        ex = self.fixture()
+        before = ex.head()
+        self.assertEqual(ex.run(), 0)
+        self.assertEqual(self.git(ex.root, 'rev-list', '--count', f'{before}..HEAD').strip(), b'1')
+        self.assertEqual(self.git(ex.root, 'log', '-1', '--format=%s').strip(),
+                         b'chore: 7-sample step0 completed (#7)')
+        self.assertFalse(ex.marker_path.exists())
+
+    def test_chore_only_index_files(self):
+        for status in ('completed', 'error', 'blocked'):
+            with self.subTest(status=status):
+                ex = self.fixture()
+                data = ex.load_index()
+                data['steps'][0].update(summary='old', completed_at='old',
+                    error_message='old', failed_at='old', blocked_reason='old', blocked_at='old')
+                ex.save_index(data)
+                (ex.root / 'src/keep.txt').write_text('decoy')
+                ex.save_marker({'stage': 'running'})
+                original = ex.commit_meta
+                def commit(label):
+                    self.assertTrue(ex.marker_path.exists())
+                    return original(label)
+                with mock.patch.object(ex, 'commit_meta', side_effect=commit):
+                    ex.confirm_step(0, status, 'new')
+                expected = {f'phases/{PHASE}/index.json'}
+                if status != 'completed':
+                    expected.add('phases/index.json')
+                self.assertEqual(self.commit_files(ex), expected)
+                self.assertTrue(self.git(ex.root, 'log', '-1', '--format=%s').startswith(
+                    b'chore: 7-sample'))
+                item = ex.load_index()['steps'][0]
+                pairs = {'completed': ('summary', 'completed_at'),
+                         'error': ('error_message', 'failed_at'),
+                         'blocked': ('blocked_reason', 'blocked_at')}
+                for state, (key, stamp) in pairs.items():
+                    if state == status:
+                        self.assertEqual(item[key], 'new')
+                        self.assertRegex(item[stamp], r'\+09:00$')
+                    else:
+                        self.assertNotIn(key, item)
+                        self.assertNotIn(stamp, item)
+                self.assertEqual(ex.changed_paths(), ['src/keep.txt'])
+                self.assertFalse(ex.marker_path.exists())
+
+    def test_recover_feat_done_chore_only(self):
+        ex = self.fixture({'step0': {'files': {'src/keep.txt': 'new'}}})
+        outcome = ex.attempt_unit('step0', 'task', ['src/'], ['true'])
+        feat = ex.commit_feat('feat: 7-sample step0 alpha (#7)', outcome.pre_sha)
+        recovered = self.make_executor(ex.root)
+        calls = len(self.exec_calls())
+        with mock.patch.object(recovered, 'rollback', side_effect=AssertionError('rollback')):
+            recovered.recover()
+        self.assertEqual(len(self.exec_calls()), calls)
+        self.assertEqual(self.git(ex.root, 'rev-parse', 'HEAD~1').decode().strip(), feat)
+        self.assertEqual(recovered.load_index()['steps'][0]['summary'], 'step0 output')
+        self.assertEqual(recovered.load_index()['steps'][0]['status'], 'completed')
+        self.assertEqual(self.commit_files(ex), {f'phases/{PHASE}/index.json'})
+        self.assertFalse(recovered.marker_path.exists())
+
+    def test_commit_failure_exits_1_keeps_marker(self):
+        ex = self.fixture({'step0': {'files': {'src/keep.txt': 'new'}}})
+        before = ex.head()
+        hook = ex.root / '.git/hooks/pre-commit'
+        hook.write_text('#!/bin/sh\nexit 1\n')
+        hook.chmod(0o755)
+        self.assertEqual(ex.run(), 1)
+        self.assertEqual(ex.head(), before)
+        self.assertEqual(ex.load_marker()['stage'], 'running')
+        self.assertEqual((ex.root / 'src/keep.txt').read_text(), 'new')
+        self.assertEqual(ex.load_index()['steps'][0]['status'], 'pending')
+
+    def test_error_blocked_confirmed_by_chore(self):
+        for status, code, count, key, stamp in (
+                ('error', 1, 3, 'error_message', 'failed_at'),
+                ('blocked', 2, 1, 'blocked_reason', 'blocked_at')):
+            with self.subTest(status=status):
+                ex = self.fixture({'step0': {'files': {'src/keep.txt': 'dirty'},
+                    'result': {'status': status, key: 'reason'}}})
+                before = ex.head()
+                calls = len(self.exec_calls())
+                self.assertEqual(ex.run(), code)
+                self.assertEqual(len(self.exec_calls()) - calls, count)
+                item = ex.load_index()['steps'][0]
+                self.assertEqual(item['status'], status)
+                self.assertIn('reason', item[key])
+                self.assertRegex(item[stamp], r'\+09:00$')
+                top = ex.load_top_index()['phases'][0]
+                self.assertEqual(top['status'], status)
+                self.assertRegex(top[stamp], r'\+09:00$')
+                self.assertEqual(self.commit_files(ex),
+                                 {f'phases/{PHASE}/index.json', 'phases/index.json'})
+                self.assertEqual(self.git(ex.root, 'rev-list', '--count', f'{before}..HEAD').strip(), b'1')
+                self.assertEqual(ex.changed_paths(), [])
+                self.assertFalse(ex.marker_path.exists())
+
+    def test_steps_order_skip_completed_and_resume_exhaustion(self):
+        ex = self.fixture(steps=[{'name': 'alpha'}, {'name': 'beta'}])
+        self.assertEqual(ex.run(), 0)
+        self.assertEqual([s['summary'] for s in ex.load_index()['steps']],
+                         ['step0 output', 'step1 output'])
+        calls = len(self.exec_calls())
+        ex.run_steps(ex.specs)
+        self.assertEqual(len(self.exec_calls()), calls)
+        ex = self.fixture()
+        ex.save_marker({'unit': 'step0', 'k': execute.MAX_ATTEMPTS,
+                        'pre_sha': ex.head(), 'stage': 'running', 'feat_sha': None, 'pgid': None})
+        self.assertEqual(ex.run(), 1)
+        self.assertEqual(len(self.exec_calls()), calls)
+        self.assertIsNone(ex.resume)
+        self.assertIn('소진', ex.load_index()['steps'][0]['error_message'])
+        self.assertFalse(ex.marker_path.exists())
+
+    def test_chore_failure_preserves_feat_done_for_recovery(self):
+        ex = self.fixture()
+        original = ex.commit_paths
+        def fail_chore(paths, message):
+            if message.startswith('chore:'):
+                raise execute.HarnessExit(1, 'chore failed')
+            return original(paths, message)
+        with mock.patch.object(ex, 'commit_paths', side_effect=fail_chore):
+            self.assertEqual(ex.run(), 1)
+        self.assertEqual(ex.load_marker()['stage'], 'feat_done')
+        self.make_executor(ex.root).recover()
+        self.assertFalse(ex.marker_path.exists())
+        self.assertEqual(ex.load_index()['steps'][0]['status'], 'completed')
+
+    def test_recover_invalid_feat_result_leaves_state_untouched(self):
+        for result in (None, {}, {'status': 'error', 'summary': 'bad'},
+                       {'status': 'completed', 'summary': ''}):
+            with self.subTest(result=result):
+                ex = self.fixture()
+                marker = {'unit': 'step0', 'k': 1, 'pre_sha': ex.head(),
+                          'stage': 'feat_done', 'feat_sha': ex.head(), 'pgid': None}
+                ex.save_marker(marker)
+                if result is not None:
+                    execute.write_json_atomic(ex.result_path('step0'), result)
+                before = ex.head()
+                self.assert_exit(1, ex.recover)
+                self.assertEqual(ex.head(), before)
+                self.assertEqual(ex.load_marker(), marker)
+                self.assertEqual(ex.changed_paths(), [])
+                self.assertEqual(self.exec_calls(), [])
 
 if __name__ == "__main__":
     program = unittest.main(exit=False)

@@ -307,13 +307,26 @@ class Executor:
                     or "pgid" not in marker
                     or (marker["pgid"] is not None and type(marker["pgid"]) is not int)):
                 raise ValueError("marker 필드가 잘못되었다")
-            if marker.get("stage") != "running":
+            if marker.get("stage") == "feat_done":
+                match = re.fullmatch(r"step(\d+)", marker["unit"])
+                result = self.read_result(marker["unit"])
+                if (self.head() != marker["feat_sha"] or match is None
+                        or result is None or result["status"] != "completed"
+                        or not isinstance(result.get("summary"), str)
+                        or not result["summary"].strip()
+                        or not any(s["step"] == int(match[1])
+                                   for s in self.load_index()["steps"])):
+                    raise ValueError("feat_done의 HEAD, unit 또는 result가 무효다")
+            elif marker.get("stage") != "running":
                 raise ValueError(f"지원하지 않는 stage: {marker.get('stage')!r}")
-            if self.head() != marker["pre_sha"]:
+            elif self.head() != marker["pre_sha"]:
                 raise ValueError("HEAD가 pre_sha와 다르다")
         except (OSError, ValueError, HarnessExit) as exc:
             raise HarnessExit(EXIT_ERROR, f"복구 거부 {self.marker_path}: {exc}") from exc
         self.marker = marker
+        if marker["stage"] == "feat_done":
+            self.confirm_step(int(match[1]), "completed", result["summary"])
+            return
         self._kill_stale_codex(marker["pgid"])
         self.rollback(marker["unit"], marker["k"], marker["pre_sha"])
         self.clear_marker()
@@ -707,6 +720,58 @@ class Executor:
             return None
         return self.commit_paths(paths, f"chore: {self.phase_dir} {label} (#{self.issue})")
 
+    def commit_feat(self, message: str, pre_sha: str) -> str:
+        if self.head() != pre_sha:
+            raise HarnessExit(EXIT_ERROR, "feat 커밋 전 HEAD가 pre_sha와 다르다")
+        changed = self.changed_paths()
+        feat_sha = self.commit_paths(changed, message) if changed else pre_sha
+        self.save_marker({**self.marker, "stage": "feat_done", "feat_sha": feat_sha})
+        return feat_sha
+
+    def confirm_step(self, step: int, status: str, text: str) -> None:
+        fields = {"completed": ("summary", "completed_at"),
+                  "error": ("error_message", "failed_at"),
+                  "blocked": ("blocked_reason", "blocked_at")}
+        key, stamp = fields[status]
+        data = self.load_index()
+        item = next((s for s in data["steps"] if s["step"] == step), None)
+        if item is None:
+            raise HarnessExit(EXIT_ERROR, f"index에 step{step}이 없다")
+        for pair in fields.values():
+            for field in pair:
+                item.pop(field, None)
+        item.update(status=status)
+        item[key] = text
+        item[stamp] = now_kst()
+        self.save_index(data)
+        if status in {"error", "blocked"}:
+            self.set_top_status(status)
+        self.commit_meta(f"step{step} {status}")
+        self.clear_marker()
+
+    def run_steps(self, specs: list[StepSpec]) -> None:
+        for spec in specs:
+            item = next(s for s in self.load_index()["steps"] if s["step"] == spec.step)
+            if item["status"] == "completed":
+                continue
+            if item["status"] != "pending":
+                code = EXIT_BLOCKED if item["status"] == "blocked" else EXIT_ERROR
+                raise HarnessExit(code, f"step{spec.step} 상태: {item['status']}")
+            unit = f"step{spec.step}"
+            start_k = 1
+            if self.resume and self.resume["unit"] == unit:
+                start_k = self.resume["next_k"]
+                self.resume = None
+            outcome = self.attempt_unit(unit, spec.text, spec.allowed, spec.ac, start_k=start_k)
+            if outcome.status == "completed":
+                self.commit_feat(f"feat: {self.phase_dir} {unit} {spec.name} (#{self.issue})",
+                                 outcome.pre_sha)
+                self.confirm_step(spec.step, "completed", outcome.summary)
+            else:
+                self.confirm_step(spec.step, outcome.status, outcome.reason)
+                code = EXIT_BLOCKED if outcome.status == "blocked" else EXIT_ERROR
+                raise HarnessExit(code, outcome.reason or f"{unit} {outcome.status}")
+
     @staticmethod
     def _last_step(data: dict) -> dict | None:
         return next((step for step in reversed(data["steps"])
@@ -781,7 +846,8 @@ class Executor:
             self.install_signal_handlers()
             self.recover()
             self.prepare()
-            self.load_step_specs()
+            specs = self.load_step_specs()
+            self.run_steps(specs)
             return EXIT_OK
         except HarnessExit as exc:
             print(exc.message, file=sys.stderr)
