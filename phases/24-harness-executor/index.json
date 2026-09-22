@@ -41,7 +41,9 @@
     {
       "step": 5,
       "name": "scoped-commit",
-      "status": "pending"
+      "status": "completed",
+      "summary": "scripts/execute.py: Executor.commit_feat(message: str, pre_sha: str) -> str, confirm_step(step: int, status: str, text: str) -> None, run_steps(specs: list[StepSpec]) -> None 추가; run() step 루프 연결 및 recover() feat_done step의 chore 재개 구현. scripts/test_execute.py: 필수 7개 포함 10개 테스트 추가, 기존 run 단위 테스트의 후속 루프 격리. AC 10줄 모두 종료 0, 전체 68개 및 Bash 가드 54/54 통과.",
+      "completed_at": "2026-09-22T20:42:49+09:00"
     },
     {
       "step": 6,
