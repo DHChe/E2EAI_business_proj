@@ -32,9 +32,9 @@ Claude 루프의 **대안이 아니다** — 어느 것을 골라도 그 안에�
    `재무합의대기`인 문서의 실행은 끝나 있고 워커 슬롯은 반환돼 있다(codex §3.3-1).
 5. **워커는 compose의 별도 서비스다**([ADR-0017](0017-public-demo-single-vm-replay-default-capped-live.md)의 그림).
    동시 LLM 작업 상한은 설정값이고 초기값은 2다 `[설계 가정]`.
-6. **#17이 정하지 않은 전이는 이름 붙은 거부로 막는다.** ~~반려·보류 이후, 재심 복귀, 타임아웃이 그 자리다.~~ **정정(#10, 2026-09-22)**: 반려 이후(`CONTEXT.md:81`), 답 없이 시간이 흐른 보류(`CONTEXT.md:88`), 재심 복귀, 타임아웃이 그 자리다. 보류 → 답변 → 같은 대기 복귀는 정의된 전이라 막지 않는다(`docs/adr/0003-approver-actions-three.md:25-26`, `docs/research/agent-architecture-comparison.md:158`).
+6. **#17이 정하지 않은 전이는 이름 붙은 거부로 막는다.** ~~반려·보류 이후, 재심 복귀, 타임아웃이 그 자리다.~~ **정정(#10, 2026-09-22)**: ~~반려 이후(`CONTEXT.md:81`), 답 없이 시간이 흐른 보류(`CONTEXT.md:88`), 재심 복귀, 타임아웃이 그 자리다.~~ 보류 → 답변 → 같은 대기 복귀는 정의된 전이라 막지 않는다(`docs/adr/0003-approver-actions-three.md:25-26`, `docs/research/agent-architecture-comparison.md:158`). **정정(#17, 2026-09-22)**: #17이 그 넷을 정했다([ADR-0024](0024-rejection-resubmission-and-card-bound-approvals.md)·[ADR-0026](0026-hold-answer-deadline-time-changes-no-state.md)·[ADR-0027](0027-reopen-returns-to-first-finance-consent.md)). 이 거부는 #17이 다른 티켓에 넘긴 세 자리에만 남는다 — 재무합의자 0명 정산의 재심, 재심 정정 뒤 차액의 지급 처리(#20), 재량 판단이 결재선 입력을 바꾼 뒤의 승인·동의(#21). #17이 이유를 정한 거절에는 이유를 말하는 이름을 붙인다([ADR-0023](0023-document-and-evidence-axes-named-rejections.md) 결정 8).
    리듀서는 그 전이를 추측하지 않고 `UNDEFINED_BY_17` 같은 거부를 돌려준다(claude §3.4). S11의
-   "#17이 정하지 않은 후속 상태를 성공으로 처리하지 않는다"(`docs/PRD.md:161`)를 코드로 옮긴 것이다.
+   "#17이 정하지 않은 후속 상태를 성공으로 처리하지 않는다"(`docs/PRD.md:161`)를 코드로 옮긴 것이다. **보완(#17, 2026-09-22)**: 위 인용은 `47c89dc`의 문장이다. 지금 S11은 ADR-0023 결정 8의 `UNDEFINED_BY_17` 자리를 가리킨다.
 
 ### 자체 구현이 지는 복구 계약
 
@@ -93,9 +93,9 @@ codex는 처음부터 뗐다(codex §4). 저장을 PostgreSQL로 고르면서 �
   3. 커밋 전 부작용의 재시도를 멱등 key로 막을 수 없다. 그때는 그 호출만 액티비티로 감싸는 편이 맞고, 전체 이관과는 별개다(grok §3.4).
 - 루프·상태 저장·재개·병렬 도구 결과 취합·감사 스키마를 우리가 쓴다. #4가 B1의 대가로 적은 그대로다(`docs/research/agent-runtime-candidates.md:905`).
 - ~~#10은 "에이전트에게 부작용 도구가 있는가"에 답해야 한다. 그 답이 반증 1을 연다.~~ **정정(#10, 2026-09-22)**: #10의 답은 "아니오"다([ADR-0018](0018-two-model-contracts-no-side-effect-tools.md)). 반증 1은 열리지 않았고, 바깥으로 쓰는 커넥터가 없어 반증 3도 생길 자리가 없다([ADR-0021](0021-three-read-only-mock-connectors-no-erp.md)).
-- #17이 전이를 정하면 리듀서에 표 행을 더한다. 그 전까지 미정 전이는 성공으로 기록되지 않는다.
+- #17이 전이를 정하면 리듀서에 표 행을 더한다. 그 전까지 미정 전이는 성공으로 기록되지 않는다. **보완(#17, 2026-09-22)**: 더할 행은 `docs/ARCHITECTURE.md` §7의 전이 표다. 남은 미정 전이와 이름 있는 거절은 [ADR-0023](0023-document-and-evidence-axes-named-rejections.md) 결정 8의 표에 있다.
 - 기존 결정과의 관계.
-  - [ADR-0003](0003-approver-actions-three.md)은 provisional이다(`docs/adr/0003-approver-actions-three.md:3`). 역할별 액션 집합을 리듀서의 **데이터**로 두면 #17의 결과를 반영하기 쉽다(claude §3.4).
+  - ~~[ADR-0003](0003-approver-actions-three.md)은 provisional이다(`docs/adr/0003-approver-actions-three.md:3`).~~ **정정(#17, 2026-09-22)**: [ADR-0003](0003-approver-actions-three.md)의 provisional 표지는 #17이 뗐다. 승인자 액션은 3종 그대로이고, 기안자의 재상신·철회와 재무팀의 반환 확인이 역할별 액션 집합에 더해진다([ADR-0024](0024-rejection-resubmission-and-card-bound-approvals.md)·[ADR-0025](0025-withdrawal-only-for-preapproval.md)·[ADR-0028](0028-negative-net-goes-to-repayment-pending.md)). 역할별 액션 집합을 리듀서의 **데이터**로 두면 #17의 결과를 반영하기 쉽다(claude §3.4).
   - [ADR-0010](0010-human-routing-bounded-by-structure-measured-by-ratio.md)의 "멈추고 드러내는 것"(`docs/adr/0010-human-routing-bounded-by-structure-measured-by-ratio.md:54`)은 작업 큐를 멈추는 것으로 구현할 수 있다(claude §3.1). 구현이 받는 규칙은 "미완료·대기 수를 공개하고 처리를 멈춘다"(`:36-37`)이다.
   - #9 본문 갱신 1은 "에이전트가 기안·결재를 대신 올리는 순간"을 전제로 적었다. ~~그 전제는 `CONTEXT.md:331`이 거뒀다.~~ **정정(#23, 2026-09-22)**: `CONTEXT.md:331`이 거둔 것은 결재 쪽뿐이다 — 에이전트는 결재 행위의 행위자가 되지 않는다. 기안 쪽은 다루지 않고, `docs/PRD.md:111`은 여전히 "에이전트가 대신 기안·확정하는 순간"을 적는다. R-e는 그 뒤에도 채택 조건이다 —
     에이전트가 만든 값의 책임자와 사람이 한 결재의 행위자·책임자를 여전히 갈라 적어야 한다(claude §11).
