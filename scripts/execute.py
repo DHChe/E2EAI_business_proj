@@ -24,6 +24,16 @@ EXIT_BLOCKED = 2
 EXIT_REVIEW = 3
 MAX_ATTEMPTS = 3
 GH_ATTEMPTS = 3
+REVIEW_CONTRACT: str = (
+    "이 리뷰에서 파일을 고치거나 커밋, push, `gh` 쓰기, 외부 게시, 원격 DB 변경을 하지 마라. "
+    "출력의 마지막 줄은 정확히 `REVIEW_RESULT: passed` 또는 `REVIEW_RESULT: failed`여야 한다."
+)
+
+
+def parse_verdict(text: str) -> str | None:
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    match = re.fullmatch(r"REVIEW_RESULT: (passed|failed)", lines[-1]) if lines else None
+    return match.group(1) if match else None
 
 
 @dataclass
@@ -212,6 +222,7 @@ class Executor:
         self.session_timeout = 1800
         self.ac_timeout = 600
         self.gh_timeout = 60
+        self.review_timeout = 1800
         self.child_pgid = None
         self.marker = None
         self.resume = None
@@ -945,6 +956,109 @@ class Executor:
         self.commit_meta("prepare", changed)
         return previous
 
+    def review_argv(self, reviewer: str, scope: str) -> list[str]:
+        if reviewer == "claude":
+            return ["claude", "-p", "--setting-sources", "project,local",
+                    "--dangerously-skip-permissions", "--disallowedTools",
+                    "Edit,Write,MultiEdit,NotebookEdit", "--strict-mcp-config",
+                    "--output-format", "json", f"/review {scope} {REVIEW_CONTRACT}"]
+        if reviewer != "grok":
+            raise ValueError(f"알 수 없는 리뷰어: {reviewer}")
+        body = (self.root / ".claude/commands/review.md").read_text(encoding="utf-8")
+        body = re.sub(r"\A---\s*\n.*?\n---[^\S\n]*(?:\n|$)", "", body,
+                      count=1, flags=re.DOTALL)
+        if "$ARGUMENTS" in body:
+            body = body.replace("$ARGUMENTS", scope)
+        else:
+            body += f"\n리뷰 범위: {scope}\n"
+        return ["grok", "-p", body.rstrip() + "\n" + REVIEW_CONTRACT,
+                "--permission-mode", "dontAsk", "--output-format", "json"]
+
+    def run_reviewer(self, reviewer: str, round_no: int, end_sha: str, scope: str) -> str:
+        unit = f"review-r{round_no}-{reviewer}"
+        self.run_dir.mkdir(parents=True, exist_ok=True)
+        report = self.run_dir / f"{unit}.txt"
+        for _ in range(2):
+            branch = self.git("symbolic-ref", "-q", "HEAD", check=False)
+            if (branch.returncode or branch.stdout.decode().strip() != f"refs/heads/{self.branch}"
+                    or self.head() != end_sha or self.git("status", "--porcelain").stdout):
+                raise HarnessExit(EXIT_ERROR, "리뷰 실행 전 브랜치/HEAD/작업 트리 불일치")
+            fingerprint = self.env_fingerprint()
+            try:
+                child = self.run_child(self.review_argv(reviewer, scope),
+                                       env=self.child_env(), timeout=self.review_timeout)
+            except OSError as exc:
+                child = ChildResult(None, False, "", str(exc))
+            branch = self.git("symbolic-ref", "-q", "HEAD", check=False)
+            if branch.returncode or branch.stdout.decode().strip() != f"refs/heads/{self.branch}":
+                ref = self.snapshot(unit, 1, end_sha)
+                raise HarnessExit(EXIT_ERROR, f"리뷰어가 브랜치를 바꿨다: {ref}")
+            changed = (self.head() != end_sha or bool(self.git("status", "--porcelain").stdout)
+                       or self.env_fingerprint() != fingerprint)
+            if changed:
+                self.rollback(unit, 1, end_sha)
+            text = child.stdout
+            valid_json = False
+            try:
+                payload = json.loads(child.stdout)
+                value = payload.get("result" if reviewer == "claude" else "text")
+                if isinstance(value, str):
+                    text, valid_json = value, True
+            except (ValueError, AttributeError):
+                pass
+            report.write_text(text, encoding="utf-8")
+            if changed:
+                return "unverifiable"
+            verdict = parse_verdict(text)
+            if valid_json and verdict and child.returncode == 0 and not child.timed_out:
+                return verdict
+        return "unverifiable"
+
+    def run_baseline(self, specs: list[StepSpec]) -> str | None:
+        for spec in sorted(specs, key=lambda item: item.step):
+            failure = self.run_ac(spec.ac)
+            if failure is not None:
+                return f"step{spec.step}: {failure}"
+        return None
+
+    def review_round(self, round_no: int, end_sha: str) -> dict[str, str]:
+        scope = f"{self.load_index()['base_commit']}..{end_sha}"
+        verdicts = {}
+        for reviewer in ("claude", "grok"):
+            verdicts[reviewer] = self.run_reviewer(reviewer, round_no, end_sha, scope)
+        return verdicts
+
+    def review_gate(self, specs: list[StepSpec]) -> int:
+        data = self.load_index()
+        if (any(step["status"] != "completed" for step in data["steps"])
+                or data.get("review", {}).get("status") == "passed"):
+            raise HarnessExit(EXIT_ERROR, "리뷰 관문 진입 조건 불일치")
+        end_sha, round_no = self.head(), 1
+        failure = self.run_baseline(specs)
+        if failure is not None:
+            self.set_top_status("error")
+            self.commit_meta("review baseline error")
+            self.issue_comment(f"review baseline error: {failure}")
+            return EXIT_ERROR
+        verdicts = self.review_round(round_no, end_sha)
+        status = ("unverifiable" if "unverifiable" in verdicts.values() else
+                  "passed" if all(v == "passed" for v in verdicts.values()) else "failed")
+        data = self.load_index()
+        data["review"] = {"status": status, "end_sha": end_sha, "round": round_no}
+        if status == "passed":
+            data["completed_at"] = now_kst()
+        self.save_index(data)
+        self.set_top_status("completed" if status == "passed" else "error")
+        self.commit_meta("phase completed" if status == "passed" else f"review {status}")
+        if status == "passed":
+            self.issue_comment(f"{self.phase_dir} completed\n" + "\n".join(
+                f"step{s['step']}: {s.get('summary', '')}" for s in data["steps"]))
+        for reviewer, verdict in verdicts.items():
+            report = self.run_dir / f"review-r{round_no}-{reviewer}.txt"
+            body = report.read_text(encoding="utf-8") if report.exists() else "리뷰 원문 없음"
+            self.issue_comment(f"{reviewer}: {verdict}\n{body}")
+        return EXIT_OK if status == "passed" else EXIT_REVIEW
+
     def run(self) -> int:
         try:
             self.acquire_lock()
@@ -955,7 +1069,11 @@ class Executor:
                 self.issue_resume()
             specs = self.load_step_specs()
             self.run_steps(specs)
-            return EXIT_OK
+            data = self.load_index()
+            if (all(s["status"] == "completed" for s in data["steps"])
+                    and data.get("review", {}).get("status") == "passed"):
+                return EXIT_OK
+            return self.review_gate(specs)
         except HarnessExit as exc:
             print(exc.message, file=sys.stderr)
             return exc.code

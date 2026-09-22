@@ -447,7 +447,8 @@ class StepSpecTests(HarnessTestCase):
         executor = self.make_executor(root)
         (root / f"phases/{PHASE}/step0.md").write_text(
             step_md(0, "alpha", ["src/"], ["touch ran.txt"]))
-        with mock.patch.object(executor, 'run_steps') as run_steps:
+        with mock.patch.object(executor, 'run_steps') as run_steps, \
+                mock.patch.object(executor, 'review_gate', return_value=0):
             self.assertEqual(executor.run(), 0)
             run_steps.assert_called_once_with(executor.specs)
         self.assertEqual(executor.specs[0].ac, ("touch ran.txt",))
@@ -857,7 +858,8 @@ finally:
                 mock.patch.object(ex, 'recover', side_effect=lambda: record('recover')), \
                 mock.patch.object(ex, 'prepare', side_effect=lambda: record('prepare')), \
                 mock.patch.object(ex, 'load_step_specs', side_effect=lambda: record('specs')), \
-                mock.patch.object(ex, 'run_steps', side_effect=lambda specs: record('steps')):
+                mock.patch.object(ex, 'run_steps', side_effect=lambda specs: record('steps')), \
+                mock.patch.object(ex, 'review_gate', return_value=0):
             install = ex.install_signal_handlers
             def installed():
                 record('signals')
@@ -1109,6 +1111,10 @@ class ScopedCommitTests(HarnessTestCase):
     def fixture(self, scenarios=None, steps=None, files=None):
         ex = self.make_executor(self.make_repo(
             steps=steps or [{'name': 'alpha', 'ac': ['true']}], files=files))
+        # Keep scoped-commit assertions isolated from the later review gate.
+        gate = mock.patch.object(ex, 'review_gate', return_value=0)
+        gate.start()
+        self.addCleanup(gate.stop)
         ex.prepare()
         os.environ['UNIT_SCENARIOS'] = json.dumps(scenarios or {})
         self.fake_bin('codex', r"""
@@ -1456,7 +1462,8 @@ if sys.argv[1:3] == ['issue', 'view']:
         data['steps'][0].pop('failed_at')
         ex.save_index(data)
         os.environ['GH_LABELS'] = '{"labels": [{"name": "ready-for-human"}]}'
-        with mock.patch.object(ex, 'run_steps') as steps:
+        with mock.patch.object(ex, 'run_steps') as steps, \
+                mock.patch.object(ex, 'review_gate', return_value=0):
             self.assertEqual(ex.run(), 0)
             steps.assert_called_once()
         self.assertEqual([args[1] for args in self.calls('gh')], ['view', 'edit'])
@@ -1466,6 +1473,237 @@ if sys.argv[1:3] == ['issue', 'view']:
         body = self.calls('gh')[-1][-1]
         self.assertEqual(len(body), 60000)
         self.assertTrue(body.endswith('[본문 잘림]'))
+
+
+
+class ReviewGateTests(HarnessTestCase):
+    def fixture(self, scenarios=None, ac=None, review='pending'):
+        ex = self.make_executor(self.make_repo(
+            steps=[{'name': 'alpha', 'ac': ac or ['true']}],
+            files={'.claude/commands/review.md': '---\ndescription: hidden metadata\n---\nUnique review body\n'}))
+        ex.prepare()
+        data = ex.load_index()
+        data['steps'][0].update(status='completed', summary='alpha output',
+                                completed_at=execute.now_kst())
+        data['review']['status'] = review
+        ex.save_index(data)
+        if review == 'failed':
+            ex.set_top_status('error')
+        ex.commit_meta('fixture completed steps')
+        os.environ['REVIEW_SCENARIOS'] = json.dumps(scenarios or {})
+        self.fake_bin('gh', 'pass\n')
+        self.fake_bin('codex', "print('[]') if 'mcp' in sys.argv else sys.exit(97)\n")
+        for reviewer in ('claude', 'grok'):
+            self.fake_bin(reviewer, r"""
+import subprocess, time
+name = Path(sys.argv[0]).name
+log_dir = Path(os.environ['HARNESS_CALLS_DIR'])
+count = len((log_dir / name).read_text().splitlines())
+options = json.loads(os.environ['REVIEW_SCENARIOS']).get(name, ['passed'])
+mode = options[min(count - 1, len(options) - 1)]
+head = subprocess.check_output(['git', 'rev-parse', 'HEAD']).decode().strip()
+with (log_dir / 'review-records').open('a') as log:
+    log.write(json.dumps({'name': name, 'head': head, 'env': dict(os.environ),
+                         'gh_empty': not list(Path(os.environ['GH_CONFIG_DIR']).iterdir())}) + '\n')
+if mode in ('edit', 'commit'):
+    Path('src/keep.txt').write_text('reviewer edit')
+    Path('src/new.txt').write_text('reviewer new')
+    if mode == 'commit':
+        subprocess.run(['git', 'add', '--', 'src/keep.txt', 'src/new.txt'], check=True)
+        subprocess.run(['git', 'commit', '-q', '-m', 'reviewer mutation'], check=True)
+if mode == 'branch':
+    subprocess.run(['git', 'checkout', '-q', 'main'], check=True)
+if mode == 'detached':
+    subprocess.run(['git', 'checkout', '-q', '--detach', 'HEAD'], check=True)
+if mode == 'env':
+    Path('.env').write_text('changed')
+if mode == 'timeout':
+    time.sleep(2)
+text = 'Review body\nREVIEW_RESULT: ' + ('failed' if mode == 'failed' else 'passed')
+if mode == 'missing':
+    text = 'No verdict'
+if mode == 'raw':
+    print(text)
+else:
+    print(json.dumps({'result' if name == 'claude' else 'text': text}))
+if mode == 'exit':
+    sys.exit(9)
+""")
+        return ex
+
+    def records(self):
+        path = self.log_dir / 'review-records'
+        return [json.loads(line) for line in path.read_text().splitlines()] if path.exists() else []
+
+    def review(self, ex, reviewer='claude'):
+        end = ex.head()
+        return ex.run_reviewer(reviewer, 1, end, f"{ex.load_index()['base_commit']}..{end}")
+
+    def test_both_passed_completes_phase(self):
+        ex = self.fixture()
+        end = ex.head()
+        self.assertEqual(ex.review_gate(ex.load_step_specs()), 0)
+        self.assertEqual(ex.load_index()['review'], {'status': 'passed', 'end_sha': end, 'round': 1})
+        self.assertIn('completed_at', ex.load_index())
+        top = ex.load_top_index()['phases'][0]
+        self.assertEqual(top['status'], 'completed')
+        self.assertIn('completed_at', top)
+        self.assertEqual(ex.git('log', '-1', '--format=%s').stdout.strip(),
+                         b'chore: 7-sample phase completed (#7)')
+        self.assertNotEqual(ex.head(), end)
+        self.assertEqual([(r['name'], r['head']) for r in self.records()],
+                         [('claude', end), ('grok', end)])
+        comments = self.calls('gh')
+        self.assertEqual(len(comments), 3)
+        self.assertTrue(all(args[:3] == ['issue', 'comment', '7'] for args in comments))
+        self.assertIn('step0: alpha output', comments[0][-1])
+        for comment in comments[1:]:
+            self.assertIn('Review body\nREVIEW_RESULT: passed', comment[-1])
+        self.assertEqual(ex.changed_paths(), [])
+
+    def test_baseline_ac_failure_errors(self):
+        ex = self.fixture(ac=['false'])
+        self.assertEqual(ex.review_gate(ex.load_step_specs()), 1)
+        self.assertEqual(self.records(), [])
+        self.assertEqual(ex.load_top_index()['phases'][0]['status'], 'error')
+        self.assertIn('step0', self.calls('gh')[0][-1])
+        self.assertEqual(ex.load_index()['review']['status'], 'pending')
+
+    def test_missing_verdict_retry_then_unverifiable(self):
+        ex = self.fixture({'claude': ['missing']})
+        self.assertEqual(ex.review_gate(ex.load_step_specs()), 3)
+        self.assertEqual(len(self.calls('claude')), 2)
+        self.assertEqual(len(self.calls('grok')), 1)
+        self.assertEqual(ex.load_index()['review']['status'], 'unverifiable')
+        os.environ['REVIEW_SCENARIOS'] = json.dumps({'claude': ['missing', 'passed']})
+        (self.log_dir / 'claude').unlink()
+        self.assertEqual(self.review(ex), 'passed')
+        self.assertEqual(len(self.calls('claude')), 2)
+
+    def test_reviewer_commit_reverted_unverifiable(self):
+        ex = self.fixture({'claude': ['commit']})
+        end = ex.head()
+        self.assertEqual(ex.review_round(1, end), {'claude': 'unverifiable', 'grok': 'passed'})
+        self.assertEqual(ex.head(), end)
+        self.assertEqual(self.records()[-1]['head'], end)
+        refs = ex.git('for-each-ref', '--format=%(refname)',
+                      f'refs/harness/{PHASE}/review-r1-claude/').stdout
+        self.assertTrue(refs.strip())
+        for mode in ('branch', 'detached'):
+            with self.subTest(mode=mode):
+                other = self.fixture({'claude': [mode]})
+                before = {b: other.git('rev-parse', b).stdout for b in ('main', other.branch)}
+                self.assert_exit(1, self.review, other)
+                self.assertEqual({b: other.git('rev-parse', b).stdout for b in before}, before)
+                self.assertTrue(other.git('for-each-ref', '--format=%(refname)',
+                                         f'refs/harness/{PHASE}/review-r1-claude/').stdout.strip())
+
+    def test_reviewer_edit_reverted_unverifiable(self):
+        ex = self.fixture({'grok': ['edit']})
+        self.assertEqual(self.review(ex, 'grok'), 'unverifiable')
+        self.assertEqual((ex.root / 'src/keep.txt').read_text(), 'keep\n')
+        self.assertFalse((ex.root / 'src/new.txt').exists())
+        self.assertEqual(ex.git('status', '--porcelain').stdout, b'')
+        self.assertEqual(len(self.calls('grok')), 1)
+
+    def test_reviewer_argv_and_env(self):
+        ex = self.fixture()
+        scope = f"{ex.load_index()['base_commit']}..{ex.head()}"
+        expected = ['claude', '-p', '--setting-sources', 'project,local',
+                    '--dangerously-skip-permissions', '--disallowedTools',
+                    'Edit,Write,MultiEdit,NotebookEdit', '--strict-mcp-config',
+                    '--output-format', 'json', f'/review {scope} {execute.REVIEW_CONTRACT}']
+        self.assertEqual(ex.review_argv('claude', scope), expected)
+        self.assertNotIn('--bare', expected)
+        grok = ex.review_argv('grok', scope)
+        self.assertEqual(grok[:2], ['grok', '-p'])
+        self.assertEqual(grok[3:], ['--permission-mode', 'dontAsk', '--output-format', 'json'])
+        for value in ('Unique review body', scope, 'REVIEW_RESULT: passed'):
+            self.assertIn(value, grok[2])
+        self.assertNotIn('hidden metadata', grok[2])
+        self.assertNotIn('\n', execute.REVIEW_CONTRACT)
+        os.environ.update(GH_TOKEN='fake', GITHUB_TOKEN='fake', SSH_AUTH_SOCK='fake')
+        self.assertEqual(ex.review_round(1, ex.head()), {'claude': 'passed', 'grok': 'passed'})
+        self.assertEqual(self.calls('claude')[-1], expected[1:])
+        self.assertEqual(self.calls('grok')[-1], grok[1:])
+        for record in self.records():
+            for key in ('GH_TOKEN', 'GITHUB_TOKEN', 'SSH_AUTH_SOCK'):
+                self.assertNotIn(key, record['env'])
+            self.assertTrue(record['gh_empty'])
+            self.assertEqual(record['env']['PYTHONDONTWRITEBYTECODE'], '1')
+
+    def test_rerun_completed_steps_starts_at_gate(self):
+        ex = self.fixture(review='failed')
+        self.assertEqual(ex.run(), 0)
+        self.assertFalse([args for args in self.calls('codex') if args[0] == 'exec'])
+        self.assertEqual(ex.load_index()['review']['status'], 'passed')
+        self.assertEqual(len(self.calls('claude')), 1)
+        self.assertEqual(len(self.calls('grok')), 1)
+        head = ex.head()
+        self.assertEqual(ex.run(), 0)
+        self.assertEqual(ex.head(), head)
+        self.assertEqual(len(self.calls('claude')), 1)
+        self.assertEqual(len(self.calls('grok')), 1)
+
+    def test_unverifiable_exits_3_no_fix(self):
+        ex = self.fixture({'claude': ['missing'], 'grok': ['failed']})
+        self.assertEqual(ex.run(), 3)
+        self.assertEqual(ex.load_index()['review']['status'], 'unverifiable')
+        self.assertEqual(self.calls('codex'), [])
+        self.assertNotIn(b'fix:', ex.git('log', '--format=%s').stdout)
+        self.assertEqual(ex.changed_paths(), [])
+        self.assertEqual(len(self.calls('gh')), 2)
+
+    def test_failed_reviews_keep_original_reports(self):
+        ex = self.fixture({'claude': ['failed']})
+        self.assertEqual(ex.review_gate(ex.load_step_specs()), 3)
+        self.assertEqual(ex.load_index()['review']['status'], 'failed')
+        self.assertEqual(len(self.calls('claude')), 1)
+        self.assertEqual(ex.load_top_index()['phases'][0]['status'], 'error')
+        self.assertIn('Review body\nREVIEW_RESULT: failed', self.calls('gh')[0][-1])
+
+    def test_verdict_strict_last_line(self):
+        for text, expected in [('', None), ('REVIEW_RESULT: passed\n\n', 'passed'),
+                               ('report\n REVIEW_RESULT: failed \n', 'failed'),
+                               ('REVIEW_RESULT: passed\nmore', None),
+                               ('REVIEW_RESULT: passed extra', None),
+                               ('REVIEW_RESULT: Passed', None)]:
+            with self.subTest(text=text):
+                self.assertEqual(execute.parse_verdict(text), expected)
+
+    def test_reviewer_invalid_json_exit_timeout_and_missing_command(self):
+        for mode in ('raw', 'exit', 'timeout'):
+            with self.subTest(mode=mode):
+                ex = self.fixture({'claude': [mode]})
+                before = len(self.calls('claude'))
+                ex.review_timeout = .05 if mode == 'timeout' else 5
+                self.assertEqual(self.review(ex), 'unverifiable')
+                self.assertEqual(len(self.calls('claude')) - before, 2)
+        ex = self.fixture()
+        command = ex.root / '.claude/commands/review.md'
+        command.write_text('---\ndescription: secret\n---\nReview $ARGUMENTS\n')
+        prompt = ex.review_argv('grok', 'a..b')[2]
+        self.assertIn('Review a..b', prompt)
+        self.assertNotIn('$ARGUMENTS', prompt)
+        self.assertNotIn('리뷰 범위:', prompt)
+        command.unlink()
+        ex.git('add', '--', '.claude/commands/review.md')
+        ex.git('commit', '-q', '-m', 'missing command fixture')
+        before = len(self.calls('grok'))
+        self.assertEqual(self.review(ex, 'grok'), 'unverifiable')
+        self.assertEqual(len(self.calls('grok')), before)
+
+    def test_reviewer_preconditions_and_env_mutation(self):
+        ex = self.fixture({'claude': ['env']})
+        (ex.root / 'src/keep.txt').write_text('dirty')
+        self.assert_exit(1, self.review, ex)
+        self.assertEqual(self.calls('claude'), [])
+        (ex.root / 'src/keep.txt').write_text('keep\n')
+        self.assert_exit(1, ex.run_reviewer, 'claude', 1, 'wrong-sha', 'a..b')
+        self.assertEqual(self.review(ex), 'unverifiable')
+        self.assertEqual(len(self.calls('claude')), 1)
+        self.assertTrue(ex.git('for-each-ref', '--format=%(refname)',
+                               f'refs/harness/{PHASE}/review-r1-claude/').stdout.strip())
 
 
 if __name__ == "__main__":
