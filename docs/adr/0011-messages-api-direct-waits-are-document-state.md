@@ -25,7 +25,7 @@ Claude 루프의 **대안이 아니다** — 어느 것을 골라도 그 안에�
 1. **Claude 호출은 Messages API 직접 호출이다(B1).** TypeScript `@anthropic-ai/sdk`와 구조화 출력을 쓴다.
    Agent SDK(A)·Tool Runner(B2)·Managed Agents(B3)는 쓰지 않는다.
 2. **보류 답변만 작은 수동 루프다.** 도구는 계산 기록과 조항 원문을 읽는 읽기 전용 도구뿐이고, 목록은 #10이 정한다.
-   여러 요청에 걸치는 `messages` 배열은 작업 행에 저장한다(`docs/research/agent-runtime-candidates.md:331`).
+   여러 요청에 걸치는 `messages` 배열은 작업 행에 저장한다. #4는 "`messages` 배열을 직렬화해 DB에 넣고"(`docs/research/agent-runtime-candidates.md:331`)까지만 적었고, 작업 행을 고른 것은 이 ADR의 결정이다.
 3. **내구 실행 계층을 두지 않는다.** Temporal·Inngest·LangGraph 없이 자체 상태 기계와 DB `job` 테이블을 쓴다.
    `job`은 임대(lease)·시도 횟수·멱등 key·fencing 값을 갖는다.
 4. **사람 결재 대기는 문서 상태(DB 행)다.** 에이전트 프로세스가 대기를 붙들지 않는다.
@@ -91,12 +91,12 @@ codex는 처음부터 뗐다(codex §4). 저장을 PostgreSQL로 고르면서 �
   2. API 응답 저장 직전·명령 저장 직후·임대 만료 시점에 프로세스를 끊었을 때 필드 이력 누락, 중복 결재, 무기한 고립 작업 중 하나라도 재현된다.
      그러면 자체 구현이 채택 조건을 통과하지 못한 것이고 Temporal 도입으로 추천을 바꾼다(codex §3.3).
   3. 커밋 전 부작용의 재시도를 멱등 key로 막을 수 없다. 그때는 그 호출만 액티비티로 감싸는 편이 맞고, 전체 이관과는 별개다(grok §3.4).
-- 루프·상태 저장·재개·감사 스키마를 우리가 쓴다. #4가 B1의 대가로 적은 그대로다(`docs/research/agent-runtime-candidates.md:905`).
+- 루프·상태 저장·재개·병렬 도구 결과 취합·감사 스키마를 우리가 쓴다. #4가 B1의 대가로 적은 그대로다(`docs/research/agent-runtime-candidates.md:905`).
 - #10은 "에이전트에게 부작용 도구가 있는가"에 답해야 한다. 그 답이 반증 1을 연다.
 - #17이 전이를 정하면 리듀서에 표 행을 더한다. 그 전까지 미정 전이는 성공으로 기록되지 않는다.
 - 기존 결정과의 관계.
   - [ADR-0003](0003-approver-actions-three.md)은 provisional이다(`docs/adr/0003-approver-actions-three.md:3`). 역할별 액션 집합을 리듀서의 **데이터**로 두면 #17의 결과를 반영하기 쉽다(claude §3.4).
-  - [ADR-0010](0010-human-routing-bounded-by-structure-measured-by-ratio.md)의 "멈추고 드러낸다"(`docs/adr/0010-human-routing-bounded-by-structure-measured-by-ratio.md:36-37`)는 작업 큐를 멈추는 것으로 구현할 수 있다(claude §3.1).
+  - [ADR-0010](0010-human-routing-bounded-by-structure-measured-by-ratio.md)의 "멈추고 드러내는 것"(`docs/adr/0010-human-routing-bounded-by-structure-measured-by-ratio.md:54`)은 작업 큐를 멈추는 것으로 구현할 수 있다(claude §3.1). 구현이 받는 규칙은 "미완료·대기 수를 공개하고 처리를 멈춘다"(`:36-37`)이다.
   - #9 본문 갱신 1은 "에이전트가 기안·결재를 대신 올리는 순간"을 전제로 적었다. 그 전제는 `CONTEXT.md:331`이 거뒀다. R-e는 그 뒤에도 채택 조건이다 —
     에이전트가 만든 값의 책임자와 사람이 한 결재의 행위자·책임자를 여전히 갈라 적어야 한다(claude §11).
 - 감사·필드 출처의 저장 계약은 [ADR-0012](0012-transition-audit-provenance-in-one-transaction.md), 모델 호출 기록은 [ADR-0016](0016-record-and-replay-model-calls.md)이다.

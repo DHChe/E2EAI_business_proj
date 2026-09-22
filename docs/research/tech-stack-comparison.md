@@ -112,8 +112,8 @@ A14(#4 빈 셀 23행)는 ADR이 아니라 이 문서와 #4 정오표로 남는�
 | 4 | Sonnet 5 $2/$0.20/$10, Opus 5 $5/$25 per MTok(claude §6.4) | **맞음** — <https://platform.claude.com/docs/en/about-claude/pricing> | 비용 추정 유지, 실측 전(ADR-0017) |
 | 5 | `mupdf`는 AGPL, `pdfjs-dist`는 Apache, Node 래스터화에는 canvas가 필요하다(claude §5.4) | **맞음.** `mupdf` 1.28.1 AGPL-3.0-or-later, `pdfjs-dist` 6.3.289 Apache-2.0, 공식 Node 경로는 `@napi-rs/canvas`. AGPL의 법적 결론은 검증 범위 밖 | 공개 링크이므로 AGPL 계열 회피를 **제약**으로 기록, 라이브러리 선택은 구현 phase(ADR-0017) |
 | 6 | Managed Agents `user.tool_confirmation`에 사람 actor 칸이 없다(claude §8, codex §8) | **맞음**(문서 부재 수준). 입력 예시의 칸은 `type`·`tool_use_id`·`result`·`deny_message` — <https://platform.claude.com/docs/en/managed-agents/permission-policies> | 유지(ADR-0011·0012) |
-| 7 | #4 §6 빈 셀은 23행이고, 빈 줄 하나가 표를 끊어 뒤 15행이 표 밖으로 떨어진다(3레인, claude §11 모순 1) | **맞음.** GFM 렌더러 두 개(marked 16.4.2, micromark 4.0.2 + gfm-table)에서 표 1개(8행) + 15줄 문단. "#1의 15 = 뒤 조각의 행 수"만 **확인 불가**(#4 종료 댓글은 17항목을 열거한다) | 빈 줄을 지워 표를 이었다(정오표). #1 문구는 목록으로만(§8) |
-| 8 | Fly.io `shared-cpu-1x` 256MB 월 $2.02(claude §6.1) | **맞음**(지역별 상이) — <https://fly.io/docs/about/pricing/> | 비채택 근거로만(ADR-0017) |
+| 7 | #4 §6 빈 셀은 23행이고, 빈 줄 하나가 표를 끊어 뒤 15행이 표 밖으로 떨어진다(3레인, claude §11 모순 1) | **맞음.** GFM 렌더러 두 개(marked 16.4.2, micromark 4.0.2 + gfm-table)에서 표 1개(8행) + 15줄 문단. "#1의 15 = 뒤 조각의 행 수"만 **확인 불가**(#4 종료 댓글은 17항목을 열거한다) | 빈 줄을 지워 표를 이었다(정오표). #1 문구는 목록으로만(§9) |
+| 8 | Fly.io `shared-cpu-1x` 256MB 월 $2.02(claude §6.1) | **맞음**(지역별 상이) — <https://fly.io/docs/about/pricing/> | 월 $2.02는 사실이고 지역별로 다르다. 비채택 근거로 쓰지 않는다 — PaaS 안은 사용자가 고르지 않았다(ADR-0017) |
 | 9 | Vercel 함수 최대 실행 300/800/1800초(베타), 스트리밍 포함(grok·claude §4.2) | **맞음**(Fluid compute의 Node.js/Bun/Python 기준) — <https://vercel.com/docs/functions/limitations#max-duration> | 비채택 근거로만(ADR-0015·0017) |
 
 사실 검증 1의 추가 사항: Temporal Cloud에는 종료 히스토리를 객체 저장소로 내보내는 Workflow History Export가 있다(<https://docs.temporal.io/cloud/export>).

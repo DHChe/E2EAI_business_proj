@@ -53,7 +53,7 @@ S4는 인용이 조항 원문의 연속 부분문자열인지, 숫자가 계산 
 | 문장 단위로 검사한 뒤 흘림(코디네이터 절충안) | 사용자가 고르지 않았다(결정 기록 U7). 결정 기록은 이 안만의 기각 이유를 따로 적지 않았다 |
 | WebSocket | 양방향이 필요 없다(claude §4.3). 며칠짜리 대기를 연결로 붙들면 끊김이 대기 소실이 된다(grok §4.2) |
 | 폴링만 | 상태 갱신은 되지만 R-a가 줄어든다(codex §4 표). 폴링은 SSE가 막혔을 때의 대체 경로로만 둔다 |
-| Next.js on Vercel(서버리스) | 함수 최대 실행 시간이 Hobby 300초, Pro·Enterprise 800초(1800초 베타)이고 스트리밍 응답 시간도 포함된다 `[1차]` — <https://vercel.com/docs/functions/limitations#max-duration>(사실 검증 9, 확인 2026-09-22). 같은 프로세스에 워커를 둘 수 없어 [ADR-0011](0011-messages-api-direct-waits-are-document-state.md)의 질문이 다시 열린다(claude §4.2 W2) |
+| Next.js on Vercel(서버리스) | Fluid compute의 Node.js/Bun/Python 기준으로 함수 최대 실행 시간이 Hobby 300초, Pro·Enterprise 기본 300초·일반 최대 800초·확장 최대 1800초 베타(함수별 설정)이고 스트리밍 응답 시간도 포함된다 `[1차]` — <https://vercel.com/docs/functions/limitations#max-duration>(사실 검증 9, 확인 2026-09-22). 같은 프로세스에 워커를 둘 수 없어 [ADR-0011](0011-messages-api-direct-waits-are-document-state.md)의 질문이 다시 열린다(claude §4.2 W2) |
 | Next.js + 별도 worker(codex가 "가능"으로 적음) | R-a~R-g는 충족한다. SSR 요구가 없고 별도 worker 조건에서 웹까지 한 요청 실행 모델로 묶는 이득이 작다(codex §4) |
 | FastAPI + React | 타입 명세가 두 벌이 되고 리듀서가 Python과 TS 화면 조건으로 갈린다(claude §4.2 W3) |
 | Hono 서버 렌더링 + htmx | 차점이다. 크롭·원본 토글(ADR-0009)처럼 클라이언트 상태가 있는 부품이 있다. 차이는 되돌릴 수 있는 크기다(claude §4.2) |
