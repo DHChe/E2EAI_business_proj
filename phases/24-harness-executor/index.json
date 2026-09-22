@@ -1,0 +1,57 @@
+{
+  "project": "E2EAI_business_proj",
+  "phase": "24-harness-executor",
+  "issue": 24,
+  "steps": [
+    {
+      "step": 0,
+      "name": "phase-state",
+      "status": "pending"
+    },
+    {
+      "step": 1,
+      "name": "step-spec",
+      "status": "pending"
+    },
+    {
+      "step": 2,
+      "name": "session-runner",
+      "status": "pending"
+    },
+    {
+      "step": 3,
+      "name": "rollback",
+      "status": "pending"
+    },
+    {
+      "step": 4,
+      "name": "attempt-loop",
+      "status": "pending"
+    },
+    {
+      "step": 5,
+      "name": "scoped-commit",
+      "status": "pending"
+    },
+    {
+      "step": 6,
+      "name": "issue-sync",
+      "status": "pending"
+    },
+    {
+      "step": 7,
+      "name": "review-gate",
+      "status": "pending"
+    },
+    {
+      "step": 8,
+      "name": "fix-loop",
+      "status": "pending"
+    },
+    {
+      "step": 9,
+      "name": "harness-docs",
+      "status": "pending"
+    }
+  ]
+}
