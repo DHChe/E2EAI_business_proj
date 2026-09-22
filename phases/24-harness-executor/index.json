@@ -73,5 +73,10 @@
       "summary": "docs/agents/harness.md, .claude/commands/harness.md, .claude/commands/review.md, AGENTS.md, docs/PRD.md 갱신: 실행·result 보고·허용 경로·AC·롤백·복구·리뷰/수정 루프·Issue·push 계약 문서화. 코드/시그니처 변경 없음. harness 73/96행, PRD 178줄 및 graft 블록 보존, PRD:5 주입 포인터를 harness.md:183으로 갱신. AC 17줄 종료 0, 실행기 100개와 가드 54/54 통과. 설계 목록과 코드 차이 반영: 번들 플러그인은 브라우저/컴퓨터 관련 3개만 비활성화; pending 재개 시 오류/시각 필드 삭제는 코드상 선택; spec 위반 전에도 복구/prepare는 수행 가능; env/새 무시 경로 검사는 AC 전이고 AC 후는 HEAD/tree만 검사; 임시 add -A는 AC tree 비교에도 사용; 재기동 첫 재개 프롬프트에는 직전 실패 사유 없음; 완료 phase --push도 기동/spec 검증 후 구현·리뷰만 생략; MCP preflight 목록 호출 timeout은 120초.",
       "completed_at": "2026-09-22T21:10:37+09:00"
     }
-  ]
+  ],
+  "review": {
+    "status": "pending",
+    "end_sha": "da4a9df675d801402623cf04caf6c686427a5742",
+    "round": 1
+  }
 }
