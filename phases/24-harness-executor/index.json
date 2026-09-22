@@ -27,7 +27,9 @@
     {
       "step": 3,
       "name": "rollback",
-      "status": "pending"
+      "status": "blocked",
+      "blocked_reason": "샌드박스가 ps -A -o pid=,pgid=,command= 실행을 operation not permitted(종료 127)로 차단한다. 따라서 recover가 규정대로 kill을 건너뛰어 test_recover_running_rolls_back의 실제 가짜 codex 프로세스 종료 검증이 TimeoutExpired로 실패했다. ps 실행이 허용되는 환경에서 검증이 필요하다.",
+      "blocked_at": "2026-09-22T20:30:03+09:00"
     },
     {
       "step": 4,
