@@ -2,7 +2,7 @@
 
 - **날짜**: 2026-09-22
 - **맥락 티켓**: #17 (반려의 후속 상태 정의 — 상태 어휘 전체의 주인)
-- **상태**: 비교와 결정 완료. ADR 0023~과 상태 문서 갱신은 아직 쓰지 않았다(§7).
+- **상태**: 비교와 결정 완료. 결정은 ADR 0023–0028(`docs/adr/0023`–`0028`)과 `docs/ARCHITECTURE.md` §5·§7, `CONTEXT.md`로 옮겼다(§7).
 
 이 문서는 세 레인의 독립 제안을 한 자리에 놓는다. 무엇이 합의였고 무엇이 갈렸으며, 누가 어떻게 정했는지를 남긴다. 여기의 번호(A·D·U·C)는 뒤에 쓸 ADR과 상태 문서가 그대로 인용한다.
 
@@ -10,7 +10,7 @@
 
 1. **세 레인 독립 제안.** codex·grok·claude 세 모델이 **같은 지시서**(레인 이름만 다름)로 서로 읽지 않고 풀었다. 셋 다 develop `47c89dc`에서 갈라졌다. codex·grok은 Orca 워커로(run `run_b792268de1a8`), claude는 코디네이터의 서브에이전트로 돌았다.
 
-   | 레인 | 커밋 | 분량 | 원문 브랜치 (로컬, 아직 push 안 함) |
+   | 레인 | 커밋 | 분량 | 원문 브랜치 (origin에 push함) |
    | --- | --- | --- | --- |
    | codex | `6d31ea4` | 447줄 | `DHChe/frontier-17-states-codex` |
    | grok | `2bd019f` | 539줄 | `DHChe/frontier-17-states-grok` |
@@ -252,4 +252,4 @@ AAC = `agent-architecture-comparison.md`, TSC = `tech-stack-comparison.md`, RPL 
    | #11 | 반증 시나리오와 지표: codex는 사례 9개와 접촉 계수 n·m·k, grok은 재상신·재심 반복 승인의 체류·열람과 H1 세션 집계, claude는 실효 승인 수·재승인 수(+1)·재량 조항 없는 불인정 반려의 비율. 셋 다 93%를 이 제품의 승인률로 쓰지 않는다. D9의 확인 지점 수 |
    | #12 | 상태별 필수 문구·기한 분리·과거 승인 효력 구분(codex). 기한 경과·효력 정지의 시각 표현(grok). 반려 버튼 활성화(#8 결과 9)·반려 사유 입력·실효된 승인의 변경 대조(claude) |
    | 그 밖(#18 후속) | 대사 중간 상태와 `ReconciliationOutcome`의 구분(codex, claude). 총무를 보류 대상으로 둘지(claude) |
-4. **세 원문 브랜치는 push로 보존한다.** `DHChe/frontier-17-states-{codex,grok,claude}`는 아직 로컬에만 있다.
+4. **세 원문 브랜치는 push로 보존했다.** `DHChe/frontier-17-states-{codex,grok,claude}`는 origin에 있다.
