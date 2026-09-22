@@ -76,7 +76,8 @@
   ],
   "review": {
     "status": "pending",
-    "end_sha": "da4a9df675d801402623cf04caf6c686427a5742",
-    "round": 1
+    "end_sha": "3f6f2408493a059e254dd39df5e14b849298ae4c",
+    "round": 2,
+    "fixes": 2
   }
 }
