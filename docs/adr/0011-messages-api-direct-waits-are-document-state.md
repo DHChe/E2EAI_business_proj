@@ -97,7 +97,7 @@ codex는 처음부터 뗐다(codex §4). 저장을 PostgreSQL로 고르면서 �
 - 기존 결정과의 관계.
   - [ADR-0003](0003-approver-actions-three.md)은 provisional이다(`docs/adr/0003-approver-actions-three.md:3`). 역할별 액션 집합을 리듀서의 **데이터**로 두면 #17의 결과를 반영하기 쉽다(claude §3.4).
   - [ADR-0010](0010-human-routing-bounded-by-structure-measured-by-ratio.md)의 "멈추고 드러내는 것"(`docs/adr/0010-human-routing-bounded-by-structure-measured-by-ratio.md:54`)은 작업 큐를 멈추는 것으로 구현할 수 있다(claude §3.1). 구현이 받는 규칙은 "미완료·대기 수를 공개하고 처리를 멈춘다"(`:36-37`)이다.
-  - #9 본문 갱신 1은 "에이전트가 기안·결재를 대신 올리는 순간"을 전제로 적었다. 그 전제는 `CONTEXT.md:331`이 거뒀다. R-e는 그 뒤에도 채택 조건이다 —
+  - #9 본문 갱신 1은 "에이전트가 기안·결재를 대신 올리는 순간"을 전제로 적었다. ~~그 전제는 `CONTEXT.md:331`이 거뒀다.~~ **정정(#23, 2026-09-22)**: `CONTEXT.md:331`이 거둔 것은 결재 쪽뿐이다 — 에이전트는 결재 행위의 행위자가 되지 않는다. 기안 쪽은 다루지 않는다(`docs/PRD.md:111`). R-e는 그 뒤에도 채택 조건이다 —
     에이전트가 만든 값의 책임자와 사람이 한 결재의 행위자·책임자를 여전히 갈라 적어야 한다(claude §11).
 - 감사·필드 출처의 저장 계약은 [ADR-0012](0012-transition-audit-provenance-in-one-transaction.md), 모델 호출 기록은 [ADR-0016](0016-record-and-replay-model-calls.md)이다.
 - 통합 비교와 원문 링크는 [`docs/research/tech-stack-comparison.md`](../research/tech-stack-comparison.md).
