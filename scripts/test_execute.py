@@ -640,6 +640,260 @@ time.sleep(60)
                 self.assertIsNone(executor.child_pgid)
 
 
+class RollbackTests(HarnessTestCase):
+    def setUp(self):
+        super().setUp()
+        # Recovery tests must never depend on sandbox access to the real ps.
+        self.fake_bin('ps', 'sys.exit(97)\n')
+
+    def fixture(self):
+        root = self.make_repo()
+        self.git(root, 'checkout', '-b', f'feat-{PHASE}')
+        return self.make_executor(root)
+
+    def marker_for(self, executor, pgid=None):
+        return dict(unit='step3', k=2, pre_sha=executor.head(), stage='running',
+                    feat_sha=None, pgid=pgid)
+
+    def record_git(self, fail=''):
+        real = shutil.which('git')
+        self.fake_bin('git', f"""
+with (Path(os.environ['HARNESS_CALLS_DIR']) / 'indexes').open('a') as stream:
+    stream.write(json.dumps([sys.argv[1:], os.environ.get('GIT_INDEX_FILE')]) + '\\n')
+if sys.argv[1] == {fail!r}:
+    sys.exit(41)
+os.execv({real!r}, [{real!r}, *sys.argv[1:]])
+""")
+
+    def test_snapshot_has_new_binary_and_unstaged(self):
+        ex = self.fixture()
+        base = ex.head()
+        binary = bytes(range(256)) + b'\x00\xff'
+        (ex.root / 'new.bin').write_bytes(binary)
+        (ex.root / 'src/keep.txt').write_bytes(b'edited\x00\xff')
+        (ex.root / '.env').write_text('ignored')
+        ref = ex.snapshot('step3', 1, base)
+        self.assertEqual(self.git(ex.root, 'rev-parse', ref + '^').decode().strip(), base)
+        self.assertEqual(self.git(ex.root, 'show', ref + ':new.bin'), binary)
+        self.assertEqual(self.git(ex.root, 'show', ref + ':src/keep.txt'), b'edited\x00\xff')
+        self.assertNotIn(b'.env', self.git(ex.root, 'ls-tree', '--name-only', ref))
+        self.assertEqual(self.git(ex.root, 'diff', '--cached'), b'')
+
+    def test_temp_index_outside_worktree(self):
+        ex = self.fixture()
+        index = ex.root / '.git/index'
+        before = index.read_bytes()
+        base = ex.head()
+        self.record_git()
+        ex.snapshot('step3', 1, base)
+        records = [json.loads(x) for x in (self.log_dir / 'indexes').read_text().splitlines()]
+        temporary = [Path(path) for argv, path in records if argv == ['add', '-A']]
+        self.assertEqual(len(temporary), 1)
+        self.assertFalse(temporary[0].resolve().is_relative_to(ex.root.resolve()))
+        self.assertFalse(temporary[0].parent.exists())
+        self.assertEqual(index.read_bytes(), before)
+        inside = ex.root / 'bad-temp'
+        inside.mkdir()
+        with mock.patch.object(execute.tempfile, 'mkdtemp', return_value=str(inside)):
+            self.assert_exit(1, ex.worktree_tree, base)
+        self.assertFalse(inside.exists())
+
+    def test_snapshot_failure_no_destructive_cmd(self):
+        ex = self.fixture()
+        base = ex.head()
+        dirty = ex.root / 'src/keep.txt'
+        dirty.write_text('edited')
+        self.record_git('update-ref')
+        self.assert_exit(1, ex.rollback, 'step3', 1, base)
+        self.assertFalse(any(a[0] in ('reset', 'clean') for a in self.calls('git')))
+        self.assertEqual(dirty.read_text(), 'edited')
+        (self.bin_dir / 'git').unlink()
+        self.git(ex.root, 'checkout', 'main')
+        self.record_git()
+        self.assert_exit(1, ex.rollback, 'step3', 2, base)
+        self.assertEqual(self.git(ex.root, 'rev-parse', 'main').decode().strip(), base)
+        self.assertEqual(dirty.read_text(), 'edited')
+        self.assertTrue(self.git(ex.root, 'for-each-ref', 'refs/harness/'))
+        self.assertFalse(any(a[0] in ('reset', 'clean') for a in self.calls('git')))
+        self.git(ex.root, 'checkout', '--detach', base)
+        self.assert_exit(1, ex.rollback, 'step3', 3, base)
+        self.assertFalse(any(a[0] in ('reset', 'clean') for a in self.calls('git')))
+
+    def test_rollback_dirty_postcondition_exits_1(self):
+        ex = self.fixture()
+        nested = ex.root / 'nested'
+        nested.mkdir()
+        self.git(nested, 'init', '-q')
+        (nested / 'keep').write_text('nested')
+        self.git(nested, 'add', '--', 'keep')
+        self.git(nested, 'commit', '-qm', 'nested fixture')
+        self.record_git()
+        self.assert_exit(1, ex.rollback, 'step3', 1, ex.head())
+        self.assertTrue(self.git(ex.root, 'for-each-ref', 'refs/harness/'))
+        self.assertIn(['clean', '-fd'], self.calls('git'))
+        self.assertTrue(any(a[:2] == ['reset', '--hard'] for a in self.calls('git')))
+        self.assertTrue(self.git(ex.root, 'status', '--porcelain'))
+        self.assertTrue((nested / '.git').exists())
+
+    def wait_file(self, path):
+        deadline = time.monotonic() + 5
+        while time.monotonic() < deadline:
+            if path.exists() and path.read_text():
+                return
+            time.sleep(.02)
+        self.fail(f'no readiness file: {path}')
+
+    def stop_process(self, proc):
+        if proc.poll() is None:
+            os.killpg(proc.pid, signal.SIGKILL)
+        proc.wait(timeout=5)
+
+    def test_recover_running_rolls_back(self):
+        for name in ('codex', 'sleeper', None):
+            with self.subTest(name=name):
+                ex = self.fixture()
+                proc = None
+                if name:
+                    ready = self.temp_dir / (name + '-ready')
+                    fake = self.fake_bin(name, f"import time\nPath({str(ready)!r}).write_text('ready')\ntime.sleep(60)\n")
+                    proc = subprocess.Popen([str(fake)], start_new_session=True)
+                    self.addCleanup(self.stop_process, proc)
+                    self.wait_file(ready)
+                marker = self.marker_for(ex, proc.pid if proc else 2147483647)
+                listing = f'{proc.pid} {proc.pid} {fake}' if proc else ''
+                self.fake_bin('ps', f'print({listing!r})\n')
+                ex.save_marker(marker)
+                (ex.root / 'src/keep.txt').write_text('dirty')
+                (ex.root / 'untracked').write_text('new')
+                (ex.root / '.env').write_text('preserved')
+                rollback = ex.rollback
+                def observed(*args):
+                    self.assertTrue(ex.marker_path.exists())
+                    return rollback(*args)
+                with mock.patch.object(ex, 'rollback', side_effect=observed):
+                    ex.recover()
+                self.assertEqual(self.calls('ps')[-1],
+                                 ['-A', '-o', 'pid=,pgid=,command='])
+                if name == 'codex':
+                    self.assertEqual(proc.wait(timeout=5), -signal.SIGKILL)
+                elif proc:
+                    self.assertIsNone(proc.poll())
+                self.assertFalse(ex.marker_path.exists())
+                self.assertIsNone(ex.marker)
+                self.assertEqual(ex.resume, {'unit': 'step3', 'next_k': 3})
+                self.assertEqual(self.git(ex.root, 'status', '--porcelain'), b'')
+                self.assertEqual((ex.root / '.env').read_text(), 'preserved')
+                self.assertTrue(self.git(ex.root, 'for-each-ref', 'refs/harness/'))
+
+    def test_recover_moved_head_touches_nothing(self):
+        ex = self.fixture()
+        marker = self.marker_for(ex)
+        self.git(ex.root, 'commit', '--allow-empty', '-qm', 'moved')
+        ex.save_marker(marker)
+        dirty = ex.root / 'src/keep.txt'
+        dirty.write_text('dirty')
+        cases = [json.dumps(marker), '{bad', '[]', json.dumps({}),
+                 json.dumps(dict(marker, pre_sha=ex.head(), stage='feat_done', feat_sha=ex.head())),
+                 json.dumps(dict(marker, pre_sha=ex.head(), stage='unknown'))]
+        for content in cases:
+            ex.marker_path.write_text(content)
+            with mock.patch.object(execute.os, 'killpg') as kill:
+                with self.assertRaises(execute.HarnessExit) as caught:
+                    ex.recover()
+                self.assertEqual(caught.exception.code, 1)
+                self.assertIn(str(ex.marker_path), str(caught.exception))
+                kill.assert_not_called()
+            self.assertEqual(dirty.read_text(), 'dirty')
+            self.assertEqual(ex.marker_path.read_text(), content)
+            self.assertEqual(self.git(ex.root, 'for-each-ref', 'refs/harness/'), b'')
+
+    def test_signal_kills_group_keeps_marker(self):
+        for sig in (signal.SIGTERM, signal.SIGHUP):
+            with self.subTest(sig=sig):
+                ex = self.fixture()
+                ready = self.temp_dir / f'ready-{sig}'
+                fake = self.fake_bin('codex', f"""
+import subprocess, signal, time
+child = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(60)'])
+def terminate(sig, frame):
+    child.wait(timeout=2)
+    sys.exit(0)
+signal.signal(signal.SIGTERM, terminate)
+Path({str(ready)!r}).write_text(json.dumps([os.getpid(), child.pid]))
+time.sleep(60)
+""")
+                driver = self.fake_bin('driver', f"""
+sys.path.insert(0, {str(Path(execute.__file__).parent)!r})
+import execute
+ex = execute.Executor(Path({str(ex.root)!r}), {PHASE!r})
+ex.install_signal_handlers()
+ex.save_marker({self.marker_for(ex)!r})
+try:
+    ex.run_child([{str(fake)!r}], env=dict(os.environ), timeout=60)
+finally:
+    ex.restore_signal_handlers()
+""")
+                proc = subprocess.Popen([str(driver)], start_new_session=True,
+                                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                self.addCleanup(self.stop_process, proc)
+                self.wait_file(ready)
+                before = ex.marker_path.read_bytes()
+                children = json.loads(ready.read_text())
+                os.kill(proc.pid, sig)
+                self.assertNotEqual(proc.wait(timeout=5), 0)
+                for pid in children:
+                    SessionRunnerTests.assert_gone(self, pid)
+                self.assertEqual(ex.marker_path.read_bytes(), before)
+
+    def test_run_recovery_order_and_signal_restore(self):
+        ex = self.fixture()
+        old = {sig: signal.getsignal(sig) for sig in (signal.SIGTERM, signal.SIGHUP)}
+        events = []
+        def record(name):
+            events.append(name)
+        with mock.patch.object(ex, 'acquire_lock', side_effect=lambda: record('lock')), \
+                mock.patch.object(ex, 'recover', side_effect=lambda: record('recover')), \
+                mock.patch.object(ex, 'prepare', side_effect=lambda: record('prepare')), \
+                mock.patch.object(ex, 'load_step_specs', side_effect=lambda: record('specs')):
+            install = ex.install_signal_handlers
+            def installed():
+                record('signals')
+                install()
+            with mock.patch.object(ex, 'install_signal_handlers', side_effect=installed):
+                self.assertEqual(ex.run(), 0)
+        self.assertEqual(events, ['lock', 'signals', 'recover', 'prepare', 'specs'])
+        for exception in (execute.HarnessInterrupted(), KeyboardInterrupt()):
+            with mock.patch.object(ex, 'recover', side_effect=exception):
+                self.assertEqual(ex.run(), 1)
+        self.assertEqual({sig: signal.getsignal(sig) for sig in old}, old)
+
+    def test_recovery_pgid_guards_and_marker_memory(self):
+        ex = self.fixture()
+        marker = self.marker_for(ex)
+        ex.save_marker(marker)
+        ex.marker_path.write_text('{broken')
+        ex.marker['pgid'] = 12
+        ex.save_marker(ex.marker)
+        self.assertEqual(ex.load_marker(), dict(marker, pgid=12))
+        for pgid in (None, -1, 0, 1, os.getpgrp()):
+            with mock.patch.object(execute.subprocess, 'run') as ps, \
+                    mock.patch.object(execute.os, 'killpg') as kill:
+                ex._kill_stale_codex(pgid)
+                ps.assert_not_called()
+                kill.assert_not_called()
+        pgid = os.getpgrp() + 10000
+        for failure in (ProcessLookupError, PermissionError):
+            result = subprocess.CompletedProcess([], 0, f'123 {pgid} node /tmp/codex.js', '')
+            with mock.patch.object(execute.subprocess, 'run', return_value=result) as ps, \
+                    mock.patch.object(execute.os, 'killpg', side_effect=failure) as kill:
+                ex._kill_stale_codex(pgid)
+                self.assertEqual(ps.call_args.args[0], ['ps', '-A', '-o', 'pid=,pgid=,command='])
+                kill.assert_called_once_with(pgid, signal.SIGKILL)
+        ex.clear_marker()
+        ex.clear_marker()
+        self.assertIsNone(ex.load_marker())
+
+
 if __name__ == "__main__":
     program = unittest.main(exit=False)
     sys.exit(0 if program.result.testsRun and program.result.wasSuccessful() else 1)

@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 import posixpath
 import re
+import shutil
 import signal
 import subprocess
 import sys
@@ -63,6 +64,10 @@ class HarnessExit(Exception):
 
 class SpecError(ValueError):
     """Invalid step instruction, with the offending source line."""
+
+
+class HarnessInterrupted(BaseException):
+    """Termination requested; preserve the attempt marker for recovery."""
 
 
 @dataclass(frozen=True)
@@ -194,6 +199,125 @@ class Executor:
         self._gh_config = None
         self.session_timeout = 1800
         self.child_pgid = None
+        self.marker = None
+        self.resume = None
+        self._signal_handlers = {}
+
+    def worktree_tree(self, base_sha: str) -> str:
+        temporary = None
+        try:
+            temporary = Path(tempfile.mkdtemp(prefix="harness-index-"))
+            if temporary.resolve().is_relative_to(self.root.resolve()):
+                raise HarnessExit(EXIT_ERROR, "임시 index 디렉토리가 저장소 안에 있다")
+            env = os.environ.copy()
+            env["GIT_INDEX_FILE"] = str(temporary / "index")
+            self.git("read-tree", base_sha, env=env)
+            self.git("add", "-A", env=env)
+            return self.git("write-tree", env=env).stdout.decode().strip()
+        except OSError as exc:
+            raise HarnessExit(EXIT_ERROR, f"작업 트리 스냅샷 실패: {exc}") from exc
+        finally:
+            if temporary is not None:
+                shutil.rmtree(temporary)
+
+    def snapshot(self, unit: str, k: int, base_sha: str) -> str:
+        try:
+            tree = self.worktree_tree(base_sha)
+            commit = self.git("commit-tree", tree, "-p", base_sha, "-m",
+                              f"harness snapshot {self.phase_dir} {unit} attempt{k}")
+            ref = f"refs/harness/{self.phase_dir}/{unit}/attempt{k}-{time.time_ns()}"
+            self.git("update-ref", ref, commit.stdout.decode().strip(), "")
+            return ref
+        except OSError as exc:
+            raise HarnessExit(EXIT_ERROR, f"스냅샷 실패: {exc}") from exc
+
+    def rollback(self, unit: str, k: int, target_sha: str) -> str:
+        ref = self.snapshot(unit, k, target_sha)
+        branch = self.git("symbolic-ref", "-q", "HEAD", check=False)
+        if branch.returncode or branch.stdout.decode().strip() != f"refs/heads/feat-{self.phase_dir}":
+            raise HarnessExit(EXIT_ERROR, f"롤백 브랜치가 feat-{self.phase_dir}가 아니다: {ref}")
+        self.git("reset", "--hard", target_sha)
+        self.git("clean", "-fd")
+        if self.git("status", "--porcelain").stdout:
+            raise HarnessExit(EXIT_ERROR, f"롤백 뒤 작업 트리가 깨끗하지 않다: {ref}")
+        return ref
+
+    @property
+    def marker_path(self) -> Path:
+        return self.run_dir / "attempt.json"
+
+    def save_marker(self, marker: dict) -> None:
+        self.run_dir.mkdir(parents=True, exist_ok=True)
+        self.marker = marker
+        write_json_atomic(self.marker_path, self.marker)
+
+    def load_marker(self) -> dict | None:
+        try:
+            return read_json(self.marker_path)
+        except FileNotFoundError:
+            return None
+
+    def clear_marker(self) -> None:
+        self.marker_path.unlink(missing_ok=True)
+        self.marker = None
+
+    def _kill_stale_codex(self, pgid: int | None) -> None:
+        if pgid is None or pgid <= 1 or pgid == os.getpgrp():
+            return
+        try:
+            result = subprocess.run(["ps", "-A", "-o", "pid=,pgid=,command="],
+                                    capture_output=True, text=True)
+            if result.returncode:
+                return
+            for line in result.stdout.splitlines():
+                fields = line.split(None, 2)
+                if len(fields) != 3 or fields[1] != str(pgid):
+                    continue
+                if any(os.path.basename(token) in {"codex", "codex.js"}
+                       for token in fields[2].split()):
+                    os.killpg(pgid, signal.SIGKILL)
+                    return
+        except (OSError, ValueError):
+            return
+
+    def recover(self) -> None:
+        try:
+            marker = self.load_marker()
+            if marker is None:
+                return
+            if (not isinstance(marker.get("unit"), str)
+                    or not re.fullmatch(r"[A-Za-z0-9_-]+", marker["unit"])
+                    or type(marker.get("k")) is not int or marker["k"] < 1
+                    or not isinstance(marker.get("pre_sha"), str)
+                    or not re.fullmatch(r"[0-9a-f]{40}|[0-9a-f]{64}", marker["pre_sha"])
+                    or "feat_sha" not in marker
+                    or (marker["feat_sha"] is not None and not isinstance(marker["feat_sha"], str))
+                    or "pgid" not in marker
+                    or (marker["pgid"] is not None and type(marker["pgid"]) is not int)):
+                raise ValueError("marker 필드가 잘못되었다")
+            if marker.get("stage") != "running":
+                raise ValueError(f"지원하지 않는 stage: {marker.get('stage')!r}")
+            if self.head() != marker["pre_sha"]:
+                raise ValueError("HEAD가 pre_sha와 다르다")
+        except (OSError, ValueError, HarnessExit) as exc:
+            raise HarnessExit(EXIT_ERROR, f"복구 거부 {self.marker_path}: {exc}") from exc
+        self.marker = marker
+        self._kill_stale_codex(marker["pgid"])
+        self.rollback(marker["unit"], marker["k"], marker["pre_sha"])
+        self.clear_marker()
+        self.resume = {"unit": marker["unit"], "next_k": marker["k"] + 1}
+
+    def install_signal_handlers(self) -> None:
+        def interrupted(signum, frame):
+            raise HarnessInterrupted(f"신호 {signum}")
+        for signum in (signal.SIGTERM, signal.SIGHUP):
+            if signum not in self._signal_handlers:
+                self._signal_handlers[signum] = signal.signal(signum, interrupted)
+
+    def restore_signal_handlers(self) -> None:
+        for signum, handler in self._signal_handlers.items():
+            signal.signal(signum, handler)
+        self._signal_handlers.clear()
 
     def run_child(self, argv: list[str], *, env: dict[str, str], timeout: float,
                   stdin_text: str | None = None, stdout_path: Path | None = None,
@@ -529,6 +653,8 @@ class Executor:
     def run(self) -> int:
         try:
             self.acquire_lock()
+            self.install_signal_handlers()
+            self.recover()
             self.prepare()
             self.load_step_specs()
             return EXIT_OK
@@ -538,6 +664,11 @@ class Executor:
         except (OSError, ValueError, KeyError, TypeError) as exc:
             print(str(exc), file=sys.stderr)
             return EXIT_ERROR
+        except (HarnessInterrupted, KeyboardInterrupt) as exc:
+            print(str(exc), file=sys.stderr)
+            return EXIT_ERROR
+        finally:
+            self.restore_signal_handlers()
 
 
 def main(argv: list[str] | None = None) -> int:
