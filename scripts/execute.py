@@ -4,6 +4,7 @@ import copy
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 import fcntl
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -21,6 +22,16 @@ EXIT_OK = 0
 EXIT_ERROR = 1
 EXIT_BLOCKED = 2
 EXIT_REVIEW = 3
+MAX_ATTEMPTS = 3
+
+
+@dataclass
+class AttemptOutcome:
+    status: str
+    summary: str | None = None
+    reason: str | None = None
+    attempts: int = 0
+    pre_sha: str = ""
 
 CODEX_CONFIG_FLAGS: list[str] = [
     '-c', 'plugins."browser@openai-bundled".enabled=false',
@@ -198,6 +209,7 @@ class Executor:
         self._lock_file = None
         self._gh_config = None
         self.session_timeout = 1800
+        self.ac_timeout = 600
         self.child_pgid = None
         self.marker = None
         self.resume = None
@@ -402,6 +414,119 @@ class Executor:
 
     def result_path(self, unit: str) -> Path:
         return self.run_dir / f"{unit}-result.json"
+
+    def env_fingerprint(self) -> dict[str, str]:
+        return {path.name: hashlib.sha256(path.read_bytes()).hexdigest()
+                for path in self.root.iterdir()
+                if (path.name == ".env" or path.name.startswith(".env."))
+                and path.name != ".env.example" and path.is_file()}
+
+    def ignored_paths(self) -> set[str]:
+        records = iter(self.git("status", "--porcelain=v1", "-z",
+                                "--ignored=matching").stdout.split(b"\0"))
+        paths = set()
+        for record in records:
+            if record[:2] == b"!!":
+                paths.add(os.fsdecode(record[3:]))
+            elif b"R" in record[:2] or b"C" in record[:2]:
+                next(records)
+        return paths
+
+    def read_result(self, unit: str) -> dict | None:
+        try:
+            result = read_json(self.result_path(unit))
+        except (OSError, ValueError):
+            return None
+        if not isinstance(result, dict) or result.get("status") not in (
+                "completed", "error", "blocked"):
+            return None
+        return result
+
+    def run_ac(self, lines: Sequence[str]) -> str | None:
+        before = self.head()
+        tree = self.worktree_tree(before)
+        failure = None
+        for line in lines:
+            result = self.run_child(["bash", "-o", "pipefail", "-c", line],
+                                    env=self.child_env(), timeout=self.ac_timeout)
+            if result.timed_out or result.returncode != 0:
+                code = "timeout" if result.timed_out else f"종료 코드 {result.returncode}"
+                failure = f"⑥ AC 실패: {line}\n{code}\n{(result.stdout + result.stderr)[-2000:]}"
+                break
+        after = self.head()
+        if after != before or self.worktree_tree(after) != tree:
+            mutation = "⑦ AC가 작업 트리를 바꿨다 (HEAD 또는 tree 변경)"
+            return f"{failure}\n{mutation}" if failure else mutation
+        return failure
+
+    def attempt_unit(self, unit: str, task_text: str, allowed: Sequence[str],
+                     ac: Sequence[str], *, start_k: int = 1) -> AttemptOutcome:
+        failure = "재개 시 시도 소진"
+        for k in range(start_k, MAX_ATTEMPTS + 1):
+            if self.changed_paths():
+                raise HarnessExit(EXIT_ERROR, "시도 전 작업 트리가 더럽다")
+            pre_sha = self.head()
+            self.result_path(unit).unlink(missing_ok=True)
+            env_before = self.env_fingerprint()
+            ignored_before = self.ignored_paths()
+            self.save_marker({"unit": unit, "k": k, "pre_sha": pre_sha,
+                              "stage": "running", "feat_sha": None, "pgid": None})
+            spawned = False
+
+            def on_spawn(pgid: int) -> None:
+                nonlocal spawned
+                spawned = True
+                self.marker["pgid"] = pgid
+                self.save_marker(self.marker)
+
+            prompt = self.build_prompt(unit, task_text, allowed,
+                                       failure=failure if k != start_k else None)
+            try:
+                child = self.run_codex(unit, prompt, on_spawn=on_spawn)
+            except HarnessExit:
+                if not spawned:
+                    self.clear_marker()
+                raise
+            self.save_marker(self.marker)
+            if self.env_fingerprint() != env_before:
+                self.rollback(unit, k, pre_sha)
+                return AttemptOutcome("error", reason="④ .env 지문 변경: 수동 확인 필요",
+                                      attempts=k)
+            result = self.read_result(unit)
+            if child.timed_out or child.returncode != 0:
+                code = "timeout" if child.timed_out else f"종료 코드 {child.returncode}"
+                failure = f"세션 실패: {code}\n{(child.stdout + child.stderr)[-2000:]}"
+            elif result is None:
+                failure = "result 없음 또는 무효"
+            elif result["status"] == "blocked":
+                self.rollback(unit, k, pre_sha)
+                return AttemptOutcome("blocked", reason=result.get("blocked_reason"), attempts=k - 1)
+            elif result["status"] == "error":
+                failure = f"세션 error: {result.get('error_message') or '사유 없음'}"
+            elif not isinstance(result.get("summary"), str) or not result["summary"].strip():
+                failure = "① completed summary가 비었다"
+            elif self.head() != pre_sha:
+                failure = "② HEAD 변경: 세션이 커밋했다"
+            else:
+                outside = [p for p in self.changed_paths() if not path_allowed(p, allowed)]
+                new_ignored = []
+                for path in self.ignored_paths() - ignored_before:
+                    parts = Path(path).parts
+                    if ((parts and parts[0] == "phases" and ".run" in parts[1:])
+                            or "__pycache__" in parts or path.endswith(".pyc")):
+                        continue
+                    new_ignored.append(path)
+                if outside:
+                    failure = f"③ 변경 허용 경로 위반: {outside}"
+                elif new_ignored:
+                    failure = f"⑤ 새 무시 경로 위반: {sorted(new_ignored)}"
+                else:
+                    failure = self.run_ac(ac)
+                    if failure is None:
+                        return AttemptOutcome("completed", summary=result["summary"],
+                                              attempts=k, pre_sha=pre_sha)
+            self.rollback(unit, k, pre_sha)
+        return AttemptOutcome("error", reason=failure, attempts=MAX_ATTEMPTS)
 
     def build_prompt(self, unit: str, task_text: str, allowed: Sequence[str],
                      failure: str | None = None) -> str:

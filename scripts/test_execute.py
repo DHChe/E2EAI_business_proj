@@ -894,6 +894,213 @@ finally:
         self.assertIsNone(ex.load_marker())
 
 
+
+class AttemptLoopTests(HarnessTestCase):
+    def fixture(self, scenarios=None):
+        root = self.make_repo()
+        self.git(root, 'switch', '-c', f'feat-{PHASE}')
+        ex = self.make_executor(root)
+        counter = self.temp_dir / ('counter-' + root.name)
+        prompts = self.temp_dir / ('prompts-' + root.name)
+        os.environ['ATTEMPT_SCENARIOS'] = json.dumps(scenarios or [{}])
+        os.environ['ATTEMPT_COUNTER'] = str(counter)
+        os.environ['ATTEMPT_PROMPTS'] = str(prompts)
+        self.fake_bin('codex', r"""
+if 'mcp' in sys.argv:
+    print('[]')
+    sys.exit(0)
+counter = Path(os.environ['ATTEMPT_COUNTER'])
+k = int(counter.read_text()) + 1 if counter.exists() else 1
+counter.write_text(str(k))
+with Path(os.environ['ATTEMPT_PROMPTS']).open('a') as stream:
+    stream.write(json.dumps(sys.stdin.read()) + '\n')
+scenarios = json.loads(os.environ['ATTEMPT_SCENARIOS'])
+scenario = scenarios[min(k - 1, len(scenarios) - 1)]
+last = Path(sys.argv[sys.argv.index('-o') + 1])
+result = last.with_name(last.name.replace('-last.txt', '-result.json'))
+for name, content in scenario.get('files', {}).items():
+    path = Path(name)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(content)
+if scenario.get('rename'):
+    import subprocess
+    subprocess.run(['git', 'mv', *scenario['rename']], check=True)
+if scenario.get('commit'):
+    import subprocess
+    subprocess.run(['git', 'commit', '--allow-empty', '-qm', 'forbidden'], check=True)
+if scenario.get('marker'):
+    (last.parent / 'attempt.json').write_text('{tampered')
+if not scenario.get('missing'):
+    result.write_text(json.dumps(scenario.get('result', {'status': 'completed', 'summary': 'src change'})))
+if scenario.get('sleep'):
+    import time
+    time.sleep(60)
+sys.exit(scenario.get('exit', 0))
+""")
+        return ex, counter, prompts
+
+    def attempt(self, ex, ac=('true',), **kwargs):
+        return ex.attempt_unit('step4', 'implement sample', ['src/'], ac, **kwargs)
+
+    def test_stale_result_deleted(self):
+        ex, counter, _ = self.fixture([{'missing': True}])
+        ex.run_dir.mkdir(parents=True)
+        ex.result_path('step4').write_text(json.dumps({'status': 'completed', 'summary': 'stale'}))
+        out = self.attempt(ex)
+        self.assertEqual(out.status, 'error')
+        self.assertIn('result', out.reason)
+        self.assertEqual(counter.read_text(), '3')
+
+    def test_ac_and_list_failure_fails(self):
+        for line in ('false && true', 'false | true'):
+            with self.subTest(line=line):
+                ex, _, _ = self.fixture()
+                out = self.attempt(ex, [line], start_k=3)
+                self.assertEqual(out.status, 'error')
+                self.assertIn(line, out.reason)
+                self.assertIn('종료 코드 1', out.reason)
+
+    def test_change_outside_allowed_fails(self):
+        ex, _, _ = self.fixture([{'files': {'AGENTS.md': 'changed'}}])
+        original = (ex.root / 'AGENTS.md').read_bytes()
+        out = self.attempt(ex)
+        self.assertEqual(out.status, 'error')
+        self.assertIn('③', out.reason)
+        self.assertEqual((ex.root / 'AGENTS.md').read_bytes(), original)
+
+    def test_session_index_edit_fails(self):
+        ex, _, _ = self.fixture([{'files': {f'phases/{PHASE}/index.json': '{}'}}])
+        original = ex.index_path.read_bytes()
+        out = self.attempt(ex)
+        self.assertEqual(out.status, 'error')
+        self.assertIn('③', out.reason)
+        self.assertEqual(ex.index_path.read_bytes(), original)
+
+    def test_ac_tree_change_fails(self):
+        ex, _, _ = self.fixture()
+        out = self.attempt(ex, ['touch src/new.txt'])
+        self.assertEqual(out.status, 'error')
+        self.assertIn('⑦', out.reason)
+        self.assertFalse((ex.root / 'src/new.txt').exists())
+
+    def test_env_change_errors_without_retry(self):
+        ex, counter, _ = self.fixture([{'files': {'.env': 'changed'}}])
+        (ex.root / '.env').write_text('before')
+        out = self.attempt(ex)
+        self.assertEqual(out.status, 'error')
+        self.assertEqual(out.attempts, 1)
+        self.assertIn('.env', out.reason)
+        self.assertEqual(counter.read_text(), '1')
+        self.assertEqual(ex.changed_paths(), [])
+        self.assertEqual(ex.load_marker(), ex.marker)
+
+    def test_new_ignored_outside_run_fails(self):
+        ex, _, _ = self.fixture([{'files': {'build.log': 'new'}}])
+        out = self.attempt(ex, start_k=3)
+        self.assertEqual(out.status, 'error')
+        self.assertIn('⑤', out.reason)
+        self.assertIn('build.log', out.reason)
+        ex, _, _ = self.fixture([{'files': {
+            f'phases/{PHASE}/.run/extra.log': 'ok', '__pycache__/cache': 'ok',
+            'src/cache.pyc': 'ok', 'src/keep.txt': 'changed'}}])
+        before = ex.head()
+        out = self.attempt(ex)
+        self.assertEqual(out.status, 'completed')
+        self.assertEqual(out.pre_sha, before)
+        self.assertEqual(out.summary, 'src change')
+        self.assertEqual(ex.marker['stage'], 'running')
+        self.assertEqual((ex.root / 'src/keep.txt').read_text(), 'changed')
+
+    def test_blocked_rolls_back_uncounted(self):
+        ex, counter, _ = self.fixture([
+            {'result': {'status': 'error', 'error_message': 'first'}},
+            {'files': {'src/keep.txt': 'partial'},
+             'result': {'status': 'blocked', 'blocked_reason': 'human decision'}}])
+        out = self.attempt(ex)
+        self.assertEqual((out.status, out.attempts, out.reason), ('blocked', 1, 'human decision'))
+        self.assertEqual(counter.read_text(), '2')
+        self.assertEqual(ex.changed_paths(), [])
+        self.assertIn(b'/attempt2-', self.git(ex.root, 'for-each-ref', '--format=%(refname)', 'refs/harness/'))
+        self.assertEqual(ex.load_marker()['k'], 2)
+
+    def test_third_failure_error(self):
+        ex, counter, _ = self.fixture([{'result': {'status': 'error', 'error_message': 'failure'},
+                                      'files': {'src/keep.txt': 'partial'}}])
+        out = self.attempt(ex)
+        self.assertEqual((out.status, out.attempts), ('error', 3))
+        self.assertEqual(counter.read_text(), '3')
+        self.assertEqual(len(self.git(ex.root, 'for-each-ref', '--format=%(refname)', 'refs/harness/').splitlines()), 3)
+        self.assertEqual(ex.changed_paths(), [])
+        self.assertEqual(ex.load_marker()['k'], 3)
+        self.assertEqual(len([args for args in self.calls('codex') if args[0] == 'exec']), 3)
+
+    def test_retry_prompt_has_reason(self):
+        ex, counter, prompts = self.fixture()
+        out = self.attempt(ex, ['if [ "$(cat "$ATTEMPT_COUNTER")" = 1 ]; then echo MARKER-42; exit 1; fi'])
+        self.assertEqual((out.status, out.attempts), ('completed', 2))
+        second = json.loads(prompts.read_text().splitlines()[1])
+        self.assertIn('MARKER-42', second)
+        self.assertIn('⑥ AC 실패', second)
+        self.assertEqual(counter.read_text(), '2')
+
+    def test_marker_tampering_preflight_and_exhaustion(self):
+        ex, _, _ = self.fixture([{'marker': True}])
+        self.assertEqual(self.attempt(ex).status, 'completed')
+        self.assertEqual(ex.load_marker(), ex.marker)
+        self.assertIsInstance(ex.marker['pgid'], int)
+        ex.clear_marker()
+        with mock.patch.object(ex, 'codex_preflight', side_effect=execute.HarnessExit(1, 'preflight')):
+            self.assert_exit(1, self.attempt, ex)
+        self.assertIsNone(ex.load_marker())
+        with mock.patch.object(ex, 'run_codex') as session:
+            out = self.attempt(ex, start_k=4)
+            self.assertEqual((out.status, out.attempts), ('error', 3))
+            self.assertIn('소진', out.reason)
+            session.assert_not_called()
+        (ex.root / 'src/keep.txt').write_text('dirty')
+        self.assert_exit(1, self.attempt, ex)
+
+    def test_result_validation_and_root_env_scope(self):
+        ex, _, _ = self.fixture()
+        ex.run_dir.mkdir(parents=True)
+        for text in ('{bad', '[]', 'null', '{"status": []}', '{"status": "unknown"}'):
+            ex.result_path('step4').write_text(text)
+            self.assertIsNone(ex.read_result('step4'))
+        (ex.root / '.env.example').write_text('sample')
+        (ex.root / 'src/.env').write_text('nested')
+        self.assertEqual(ex.env_fingerprint(), {})
+        (ex.root / '.env.local').write_text('value')
+        before = ex.env_fingerprint()
+        self.assertEqual(set(before), {'.env.local'})
+        self.assertEqual(len(before['.env.local']), 64)
+        (ex.root / '.env.local').unlink()
+        self.assertNotEqual(before, ex.env_fingerprint())
+
+    def test_summary_head_rename_and_child_failures(self):
+        cases = [({'result': {'status': 'completed', 'summary': '  '}}, '①'),
+                 ({'commit': True}, '②'),
+                 ({'rename': ['AGENTS.md', 'src/agents.md']}, '③'),
+                 ({'exit': 9}, '종료 코드 9'),
+                 ({'sleep': True}, 'timeout')]
+        for scenario, reason in cases:
+            with self.subTest(scenario=scenario):
+                ex, _, _ = self.fixture([scenario])
+                ex.session_timeout = 0.1
+                before = ex.head()
+                out = self.attempt(ex, start_k=3)
+                self.assertEqual(out.status, 'error')
+                self.assertIn(reason, out.reason)
+                self.assertEqual(ex.head(), before)
+                self.assertEqual(ex.changed_paths(), [])
+
+    def test_ac_separate_shells_timeout_and_head_change(self):
+        ex, _, _ = self.fixture()
+        self.assertIsNone(ex.run_ac(['export AC_LOCAL_ONLY=value', 'test -z "$AC_LOCAL_ONLY"']))
+        ex.ac_timeout = 0.1
+        self.assertIn('timeout', ex.run_ac(['echo AC-TIMEOUT; sleep 60']))
+        self.assertIn('⑦', ex.run_ac(['git commit --allow-empty -qm ac-change']))
+
+
 if __name__ == "__main__":
     program = unittest.main(exit=False)
     sys.exit(0 if program.result.testsRun and program.result.wasSuccessful() else 1)
