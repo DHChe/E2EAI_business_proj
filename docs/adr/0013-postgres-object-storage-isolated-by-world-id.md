@@ -89,7 +89,7 @@ SQLite를 쓰지 않으므로 사실 검증 2(SQLite WAL-reset 버그)는 기록
   - [ADR-0005](0005-policy-source-of-truth.md) ④는 판을 "문서 단위와 조항 단위 둘 다"(`docs/adr/0005-policy-source-of-truth.md:81`)로 두고(조항 단위는 `:84`의 `TRV-15-2`), `PRC-2-2`는 한 출장에 사전승인 기안일의 판을 정산까지 적용한다(`docs/company/travel-procedure.md:33`).
 
     > _ADR-0005 ④(`docs/adr/0005-policy-source-of-truth.md:81-86`)·`PRC-2-2`와 어긋날 여지가 있다. 새 판이 나오면 옛 판으로 판정되는 출장이 남으므로 판이 여럿 동시에 살아야 하는데,
-    > 저장소에는 문서마다 파일이 하나다. 이 긴장은 문서 판에 관한 것이다. 조항 판은 `TRV-15-2` 블록 하나가 두 판을 함께 적으므로(`docs/company/travel-policy.md:338-344`) 문서당 파일 하나와 부딪치지 않는다 `[유도]`. 이 ADR은 판 1만 적재해 지금은 부딪치지 않게 한다. 옛 판을 둘 자리는 ADR-0005 후속으로 다시 논의할 가치가 있다(claude §11 모순 6)._
+    > 저장소에는 문서마다 파일이 하나다. 이 긴장은 문서 판에 관한 것이다. 조항 판은 `TRV-15-2` 블록 하나가 두 판을 함께 적으므로(`docs/company/travel-policy.md:335-345`) 문서당 파일 하나와 부딪치지 않는다 `[유도]`. 이 ADR은 판 1만 적재해 지금은 부딪치지 않게 한다. 옛 판을 둘 자리는 ADR-0005 후속으로 다시 논의할 가치가 있다(claude §11 모순 6)._
 
   - [ADR-0009](0009-evidence-is-crop-plus-original-toggle.md): 원본과 pre-resize된 보낸 이미지를 둘 다 두는 것이 이 ADR의 저장 단위다(`docs/adr/0009-evidence-is-crop-plus-original-toggle.md:27`).
   - `CONTEXT.md:358`: 감사 로그는 추가만 된다. 세계를 통째로 지우는 것은 한 세계 안의 감사 삭제가 아니다(claude §6.1). 세계의 보존·삭제 주기는 이 ADR이 정하지 않는다 — codex가 사용자 결정으로 남긴 자리다(codex §6.2).
