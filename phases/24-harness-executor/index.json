@@ -48,7 +48,9 @@
     {
       "step": 6,
       "name": "issue-sync",
-      "status": "pending"
+      "status": "completed",
+      "summary": "scripts/execute.py: GH_ATTEMPTS=3, gh_timeout=60, Executor.gh(*args: str) -> bool, retry_gh_pending() -> None, issue_comment(body: str) -> None, issue_blocked(reason: str) -> None, issue_resume() -> None 추가. 검증된 대기열 재시도 및 run/step 확정 후 Issue 동기화 연결. scripts/test_execute.py: IssueSyncTests 8개 추가; 전체 76개 및 AC 8줄 종료 0, Bash 가드 54/54 통과.",
+      "completed_at": "2026-09-22T20:48:16+09:00"
     },
     {
       "step": 7,
