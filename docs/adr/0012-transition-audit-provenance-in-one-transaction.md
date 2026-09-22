@@ -51,9 +51,9 @@ LangGraph checkpoint는 승인 감사 레코드가 아니다(`:799`).
 상태와 감사를 두 저장소에 쓰면 한쪽만 커밋되는 틈이 생긴다. 감사 로그의 상태 전이(`CONTEXT.md:358`)도 "추가만 되고 지워지지 않는다"다.
 
 **왜 책임자를 지금 채우지 않는가.** codex가 짚었다 — `responsibleHumanId`를 모든 이벤트의 전결권자로 기계적으로 채우지 않는다.
-수기 확정은 확정한 사람, 결재는 그 승인자, 비결재 조작은 #10의 배정 규칙을 쓴다(codex §2).
+수기 확정은 확정한 사람, 결재는 그 승인자, 비결재 조작은 ~~#10의 배정 규칙을 쓴다(codex §2).~~ **정정(#10, 2026-09-22)**: [ADR-0019](0019-non-approval-owner-is-assigned-operations-person.md)의 배정 규칙을 쓴다.
 grok은 추출·계산의 책임자를 기안자로 고정하자고 했고, 그 약점도 스스로 적었다 —
-"아직 확정하지 않은 오독의 책임이 출장자에게 찍힌다"(grok §10-2). 도구와 책임 배정표는 #10의 몫이라, #9는 NOT NULL과 실행 전 차단만 계약으로 둔다.
+"아직 확정하지 않은 오독의 책임이 출장자에게 찍힌다"(grok §10-2). ~~도구와 책임 배정표는 #10의 몫이라, #9는 NOT NULL과 실행 전 차단만 계약으로 둔다.~~ **정정(#10, 2026-09-22)**: #9 시점에는 도구와 책임 배정표가 #10의 몫이라 NOT NULL과 실행 전 차단만 계약으로 두었다. #10이 배정 규칙은 [ADR-0019](0019-non-approval-owner-is-assigned-operations-person.md)로, 에이전트의 도구는 [ADR-0018](0018-two-model-contracts-no-side-effect-tools.md)로 정했다.
 
 **왜 관문 중에도 반려를 받는가.** #8 결과 5는 "판단을 기록하기 전에는 승인·동의가 열리지 않는다"고 적었고 반려는 적지 않았다
 (<https://github.com/DHChe/E2EAI_business_proj/issues/8#issuecomment-5769586450>). 반려까지 막으면 `APV-9-3`의 `reject_always_allowed: true`

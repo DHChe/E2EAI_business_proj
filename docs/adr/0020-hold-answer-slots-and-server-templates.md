@@ -65,7 +65,7 @@ codex와 claude는 셋을 다르게 나눴다.
 
 **왜 문장 검사로는 모자란가.** 숫자가 계산 기록과 같아도 문장의 방향은 반대일 수 있다. codex의 반례가 그것이다(codex §2.2).
 숫자 대조와 부분문자열 대조는 방향을 보지 않는다. SlipScan의 방식은 그보다 약하다 — 지시문이 "그대로 인용합니다"라고 적을 뿐이고(`slipscan:lib/claude/prompts/report.ts:11`),
-스트림 조각을 받는 즉시 흘리며(`slipscan:lib/claude/report.ts:205-212`), 저장 전에 보는 것은 `stop_reason`뿐이다(`:144-148`).
+스트림 조각을 받는 즉시 흘리며(`slipscan:lib/claude/report.ts:205-212`), 저장 전에 보는 것은 `stopReason === "end_turn"`뿐이다(`:144-148`. API 필드 `stop_reason`은 `slipscan:lib/claude/report.ts:201`).
 
 **왜 슬롯만으로도 모자란가.** 슬롯은 숫자와 인용을 구성으로 지킨다. 그러나 방향 문장은 이음말 안에 남을 수 있고, 검증기 V4는 권고 문형만 본다(비교 문서 `:112`).
 그래서 방향을 단정하는 문장을 모델에게서 빼 서버 템플릿으로 옮긴다. U2가 codex §2.2와 claude §3.3을 합친 이유다.

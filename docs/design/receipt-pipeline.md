@@ -2345,7 +2345,7 @@ export type FieldState = {
   field: JudgmentInputField;
   signals: UncertaintySignal[];
   candidates: string[];
-  /** 같은 사실을 시스템 연동(법인카드 명세)이 갖고 있고 대사가 붙었다. 출장 일정은 시스템 연동이 아니다(ADR-0021). */
+  /** 같은 사실을 시스템 연동(법인카드 명세)이 갖고 있고 대사가 붙었다. 출장 일정은 시스템 연동이 아니다(ADR-0021 결정 1 — 한성워크 커넥터는 조직 정보 스냅샷만 준다). */
   supersededBySystem: boolean;
   /** 이 결제 경로에서 법정 판정 또는 정책 대조의 입력인가. */
   affectsJudgment: boolean;

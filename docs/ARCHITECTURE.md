@@ -123,8 +123,8 @@ flowchart LR
 
 | 경계 | 이유 | 이 경계가 없으면 생기는 구체적 실패 | 근거(파일:줄) |
 | --- | --- | --- | --- |
-| 판독기 ↔ 답변기 | 실패 격리 | 영수증·여행사 메일에 심긴 지시문이, 계산 기록을 읽고 승인자에게 문장을 내는 맥락에 들어간다 | `docs/design/receipt-pipeline.md:261`, `docs/company/tools.md:52-53`, 비교 문서 `:80` |
-| LLM 호출 ↔ 명령 처리기 | 권한 | 모델이 전이·라우팅·값 확정을 일으킨다. 결재 행위자가 에이전트인 이벤트가 생기고 ADR-0011 반증 1이 열린다 | `CONTEXT.md:331`, `docs/adr/0012-transition-audit-provenance-in-one-transaction.md:35-36`, `docs/PRD.md:141`, `docs/adr/0011-messages-api-direct-waits-are-document-state.md:89` |
+| 판독기 ↔ 답변기 | 실패 격리 | 영수증·여행사 메일에 심긴 지시문이, 계산 기록을 읽고 승인자에게 문장을 내는 맥락에 들어간다 | `docs/design/receipt-pipeline.md:261`, 비교 문서 `:80`. 여행사 입력이 메일이라는 것은 `docs/company/tools.md:15` |
+| LLM 호출 ↔ 명령 처리기 | 권한 | 모델이 전이·라우팅·값 확정을 일으킨다. 결재 행위자가 에이전트인 이벤트가 생기고, A1의 업무 쓰기 권한 경계를 어긴다. 사람 확인·반복 확인·보상까지 함께 필요해지면 ADR-0011 반증 1도 열린다(§4.2) | `CONTEXT.md:331`, `docs/adr/0012-transition-audit-provenance-in-one-transaction.md:35-36`, `docs/PRD.md:141`, `docs/adr/0011-messages-api-direct-waits-are-document-state.md:89` |
 | 판독값 ↔ 판정 | 실패 격리 | 모델의 오독이 한도·수취 의무 판정에 곧바로 들어간다 | `docs/adr/0008-extraction-uncertainty-is-first-class.md:32`, `PRC-11-2`(`docs/company/travel-procedure.md:192`) |
 | 분류 스키마 ↔ 추출 스키마 (에이전트 경계가 아니라 스키마 경계, C1) | 실패 격리 | 한 응답이 유형과 금액을 같이 쓰면 검산을 통과하는 유형 쪽으로 금액을 맞춘다(grok §3.3 1행) | `docs/design/receipt-pipeline.md:65-66`, 비교 문서 `:77`, `:191` |
 | 정책 엔진 ↔ 답변기 | 책임 | 승인자에게 보인 숫자가 계산 기록으로 거슬러 가지 않고, 답변이 새 판정 입력을 만든다 | `docs/PRD.md:45`, `:154`, `docs/adr/0012-transition-audit-provenance-in-one-transaction.md:43` |
@@ -134,7 +134,7 @@ flowchart LR
 | 답변 검증기 ↔ 화면 | 실패 격리 | 인용·숫자 검사를 통과하지 못한 문장이 승인자에게 먼저 보인다 | `docs/adr/0015-typescript-web-stage-sse-no-unverified-answer-text.md:26` |
 | 커넥터 어댑터 ↔ 명령 처리기 | 책임 | 카드 줄·조직 정보가 출처·책임자 없이 행으로 생긴다. S11의 누락 0을 어긴다 | `docs/PRD.md:161`, `CONTEXT.md:345`, `docs/adr/0012-transition-audit-provenance-in-one-transaction.md:41` |
 | 커넥터 어댑터 사이 | 실패 격리 | 카드 파일의 지연·깨진 줄이 여행사 메일 수신이나 조직 스냅샷 동기화까지 멈춘다 `[유도]`(codex §1.3 7행을 커넥터 셋에 옮김) | [ADR-0021](adr/0021-three-read-only-mock-connectors-no-erp.md) 결정 6, `docs/company/tools.md:11-16` |
-| 한성워크 모의 ↔ 앱의 결재 상태 | 책임 | 결재 상태가 두 곳에 살아 큐와 감사가 어긋나고, 어느 쪽이 원장인지 가를 수 없다 | A8, `docs/adr/0011-messages-api-direct-waits-are-document-state.md:74-75`, `docs/PRD.md:24` |
+| 한성워크 모의 ↔ 앱의 결재 상태 | 책임 | 결재 상태가 두 곳에 살아 큐와 감사가 어긋나고, 어느 쪽이 원장인지 가를 수 없다 | A8, `docs/PRD.md:24`. 내구 실행 계층의 이중 상태(`docs/adr/0011-messages-api-direct-waits-are-document-state.md:74-75`)에서 끌어온 것은 유추다 |
 | 바깥으로 쓰기 없음 (모의 커넥터 읽기 전용) | 실패 격리 | 커밋 전 외부 부작용의 재시도를 멱등 key로 막지 못한다(ADR-0011 반증 3) | `docs/adr/0011-messages-api-direct-waits-are-document-state.md:93`, [ADR-0021](adr/0021-three-read-only-mock-connectors-no-erp.md) 결정 2 |
 | 운영 배정 ↔ 실행 | 책임 | 책임자 없는 조작이 먼저 돌고, 뒤에 기안자·admin 같은 기본값으로 책임자가 채워진다 | `docs/adr/0012-transition-audit-provenance-in-one-transaction.md:44`, [ADR-0019](adr/0019-non-approval-owner-is-assigned-operations-person.md) 결정 6·7 |
 | 업무 담당자 ↔ 내부감사(admin) | 권한 | 감사자가 값을 고치고 자기 변경을 감사한다 | `docs/adr/0002-admin-read-only-audit-axis.md:23-27` |
@@ -212,7 +212,7 @@ type HoldAnswer = {
 **수정 채택이다**([ADR-0020](adr/0020-hold-answer-slots-and-server-templates.md) 결정 9). 계약은 계산 언어가 아니라 LLM이 계산의 원본이 되지 않는다는 것이다(codex §2.2).
 계산은 정책 엔진이 하고, 결과는 입력 revision·계산기 버전·적용 조항을 가진 계산 기록으로 남는다(`docs/adr/0012-transition-audit-provenance-in-one-transaction.md:43`).
 
-SlipScan의 방식은 받지 않는 부분이 있다. 지시문이 "그대로 인용합니다"라고 적을 뿐이고(`slipscan:lib/claude/prompts/report.ts:11`), 스트림 조각을 검증 없이 흘리며(`slipscan:lib/claude/report.ts:205-212`), 저장 전에 보는 것은 `stop_reason`뿐이다(`:144-148`).
+SlipScan의 방식은 받지 않는 부분이 있다. 지시문이 "그대로 인용합니다"라고 적을 뿐이고(`slipscan:lib/claude/prompts/report.ts:11`), 스트림 조각을 검증 없이 흘리며(`slipscan:lib/claude/report.ts:205-212`), 저장 전에 보는 것은 `stopReason === "end_turn"`뿐이다(`:144-148`. API 필드 `stop_reason`은 `:201`).
 그래서 이 설계는 숫자를 슬롯으로, 방향 문장을 템플릿으로 옮기고, 토큰 스트리밍을 하지 않는다(비교 문서 `:69`).
 
 ## 5. 명령 처리기
@@ -250,7 +250,7 @@ job = envelope + input_hash + policy_edition + model/prompt/schema_versions
 배정은 세계마다 인사·총무·재무 팀장이 실명 사람 ID로 한다. 자동 대체는 없고, 미배정은 실행 전에 막는다.
 
 아래 표는 codex §6.2의 표에서 U3으로 ERP·환율 참조 동기화 행과 전표 분류를 빼고, U4·U5·U6을 반영한 것이다(비교 문서 `:185`).
-**표의 행과 예시 인물은 모두 `[설계 가정]`이다** — 규정에 운영 배정이 없다(비교 문서 `:102`).
+**이 표는 U1이 채택한 업무별 책임 배정에 U3·U4·U5·U6을 반영한 결정이다.** 규정에 원래 있던 배정이라는 뜻은 아니며, 예시 인물과 배정 레코드의 구현 형식만 `[설계 가정]`이다(비교 문서 `:175`, `:185`).
 
 | 조작 | 행위자 | 책임자 | 근거 |
 | --- | --- | --- | --- |
@@ -258,7 +258,7 @@ job = envelope + input_hash + policy_edition + model/prompt/schema_versions
 | 원본 전처리·방향 처리 | 시스템(전처리) | 증빙은 재무 증빙 운영 담당, 여행사 첨부는 총무 예약 담당 | codex §6.2 3행, `docs/design/receipt-pipeline.md:64` |
 | 검산·자동 대사·법정 판정 | 시스템(증빙 코드) | 배정된 재무 증빙 운영 담당 | codex §6.2 4행, `docs/company/approval-matrix.md:239-243`. 법적 하자의 처리 판단자를 정하는 것은 아니다(#20) |
 | 한도·환산·안분·정산 차이 계산 | 시스템(정책 엔진) | 배정된 재무 계산 운영 담당 | codex §6.2 5행, `docs/company/approval-matrix.md:242` |
-| 조직 정보 반영·결재선 계산 | 시스템(정책 엔진) | 배정된 인사 절차 운영 담당 | codex §6.2 6행, `docs/company/org.md:11`, `docs/company/approval-matrix.md:178`. codex 행의 "일정"은 U3으로 한성워크가 조직 정보만 주므로 뺐다 `[설계 가정]`. "기한"은 아래 결정으로 뺐다 |
+| 조직 정보·출장 일정 반영, 결재선 계산 | 시스템(정책 엔진) | 배정된 인사 절차 운영 담당 | codex §6.2 6행, `docs/company/org.md:11`, `docs/company/approval-matrix.md:178`. codex 행의 "기한"은 아래 결정으로 뺐다 |
 | 카드 이용 내역 매일 가져오기·파싱 | 시스템(카드 어댑터) | 배정된 카드 수집 담당(총무 또는 재무 중 팀장이 배정) | U4, 비교 문서 `:185`, `docs/company/tools.md:16` |
 | 청구 명세 가져오기 | 재무팀 담당자 | 그 사람 | U4, [ADR-0019](adr/0019-non-approval-owner-is-assigned-operations-person.md) 결정 2 |
 | 청구 명세 파싱 | 시스템(카드 어댑터) | 그 batch에 배정된 재무 수집 담당 | codex §6.2 7행 |
@@ -343,6 +343,7 @@ stateDiagram-v2
 ```
 
 설명용 스케치이고 구현이 아니다(claude §5.3을 옮김). 정산 문서의 그림이다. 사전승인 문서에는 `재무합의대기`가 없고 상신하면 곧바로 결재선 1단계로 간다(`APV-9-1`, `docs/company/approval-matrix.md:205`).
+이 그림은 재무합의자가 한 명 이상인 정산의 골격이다. `APV-9-4`로 재무합의가 없어지는 경우는 이 그림에서 생략했으며, 그 귀결의 규정 보완은 #20의 몫이다(`docs/company/approval-matrix.md:217`, `:233`).
 사전승인 문서에 걸린 이의 플래그의 대상 상태는 정의돼 있지 않다 — #17로 넘긴다(비교 문서 `:162`).
 
 **3자 승인 루프의 골격.** 루프의 세 당사자는 기안자·재무합의자·결재권자다. 에이전트는 **보류의 한 대상**으로만 루프에 들어오고 결재 행위를 하지 않는다(A9).
@@ -367,7 +368,7 @@ stateDiagram-v2
 | 기안 초안 채택·상신 | 기안자 | 판독기의 초안을 고쳐 상신한다 | 문서 상태 `기안`. 초안은 판정 입력이 아니다 | U6 |
 | 수기 확정 | 기안자 | `추출 불확실`을 백지 입력으로 닫는다 | 필드가 열려 있고 정산 상신이 막힌다 | `CONTEXT.md:315-317`, `PRC-11-2` |
 | 짝 확인(경쟁·대조 불가·후보 복수) | 기안자 | 같은 지출인지, 어느 줄인지 | 대사 상태 `짝 보류`·`후보 복수`(영속) | `CONTEXT.md:310`, `docs/adr/0013-postgres-object-storage-isolated-by-world-id.md:38` |
-| 짝 확인(값 모순) | 재무합의자 | 같은 거래인지 | 재무합의 단계의 동의만 막는다(C3) | `CONTEXT.md:310` |
+| 짝 확인(값 모순) | 재무합의자 | 같은 거래인지 | 현재 단계의 승인·동의만 막는다(C3). 확인 담당자는 재무합의자이며 반려·보류는 받는다 | `CONTEXT.md:310`, 비교 문서 `:193` |
 | 재량 판단 기록 | 조항의 `decided_by` | 판단과 사유 | `gate=on` — 승인·동의만 막는다 | `docs/adr/0012-transition-audit-provenance-in-one-transaction.md:46` |
 | 결재 | 결재권자 / 재무합의자 | 승인·반려·보류 / 동의·반려·보류 | 문서 상태와 현재 단계 | `docs/adr/0003-approver-actions-three.md:23` |
 | 보류 답변 | 기안자, 또는 답변기(작업) | 승인자의 질문에 답한다 | 문서 상태 `보류`. 대상이 에이전트면 같은 트랜잭션에서 답변 `job`을 넣는다 | `docs/adr/0003-approver-actions-three.md:25-26`, claude §5.1 |
@@ -439,6 +440,9 @@ stateDiagram-v2
 
 표는 claude §4.5를 옮겼다. 파일 칸의 함정은 `[설계 가정]`이다.
 
+일별 이용 내역은 `billedKrw`가 없어 현행 `CardLine` 입력 계약과 바로 호환되지 않는다(`docs/design/receipt-pipeline.md:1806`).
+청구 전 대사 입력과 청구 후 값의 구분은 #18 후속에서 정하며, 이 문서는 그 타입을 확정하지 않는다.
+
 ## 10. `job`과 실패 격리
 
 - **`job`은 임대·시도 횟수·멱등 key·fencing 값을 갖는다**(`docs/adr/0011-messages-api-direct-waits-are-document-state.md:30`). 입력 revision·정책 판·모델·프롬프트·스키마 판·시도 번호를 고정한다(`:44`).
@@ -468,12 +472,13 @@ stateDiagram-v2
 
 | 티켓 | 넘기는 것 | 출처 |
 | --- | --- | --- |
-| #20 | 결재권자가 여럿일 때의 `decided_by`(C5). grok의 교착 지적 — 전결권자만 기록하면 앞 결재권자의 승인이 관문에 막힌다(grok §10.2) | 비교 문서 `:143`, `:195` |
-| #20 | 재무팀 담당자 본인의 청구 총액 500만 원 이하 정산에서 `APV-9-4`로 재무합의가 사라지는 귀결 | 비교 문서 `:161`, `docs/company/approval-matrix.md:216-217` |
+| #20 | 결재권자가 여럿일 때의 `decided_by`(C5). grok의 교착 지적 — 전결권자만 기록하면 앞 결재권자의 승인이 관문에 막혀 교착할 수 있다(grok §10.2). 기존 규정은 전결권자가 앞 단계보다 먼저 재량 판단을 기록할 수 있는지 정하지 않아, 조건부 위험이다 | 비교 문서 `:143`, `:195`, `docs/adr/0012-transition-audit-provenance-in-one-transaction.md:46`, `docs/company/approval-matrix.md:187` |
+| #20 | 재무팀 담당자 본인의 청구 총액 500만 원 이하 정산에서 `APV-9-4`로 재무합의가 사라지는 귀결 | 비교 문서 `:161`, `docs/company/approval-matrix.md:216-217`, `:233` |
 | #20 | 규정 문언에 개정권 조항을 넣는 일(U5) | 비교 문서 `:187`, [ADR-0022](adr/0022-policy-amendment-by-ceo-no-in-app-publishing.md) 결정 6 |
 | #17 | 사전승인 문서에 걸린 이의 플래그의 대상 상태 | 비교 문서 `:162` |
 | #17 | 반려 이후, 답 없이 시간이 흐른 보류, 재심 복귀, 타임아웃의 전이 | `docs/adr/0011-messages-api-direct-waits-are-document-state.md:35` |
 | #18 후속 | `CardLine`의 가맹점 업종 칸. 여행사 결제가 걸리는 카드와 그 줄의 짝 확인 담당 | 비교 문서 `:67`, `:164`, `:214` |
+| #18 후속 | 일별 이용 내역(U4)과 `CardLine`의 타입 공백. 이용 내역은 `billedKrw`가 없어 현행 입력 계약과 바로 호환되지 않는다. 청구 전 대사 입력과 청구 후 값의 구분 | `docs/design/receipt-pipeline.md:1806`, 비교 문서 `:178` |
 | #18 후속 | 방향 분류기 실행 자산의 검증 | A13 |
 | #22 | 상신 뒤 짝 보류·값 모순 짝 확인·재량 관문을 한 이름("열린 의무")으로 올릴지(C3). 수기 확정의 정의 보정(C9, `CONTEXT.md:315`) | 비교 문서 `:193`, `:199` |
 | #11 | codex의 구현 검증 계약 7개(미배정 차단, 주입 문장, 방향 반대 서술 등). 루프 상한·회전각 칸의 측정 | codex §11, 비교 문서 `:160`, `:194` |
