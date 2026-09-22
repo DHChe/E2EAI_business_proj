@@ -61,7 +61,7 @@ phases/
 - `steps[].step`: 0부터 시작하는 순번.
 - `steps[].name`: kebab-case slug. 해당 step의 핵심 모듈을 한두 단어로.
 - `steps[].status`: 생성 시 전부 `"pending"`.
-- 실행기가 `created_at`, `base_commit`, `review{status, end_sha, round, blocked_reason?}`를 기록한다. 생성 시 넣지 않는다. `started_at`은 기록하지 않는다.
+- 실행기가 `created_at`, `base_commit`, `review{status, end_sha, round, fixes, blocked_reason?}`를 기록한다. 생성 시 넣지 않는다. `started_at`은 기록하지 않는다.
 
 ## 상태 기계
 
@@ -172,9 +172,9 @@ step AC는 phase 끝까지 참이어야 한다.
 
 ### 기동과 책임
 
-1. worktree 잠금 → 신호 처리 설치 → marker 복구 → gh 대기열 재시도 → 시작 전 검사와 필요시 라벨 복원 순서다.
+1. worktree 잠금 → Git 복원 실패 guard 확인(있으면 다른 git 호출 전 exit 1) → 신호 처리 설치 → marker 복구 → gh 대기열 재시도 → 시작 전 검사와 필요시 라벨 복원 순서다.
 2. `feat-{phase}`를 먼저 checkout한다. 없으면 현재 HEAD에서 만든다. 무시되지 않은 변경은 해당 `phases/{dir}/` 안에서만 허용한다.
-3. phase index의 변경은 위 복구 절의 step 재개 또는 리뷰 blocked 재개만 허용한다. 코드상 오류·시각 필드를 그대로 두는 것도 허용하지만, 복구할 때는 지운다. 두 종류의 재개를 한 diff에 합치거나 다른 필드를 바꾸지 않는다.
+3. phase index의 변경은 위 복구 절의 step 재개 또는 리뷰 blocked 재개만 허용한다. 코드상 오류·시각 필드를 그대로 두는 것도 허용하지만, 복구할 때는 지운다. 두 종류의 재개를 한 diff에 합치거나 다른 필드를 바꾸지 않는다. `review.fixes`의 누락과 0은 같은 값으로 비교하며 완료한 수정 수는 사람이 바꾸지 않는다.
 4. 마지막 비-pending step이 `error`면 exit 1, `blocked`면 exit 2다. `review.status=blocked`도 exit 2다. 허용된 phase 파일 변경은 prepare chore로 커밋한다.
 5. 최초 실행(`created_at` 없음)이면 `created_at`·`base_commit`(prepare 커밋 전 HEAD)·기본 `review`를 기록하고 첫 시도 전에 커밋한다. 상위 index의 해당 phase가 `error`/`blocked`면 실행기가 `pending`으로 돌린다.
 6. HEAD에 커밋된 모든 step 파일의 허용 경로와 AC를 검증해 고정한다. 하나라도 잘못되면 오류를 모아 exit 1이며, 구현 세션과 AC 본 실행을 시작하지 않는다. 앞선 복구·prepare는 이미 수행됐을 수 있다.
@@ -184,9 +184,9 @@ step AC는 phase 끝까지 참이어야 한다.
 - 컨텍스트 누적 — 완료된 step의 `summary`, step 본문, 허용 경로, result 계약, 금지 사항을 stdin 프롬프트로 전달한다. 같은 기동의 재시도에는 직전 실패 사유도 넣는다.
 - 상태 소유 — 세션은 result만 쓰고 커밋하지 않는다(샌드박스에서 `.git` 쓰기 불가). phase 등록과 명시된 수동 복구 외에 두 index는 실행기만 쓰며, 시도 중에는 실행기도 index를 쓰지 않는다.
 
-`review` 초기값은 `{"status": "pending", "end_sha": null, "round": 0}`이다.
+`review` 초기값은 `{"status": "pending", "end_sha": null, "round": 0, "fixes": 0}`이다.
 status는 `pending`·`passed`·`failed`·`unverifiable`·`blocked`이며, `end_sha`는 리뷰 대상 HEAD,
-`round`는 리뷰 라운드 번호다. 수정 blocked 때만 `blocked_reason`을 더한다.
+`round`는 리뷰 라운드 번호이고 `fixes`는 완료한 수정 수다(기존 index에 없으면 0). 수정 통과·커밋의 chore에서만 1 올리고 관문 확정(passed·수정 예산 소진 failed·unverifiable) 때 0으로 되돌린다. 수정 blocked 때만 `blocked_reason`을 더한다.
 리뷰 통과 시 phase index에도 `completed_at`을 기록하고 상위 phase를 `completed`로 확정한다.
 시각은 KST ISO 형식이다. `started_at`은 쓰지 않는다.
 
@@ -212,24 +212,24 @@ env의 토큰 변수 제거와 credential.helper 비우기. 파일·키체인의
 | ② | HEAD가 시도 전과 같다 |
 | ③ | 변경 경로가 허용 경로 안이다(두 index 수정도 위반) |
 | ④ | 루트 바로 아래 `.env`·`.env.*`의 SHA-256이 같다(`.env.example` 제외, 하위 디렉토리는 보지 않음) |
-| ⑤ | unit 허용 경로 안 산출물과 `phases/` 아래 `.run/`, 위치와 무관한 `__pycache__/`·`*.pyc`를 제외하고 새 무시 경로가 없다 |
+| ⑤ | `git status --porcelain=v1 -z --ignored=matching`의 `!! ` 집합에서 새 항목이 없다. unit 허용 경로 안, `phases/` 아래 `.run/`, `__pycache__/`·`*.pyc`, 도구 상태 `graft/`·`.omc/`와 그 하위는 예외다 |
 | ⑥ | AC 각 줄이 모두 종료 0이다 |
 | ⑦ | AC 전후 HEAD와 작업 트리 tree SHA가 같다 |
 
-④는 세션 종료 뒤와 AC 뒤 모두 검사한다. AC 뒤에는 ⑦도 검사한다. ⑤의 무시 경로 기준선은 unit 첫 시도 직전에 한 번만 잡아 marker에 보존하며 재시도·크래시 복구에서도 유지한다. 이전 버전 marker에 기준선이 없으면 재개 첫 시도 직전 값을 쓴다.
-시도(세션+AC) 전후 Git의 `--git-path config`, `hooks`·`info` 전체 내용 해시도 비교한다. 변경되면 재시도·롤백·후속 Git 명령 없이 exit 1이며 marker를 남겨 수동 확인한다.
+④는 세션 종료 뒤와 AC 뒤 모두 검사한다. 시도·기준선 시작 때 루트 `.env`·`.env.*`(`.env.example` 제외)의 바이트를 메모리에 보관하고 불일치면 수정·삭제를 복원하고 새 파일은 제거한 뒤 재시도 없이 error로 확정한다. AC 뒤에는 ⑦도 검사한다. ⑤의 무시 경로 기준선은 unit 첫 시도 직전에 한 번만 잡아 marker에 보존하며 재시도·크래시 복구에서도 유지한다. 이전 버전 marker에 기준선이 없으면 재개 첫 시도 직전 값을 쓴다.
+자식(세션·AC·기준선 AC·리뷰어) 시작 전에 저장소 공용 config 바이트와 hooks·info의 모든 항목(종류·바이트/링크 대상·권한)을 메모리에 보관한다. config 비교는 저장소 밖 임시 cwd에서 `git config --file <path> --null --list`의 (키, 값) 목록 중 `branch.*`를 뺀 전부로 한다. hooks·info는 링크를 따라가지 않는 내용 해시다. 차이는 다른 git 호출 전에 보관본으로 복원하고 다시 비교한다. 복원 성공 시 시도는 스냅샷·롤백 후 step/fix error와 두 index를 chore 커밋하고 marker를 지워 exit 1, 기준선은 phase error를 커밋해 exit 1이다. 복원 실패면 두 index를 쓰지 않고 기준 해시·사유를 기동 때 계산한 `--git-path harness/{phase}/git-guard.json`에 남겨 exit 1이다. 다음 기동은 잠금 직후 recover·prepare·다른 git 호출 전에 guard 파일을 확인해 멈추며, 설정을 확인·복원한 사람이 그 파일을 지운 뒤 재개한다. 전역 `~/.gitconfig`는 검사 밖이다.
 
 ### 재시도·롤백·커밋
 
 unit당 최대 3회다. 실패한 작업은 먼저 저장소 밖 임시 index로 tree와 스냅샷 커밋을 만들고
 `refs/harness/<phase>/<unit>/attempt<k>-<epoch>`에 남긴다(epoch는 나노초). 이 ref는 push하지 않는다.
 **스냅샷 뒤에 실행기(`scripts/execute.py`) 프로세스만** `git reset --hard <pre_sha>`와
-`git clean -fd`(`-x` 없음)를 실행하고, 기준선 이후 새로 생긴 허용 경로 안 무시 파일만 지운다. 허용 경로 밖 무시 파일은 절대 지우지 않는다. 세션과 사람에게는 이 명령이 계속 금지다.
+`git clean -fd`(`-x` 없음)를 실행하고, ⑤와 같은 집합에서 기준선에 없던 허용 경로 안 항목만 지운다(파일은 unlink, 새 디렉토리는 링크를 따라가지 않고 그 아래 삭제). 기존 무시 디렉토리 안에 새로 생긴 파일은 지우지 않는다. 도구 상태 `graft/`·`.omc/`와 하위는 새로 생겨도 절대 지우지 않는다. basename이 `.env` 또는 `.env.`으로 시작하는 항목은 삭제하지 않고 stderr에 경로만 보고하며, 그것 때문에 비지 않은 디렉토리도 남긴다. 허용 경로 밖 무시 파일은 절대 지우지 않는다. 세션과 사람에게는 이 명령이 계속 금지다.
 스냅샷 실패면 파괴 명령 없이 exit 1이다. reset 직전 `git symbolic-ref -q HEAD`로
 `feat-{phase}`인지 확인하며, 다르면 스냅샷만 남기고 reset 없이 exit 1이다.
 롤백 뒤 `git status --porcelain`이 비어 있지 않아도 exit 1이다.
 `blocked` 보고는 롤백하고 그 시도를 횟수에 넣지 않으며, index 확정 뒤 exit 2다.
-④ 위반은 롤백 뒤 재시도 없이 `error`로 확정한다.
+④ 위반은 복원·롤백 뒤 재시도 없이 `error`로 확정한다. 허용 경로 밖 ⑤ 위반도 재시도 없이 error이며 사유는 "허용 경로 밖 새 무시 경로: 수동 정리 필요"와 경로 목록이다.
 
 성공 순서는 검증 → feat 커밋 → marker `feat_done` → index 확정 → 두 index만 chore 커밋 → marker 삭제다.
 feat는 검증된 변경 경로만 literal pathspec으로 add하며 변경이 없으면 생략한다.
@@ -246,13 +246,13 @@ prepare chore에는 허용된 phase 파일도 포함할 수 있다.
 `phases/.run/lock`에 flock을 건다. 같은 worktree의 두 번째 실행기는 phase가 달라도 exit 1이다.
 marker는 시도 중이거나 feat와 chore 사이일 때만 존재하고, unit을 확정하는 경로는 chore 뒤 지운다.
 신호·내부 실패로 중단되면 복구할 marker를 남길 수 있다.
-`git rev-parse --git-path harness/{dir}/attempt.json`에 marker를 두고 필요하면 디렉토리를 만든다. 필드는 `{unit, k, pre_sha, stage, feat_sha, pgid, ignored_before, allowed}`다.
+`git rev-parse --git-path harness/{dir}/attempt.json`에 marker를 두고 필요하면 디렉토리를 만든다. 필드는 `{unit, k, pre_sha, stage, feat_sha, pgid, ignored_before, allowed, env_before}`다.
 Codex 샌드박스는 `.git`을 쓸 수 없다. 기존 `.run/attempt.json`은 읽지 않는다. 프롬프트 생성은 marker 기록 전이며, spawn 전 예외는 marker를 지워 시도를 소모하지 않는다.
 
 | 기동 시 marker | 복구 |
 | --- | --- |
-| `running`, HEAD = `pre_sha` | 해당 pgid에 codex 프로세스가 있을 때만 남은 그룹을 죽인다. ps 실패·예외면 롤백 없이 exit 1, marker를 유지한다. 롤백·marker 삭제 뒤 k+1로 재개한다. 다음 번호는 메모리에만 있다 |
-| `feat_done`, HEAD = `feat_sha` | unit과 completed result·summary를 검증하고 chore만 이어서 한다(step 확정 또는 fix의 review pending 확정) |
+| `running`, HEAD = `pre_sha` | 해당 pgid에 codex 프로세스가 있을 때만 남은 그룹을 죽인다. ps 실패·예외면 롤백 없이 exit 1, marker를 유지한다. ④ 해시가 marker의 `env_before`와 다르면 보관 바이트가 없으므로 롤백 뒤 재시도 없이 error를 chore 커밋하고 marker를 지운다(수동 .env 복원 필요). 같거나 이전 marker에 해시가 없으면 롤백·marker 삭제 뒤 k+1로 재개한다. 다음 번호는 메모리에만 있다 |
+| `feat_done`, HEAD = `feat_sha` | unit과 completed result·summary를 검증한다. ④ 해시가 다르면 running과 같이 pre_sha로 롤백하고 error를 확정한다. 같으면 chore만 이어서 한다(step 확정 또는 fix의 review pending·fixes 증가 확정) |
 | 그 밖 또는 무효 marker/result | 아무것도 건드리지 않고 marker 경로·사유를 출력하며 exit 1 |
 
 SIGINT·SIGTERM·SIGHUP에는 자식 프로세스 그룹을 종료하고 marker를 남긴다.
@@ -263,12 +263,12 @@ fix 크래시 재개는 `.run/` 원문을 신뢰하지 않고 현재 HEAD에서 
 ### 리뷰 관문·수정 루프
 
 모든 step이 completed이고 `review.status`가 passed가 아니면 진입한다.
-매 리뷰 전 `end_sha = HEAD`에서 전 step AC 기준선을 돌린다. 실패면 리뷰 없이 phase error, exit 1이다. ⑦이면 `end_sha`로 스냅샷·롤백한다. 기준선 AC 뒤에도 루트 `.env`와 Git 설정 해시를 검사한다.
+매 리뷰 전 `end_sha = HEAD`에서 전 step AC 기준선을 돌린다. 실패면 리뷰 없이 phase error, exit 1이다. ⑦이면 `end_sha`로 스냅샷·롤백한다. 기준선 AC 뒤에도 루트 `.env`와 위 Git 설정 비교·복원 규칙을 적용한다. Git 복원 성공 뒤에는 스냅샷·롤백하고 phase error를 커밋한다.
 Claude와 Grok을 순차로 실행한다. Claude는 `/review <base_commit>..<end_sha>`와 계약문,
 Grok은 `review.md` 본문(frontmatter 제외)의 `$ARGUMENTS`를 범위로 치환한 것과 계약문을 받는다.
 계약문은 파일 변경·커밋·push·gh 쓰기·외부 게시·원격 DB 변경을 금지한다.
 
-리뷰어 전후 브랜치·HEAD·porcelain·루트 `.env` 및 Git config·hooks·info 내용 해시를 검사한다. Git 설정 변경은 스냅샷 대상 밖이므로 되돌리지 않고 unverifiable 사유를 남긴다. 이후 리뷰어·Git 명령은 중단하며 index의 error/unverifiable 기록은 커밋하지 않은 채 수동 확인을 기다린다.
+리뷰어 전후 브랜치·HEAD·porcelain·루트 `.env` 및 위 Git 설정 비교·복원 규칙을 적용한다. Git 설정 복원 성공이면 `[executor] Git 설정 변경 감지·복원`을 붙이고 그 리뷰어를 unverifiable로 판정한다. 이후 브랜치·HEAD·porcelain 검사와 필요한 스냅샷·롤백을 수행하고 두 index의 error/unverifiable 기록을 chore 커밋해 exit 3이다. 복원 실패는 앞 절의 guard 파일 규칙대로 두 index를 쓰지 않고 exit 1이다.
 브랜치가 바뀌면 스냅샷만 남기고 되돌리지 않은 채 exit 1이다.
 나머지 변경은 스냅샷 뒤 롤백하고 그 리뷰어를 `unverifiable`로 판정한다.
 정상 종료와 올바른 JSON 결과(Claude `result`, Grok `text` 필드), 마지막 비어 있지 않은 줄의
@@ -277,7 +277,7 @@ Grok은 `review.md` 본문(frontmatter 제외)의 `$ARGUMENTS`를 범위로 치�
 원문은 반환 시 메모리에 보관해 Issue 댓글·수정 프롬프트에 쓴다. `.run/review-r{r}-{claude|grok}.txt`는 사람용 기록으로만 쓰고 되읽지 않는다. 되돌림(스냅샷 ref 포함)·판정 누락·timeout·비정상 종료 사유는 `[executor] ...`로 원문 끝과 stderr에 남기므로 댓글에도 포함된다.
 
 둘 다 passed면 phase completed, 하나라도 unverifiable이면 수정 없이 phase error·exit 3이다.
-그 밖의 failed에서만 수정 루프를 돌린다. 최대 2회 수정하며 unit은 `fix{r}`다. index `review.round`로 크래시 전 소모분을 이어 센다. failed/unverifiable로 확정된 뒤의 새 기동만 예산을 새로 받으며, fix 도중 크래시 재개나 fix 완료 뒤 pending 재개는 새 예산을 받지 않는다.
+그 밖의 failed에서만 수정 루프를 돌린다. 최대 2회 수정하며 unit은 `fix{r}`다. 남은 예산은 `MAX_FIX_ROUNDS - review.fixes`이고 `review.round`에서 추론하지 않는다. 수정 blocked를 풀고 재개하면 완료한 수정 수만 소모로 센다. spawn 전 실패와 blocked는 소모하지 않으며 이전 완료분도 지우지 않는다. 관문 확정 때 fixes를 0으로 되돌린 뒤의 새 기동만 새 예산을 받으며, fix 도중 크래시 재개나 fix 완료 뒤 pending 재개는 새 예산을 받지 않는다.
 전 step 허용 경로의 합집합과 전 step AC를 쓰고 판정·3회 시도·롤백 규칙은 step과 같다.
 수정 통과 → fix 커밋 → 재리뷰다. 2회 수정 뒤에도 failed거나 수정 시도를 소진하면
 `review.status=failed`, phase error, exit 3이다. 수정 blocked면 review와 phase를 blocked로 확정하고 exit 2다.
@@ -312,8 +312,8 @@ push 실패는 exit 1이고 phase는 completed로 남는다. 완료 phase를 `--
 worktree 공용 `phases/.run/`에는 `lock`을 둔다. 모두 gitignore 대상이다.
 기존 `step{N}-output.json`은 생성하지 않는다.
 
-기존 무시 파일은 롤백하지 않는다. 새 허용 경로 안 무시 파일만 실패·blocked 롤백에서 지운다. 허용 경로 밖 새 무시 파일은 위반을 보고하되 보존한다(`.omc/`·`graft/` 등 도구 상태 보호).
-기존 무시 파일의 제자리 수정과 루트 밖 `.env` 변경은 감지하지 못한다. 무시 파일은 ⑦의 tree 비교 대상 밖이다.
+⑤ 판정과 롤백 삭제는 접힌 무시 경로 집합 하나를 공유한다. 기존 무시 디렉토리 안의 새 파일은 지우지 않는다. 새 허용 경로 안 항목만 실패·blocked 롤백에서 지우되 `.env*`와 도구 상태는 보호한다. 허용 경로 밖 새 항목은 위반을 보고하되 보존한다. 시도 중이거나 크래시 뒤 재기동 전에는 허용 경로 안에 무시 파일을 만들지 마라.
+④ 대상 외 기존 무시 파일의 제자리 수정과 루트 밖 `.env` 변경은 감지하지 못한다. 무시 파일은 ⑦의 tree 비교 대상 밖이다.
 
 참고 원본: https://github.com/jha0313/harness_framework (`scripts/execute.py`).
 위 책임과 보호 규칙은 원본 구현에 없거나 잘못된 것을 고친 것이다. 원본을 그대로 복사하지 말 것.

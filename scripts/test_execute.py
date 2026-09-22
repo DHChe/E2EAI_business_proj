@@ -236,7 +236,7 @@ class PhaseStateTests(HarnessTestCase):
         data = json.loads(self.git(executor.root, "show", f"HEAD:phases/{PHASE}/index.json"))
         self.assertEqual(data["base_commit"], initial)
         self.assertRegex(data["created_at"], r"^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\+09:00$")
-        self.assertEqual(data["review"], {"status": "pending", "end_sha": None, "round": 0})
+        self.assertEqual(data["review"], {"status": "pending", "end_sha": None, "round": 0, "fixes": 0})
         self.assertEqual(executor.changed_paths(), [])
         head = executor.head()
         executor.prepare()
@@ -1041,7 +1041,7 @@ sys.exit(scenario.get('exit', 0))
         self.assertFalse((ex.root / 'src/build.log').exists())
         self.assertTrue((ex.root / 'outside.log').exists())
         out = self.attempt(resumed, start_k=resumed.resume['next_k'])
-        self.assertEqual((out.status, out.attempts, counter.read_text()), ('error', 3, '2'))
+        self.assertEqual((out.status, out.attempts, counter.read_text()), ('error', 2, '1'))
         self.assertIn('⑤', out.reason)
         self.assertTrue((ex.root / 'outside.log').exists())
 
@@ -1058,7 +1058,9 @@ sys.exit(scenario.get('exit', 0))
 
     def test_ac_env_change_errors_without_retry(self):
         ex, counter, _ = self.fixture()
+        (ex.root / '.env').write_bytes(b'original')
         out = self.attempt(ex, ['echo changed > .env'])
+        self.assertEqual((ex.root / '.env').read_bytes(), b'original')
         self.assertEqual((out.status, out.attempts, counter.read_text()), ('error', 1, '1'))
         self.assertIn('④', out.reason)
 
@@ -1089,15 +1091,234 @@ sys.exit(scenario.get('exit', 0))
             for in_ac in (False, True):
                 with self.subTest(target=target, in_ac=in_ac):
                     ex, counter, _ = self.fixture()
-                    content = '# changed\n'
+                    content = '[core]\n\tfsmonitor = false\n' if target == '.git/config' else '# changed\n'
                     if not in_ac:
                         os.environ['ATTEMPT_SCENARIOS'] = json.dumps([{'files': {target: content}}])
-                    ac = [f"echo '# changed' >> {target}"] if in_ac else ['true']
+                    ac = (["git config core.fsmonitor false"] if target == '.git/config'
+                          else [f"echo '# changed' >> {target}"]) if in_ac else ['true']
                     with mock.patch.object(ex, 'rollback', wraps=ex.rollback) as rollback:
-                        self.assert_exit(1, self.attempt, ex, ac)
-                        rollback.assert_not_called()
+                        out = self.attempt(ex, ac)
+                        self.assertEqual(out.status, 'error')
+                        self.assertIn('④', out.reason)
+                        rollback.assert_called_once()
                     self.assertEqual(counter.read_text(), '1')
                     self.assertTrue(ex.marker_path.exists())
+
+    def test_tool_state_ignored_directories_survive(self):
+        for existing in (False, True):
+            for result in ('completed', 'blocked'):
+                ex, _, _ = self.fixture([{'files': {
+                    'graft/.cache/session/new.json': '{}', '.omc/session/new.json': '{}'},
+                    'result': {'status': result, 'summary': 'ok'}}])
+                (ex.root / '.gitignore').open('a').write('graft/\n.omc/\n')
+                ex.git('add', '--', '.gitignore')
+                ex.git('commit', '-qm', 'tool ignore fixture')
+                if existing:
+                    (ex.root / 'graft').mkdir()
+                    (ex.root / 'graft/old').write_text('old')
+                self.assertEqual(self.attempt(ex).status, result)
+                for name in ('graft/.cache/session/new.json', '.omc/session/new.json'):
+                    self.assertTrue((ex.root / name).exists())
+
+    def test_ignored_directory_keeps_env_and_does_not_follow_links(self):
+        ex, _, _ = self.fixture([{'files': {'src/dist/.env.local': 'secret',
+                                          'src/dist/build': 'new'}}])
+        (ex.root / '.gitignore').open('a').write('dist/\n')
+        ex.git('add', '--', '.gitignore')
+        ex.git('commit', '-qm', 'ignore directory')
+        outside = self.temp_dir / 'outside'
+        outside.mkdir()
+        (outside / 'keep').write_text('keep')
+        original = ex.run_codex
+        def session(*args, **kw):
+            child = original(*args, **kw)
+            (ex.root / 'src/dist/link').symlink_to(outside)
+            return child
+        with mock.patch.object(ex, 'run_codex', side_effect=session):
+            self.assertEqual(self.attempt(ex, ['false']).status, 'error')
+        self.assertEqual((ex.root / 'src/dist/.env.local').read_text(), 'secret')
+        # After the first rollback the preserved directory is still a new status item.
+        self.assertFalse((ex.root / 'src/dist/build').exists())
+        self.assertEqual((outside / 'keep').read_text(), 'keep')
+
+    def test_git_branch_config_is_allowed(self):
+        ex, _, _ = self.fixture()
+        original = ex.run_codex
+        def session(*args, **kw):
+            child = original(*args, **kw)
+            ex.git('config', 'branch.x.remote', 'origin')
+            return child
+        with mock.patch.object(ex, 'run_codex', side_effect=session):
+            self.assertEqual(self.attempt(ex).status, 'completed')
+
+    def test_git_fsmonitor_restored_before_any_repository_git(self):
+        for in_ac in (False, True):
+            ex, counter, _ = self.fixture()
+            ex.prepare()
+            config = ex.root / '.git/config'
+            before = config.read_bytes()
+            canary = self.temp_dir / ('canary-' + ex.root.name)
+            hook = self.temp_dir / ('monitor-' + ex.root.name)
+            hook.write_text('#!/bin/sh\necho ran > ' + str(canary) + '\n')
+            hook.chmod(0o755)
+            original = ex.run_codex
+            def session(*args, **kw):
+                child = original(*args, **kw)
+                config.open('a').write('\n[core]\nfsmonitor = ' + str(hook) + '\n')
+                return child
+            if in_ac:
+                out = self.attempt(ex, ['git config core.fsmonitor ' + str(hook)])
+            else:
+                with mock.patch.object(ex, 'run_codex', side_effect=session):
+                    out = self.attempt(ex)
+            self.assertEqual((out.status, counter.read_text()), ('error', '1'))
+            ex.confirm_step(0, out.status, out.reason)
+            self.assertEqual(config.read_bytes(), before)
+            self.assertFalse(canary.exists())
+            self.assertEqual(ex.changed_paths(), [])
+            self.assertFalse(ex.marker_path.exists())
+            data = ex.load_index()
+            data['steps'][0]['status'] = 'pending'
+            ex.save_index(data)
+            self.make_executor(ex.root).prepare()
+            self.assertEqual(ex.changed_paths(), [])
+
+    def test_git_restore_failure_blocks_recovery_without_index_edits(self):
+        ex, _, _ = self.fixture()
+        ex.prepare()
+        indices = (ex.index_path.read_bytes(), ex.top_index_path.read_bytes())
+        canary = self.temp_dir / 'guard-canary'
+        hook = self.temp_dir / 'guard-monitor'
+        hook.write_text('#!/bin/sh\necho ran > ' + str(canary) + '\n')
+        hook.chmod(0o755)
+        original = ex.run_codex
+        def session(*args, **kw):
+            child = original(*args, **kw)
+            (ex.root / '.git/config').open('a').write('\n[core]\nfsmonitor = ' + str(hook) + '\n')
+            return child
+        with mock.patch.object(ex, 'run_codex', side_effect=session), \
+                mock.patch.object(ex, 'restore_path', side_effect=OSError('cannot restore')):
+            self.assert_exit(1, self.attempt, ex)
+        self.assertTrue(ex.git_guard_path.exists())
+        self.assertEqual((ex.index_path.read_bytes(), ex.top_index_path.read_bytes()), indices)
+        resumed = self.make_executor(ex.root)
+        with mock.patch.object(resumed, 'recover') as recover, \
+                mock.patch.object(resumed, 'git', side_effect=AssertionError('git after lock')):
+            self.assertEqual(resumed.run(), 1)
+            recover.assert_not_called()
+        self.assertFalse(canary.exists())
+
+    def test_git_hooks_info_restore_kinds_permissions_and_canary(self):
+        ex, _, _ = self.fixture()
+        ex.prepare()
+        canary = self.temp_dir / 'hook-canary'
+        external = self.temp_dir / 'hook-external'
+        external.mkdir()
+        (external / 'keep').write_text('keep')
+        hooks, info = ex.root / '.git/hooks', ex.root / '.git/info'
+        old = hooks / 'old-hook'
+        old.write_bytes(b'old bytes')
+        old.chmod(0o751)
+        (info / 'old-link').symlink_to(external)
+        saved = ex.capture_git_guard()
+        original = ex.run_codex
+        def session(*args, **kw):
+            child = original(*args, **kw)
+            old.unlink()
+            (info / 'exclude').write_bytes(b'changed')
+            (info / 'old-link').unlink()
+            (info / 'old-link').mkdir()
+            (info / 'new-link').symlink_to(external)
+            hook = hooks / 'reference-transaction'
+            hook.write_text('#!/bin/sh\necho ran > ' + str(canary) + '\n')
+            hook.chmod(0o755)
+            return child
+        with mock.patch.object(ex, 'run_codex', side_effect=session):
+            out = self.attempt(ex)
+        self.assertEqual(out.status, 'error')
+        ex.confirm_step(0, out.status, out.reason)
+        self.assertEqual(ex.capture_git_guard(), saved)
+        self.assertEqual((external / 'keep').read_text(), 'keep')
+        self.assertFalse(canary.exists())
+        self.assertEqual(ex.changed_paths(), [])
+        self.assertFalse(ex.marker_path.exists())
+
+    def test_existing_ignored_directory_new_files_are_preserved(self):
+        ex, _, _ = self.fixture([{'files': {'src/dist/new': 'new'}}])
+        ignore = ex.root / '.gitignore'
+        ignore.write_text(ignore.read_text() + 'dist/\n')
+        ex.git('add', '--', '.gitignore')
+        ex.git('commit', '-qm', 'ignore directory')
+        (ex.root / 'src/dist').mkdir()
+        (ex.root / 'src/dist/old').write_text('old')
+        self.assertEqual(self.attempt(ex, ['false']).status, 'error')
+        self.assertEqual((ex.root / 'src/dist/new').read_text(), 'new')
+
+    def test_outside_ignored_error_commits_indices_and_resets_pending(self):
+        ex, counter, _ = self.fixture([{'files': {'outside.log': 'new'}}])
+        ex.prepare()
+        self.assert_exit(1, ex.run_steps, ex.load_step_specs())
+        self.assertEqual(counter.read_text(), '1')
+        self.assertEqual(ex.load_index()['steps'][0]['status'], 'error')
+        self.assertEqual(ex.changed_paths(), [])
+        self.assertFalse(ex.marker_path.exists())
+        data = ex.load_index()
+        data['steps'][0]['status'] = 'pending'
+        ex.save_index(data)
+        self.make_executor(ex.root).prepare()
+        self.assertEqual(ex.changed_paths(), [])
+
+    def test_crash_env_hash_errors_without_retry(self):
+        ex, _, _ = self.fixture()
+        ex.prepare()
+        (ex.root / '.env').write_text('original')
+        ex.save_marker({'unit': 'step0', 'k': 1, 'stage': 'running', 'pre_sha': ex.head(),
+                        'feat_sha': None, 'pgid': None, 'allowed': ['src/'],
+                        'ignored_before': sorted(ex.ignored_paths()),
+                        'env_before': ex.env_fingerprint()})
+        (ex.root / '.env').write_text('changed during crash')
+        (ex.root / 'src/.env.local').write_text('human secret')
+        resumed = self.make_executor(ex.root)
+        self.assertEqual(resumed.run(), 1)
+        self.assertEqual(resumed.load_index()['steps'][0]['status'], 'error')
+        self.assertFalse(resumed.marker_path.exists())
+        self.assertEqual(resumed.changed_paths(), [])
+        self.assertEqual((ex.root / 'src/.env.local').read_text(), 'human secret')
+        self.assertIsNone(resumed.resume)
+
+    def test_env_deletion_and_creation_restore_original_set(self):
+        ex, counter, _ = self.fixture([{'files': {'.env.new': 'new secret'}}])
+        (ex.root / '.env').write_bytes(b'original secret')
+        original = ex.run_codex
+        def session(*args, **kw):
+            child = original(*args, **kw)
+            (ex.root / '.env').unlink()
+            return child
+        with mock.patch.object(ex, 'run_codex', side_effect=session):
+            out = self.attempt(ex)
+        self.assertEqual((out.status, counter.read_text()), ('error', '1'))
+        self.assertEqual((ex.root / '.env').read_bytes(), b'original secret')
+        self.assertFalse((ex.root / '.env.new').exists())
+
+    def test_feat_done_crash_env_change_rolls_back_and_errors(self):
+        ex, _, _ = self.fixture()
+        ex.prepare()
+        (ex.root / '.env').write_text('original')
+        ex.save_marker({'unit': 'step0', 'k': 1, 'stage': 'running', 'pre_sha': ex.head(),
+                        'feat_sha': None, 'pgid': None, 'allowed': ['src/'],
+                        'ignored_before': sorted(ex.ignored_paths()),
+                        'env_before': ex.env_fingerprint()})
+        ex.run_dir.mkdir(parents=True, exist_ok=True)
+        ex.result_path('step0').write_text(json.dumps({'status': 'completed', 'summary': 'ok'}))
+        (ex.root / 'src/new.txt').write_text('completed before crash')
+        ex.commit_feat('feat fixture', ex.head())
+        (ex.root / '.env').write_text('changed after feat')
+        resumed = self.make_executor(ex.root)
+        self.assertEqual(resumed.run(), 1)
+        self.assertFalse((ex.root / 'src/new.txt').exists())
+        self.assertEqual(resumed.load_index()['steps'][0]['status'], 'error')
+        self.assertEqual(resumed.changed_paths(), [])
+        self.assertFalse(resumed.marker_path.exists())
 
     def test_change_outside_allowed_fails(self):
         ex, _, _ = self.fixture([{'files': {'AGENTS.md': 'changed'}}])
@@ -1136,8 +1357,8 @@ sys.exit(scenario.get('exit', 0))
     def test_new_ignored_outside_run_fails(self):
         ex, _, _ = self.fixture([{'files': {'build.log': 'new'}}])
         out = self.attempt(ex, start_k=1)
-        self.assertEqual((out.status, out.attempts), ('error', 3))
-        self.assertEqual(len([a for a in self.calls('codex') if a[0] == 'exec']), 3)
+        self.assertEqual((out.status, out.attempts), ('error', 1))
+        self.assertEqual(len([a for a in self.calls('codex') if a[0] == 'exec']), 1)
         self.assertTrue((ex.root / 'build.log').exists())
         self.assertIn('⑤', out.reason)
         self.assertIn('build.log', out.reason)
@@ -1680,7 +1901,7 @@ if mode == 'exit':
         ex = self.fixture()
         end = ex.head()
         self.assertEqual(ex.review_gate(ex.load_step_specs()), 0)
-        self.assertEqual(ex.load_index()['review'], {'status': 'passed', 'end_sha': end, 'round': 1})
+        self.assertEqual(ex.load_index()['review'], {'status': 'passed', 'end_sha': end, 'round': 1, 'fixes': 0})
         self.assertIn('completed_at', ex.load_index())
         top = ex.load_top_index()['phases'][0]
         self.assertEqual(top['status'], 'completed')
@@ -1711,7 +1932,9 @@ if mode == 'exit':
                         'git commit --allow-empty -qm ac-mutation'):
             ex = self.fixture(ac=[command])
             before = ex.head()
+            (ex.root / '.env').write_bytes(b'original')
             self.assertEqual(ex.review_gate(ex.load_step_specs()), 1)
+            self.assertEqual((ex.root / '.env').read_bytes(), b'original')
             self.assertEqual(ex.load_top_index()['phases'][0]['status'], 'error')
             if '.env' not in command:
                 self.assertEqual((ex.root / 'src/keep.txt').read_text(), 'keep\n')
@@ -1721,16 +1944,63 @@ if mode == 'exit':
     def test_review_git_metadata_change_and_reason(self):
         for target in ('.git/config', '.git/hooks/new-hook', '.git/info/new-info'):
             ex = self.fixture()
-            self.fake_bin('claude', f"Path({target!r}).open('a').write('# changed\\n')\n"
+            self.fake_bin('claude', f"Path({target!r}).open('a').write('[core]\\nfsmonitor = false\\n')\n"
                           "print(json.dumps({'result': 'REVIEW_RESULT: passed'}))\n")
             with mock.patch.object(ex, 'rollback') as rollback:
                 self.assertEqual(ex.review_gate(ex.load_step_specs()), 3)
                 rollback.assert_not_called()
             self.assertEqual(ex.load_index()['review']['status'], 'unverifiable')
             body = (ex.run_dir / 'review-r1-claude.txt').read_text()
-            self.assertIn('[executor] Git config/hooks/info', body)
+            self.assertIn('[executor] Git 설정 변경 감지·복원', body)
             self.assertIn(body, self.calls('gh')[-1][-1])
             self.assertEqual(self.calls('grok'), [])
+
+    def test_reviewer_fsmonitor_restores_and_rerun_passes_prepare(self):
+        ex = self.fixture()
+        config = ex.root / '.git/config'
+        before = config.read_bytes()
+        canary = self.temp_dir / 'review-canary'
+        hook = self.temp_dir / 'review-monitor'
+        hook.write_text('#!/bin/sh\necho ran > ' + str(canary) + '\n')
+        hook.chmod(0o755)
+        payload = '\n[core]\nfsmonitor = ' + str(hook) + '\n'
+        self.fake_bin('claude', f"Path('.git/config').open('a').write({payload!r})\n"
+                      "print(json.dumps({'result': 'REVIEW_RESULT: passed'}))\n")
+        self.assertEqual(ex.run(), 3)
+        self.assertEqual(config.read_bytes(), before)
+        self.assertEqual(ex.changed_paths(), [])
+        self.assertEqual(ex.load_index()['review']['status'], 'unverifiable')
+        self.assertFalse(canary.exists())
+        ex._lock_file.close()
+        self.fake_bin('claude', "print(json.dumps({'result': 'REVIEW_RESULT: passed'}))\n")
+        self.assertEqual(self.make_executor(ex.root).run(), 0)
+        self.assertEqual(len(self.calls('claude')), 2)
+        self.assertFalse(canary.exists())
+
+    def test_baseline_git_restoration_commits_indices(self):
+        ex = self.fixture(ac=['git config core.fsmonitor false'])
+        config = ex.root / '.git/config'
+        before = config.read_bytes()
+        self.assertEqual(ex.run(), 1)
+        self.assertEqual(config.read_bytes(), before)
+        self.assertEqual(ex.changed_paths(), [])
+        ex._lock_file.close()
+        resumed = self.make_executor(ex.root)
+        with mock.patch.object(resumed, 'run_baseline', return_value=None):
+            self.assertEqual(resumed.run(), 0)
+
+    def test_baseline_restore_failure_leaves_indices_untouched(self):
+        ex = self.fixture(ac=['git config core.fsmonitor false'])
+        indices = (ex.index_path.read_bytes(), ex.top_index_path.read_bytes())
+        with mock.patch.object(ex, 'restore_path', side_effect=OSError('restore failed')):
+            self.assertEqual(ex.run(), 1)
+        self.assertEqual((ex.index_path.read_bytes(), ex.top_index_path.read_bytes()), indices)
+        self.assertTrue(ex.git_guard_path.exists())
+        ex._lock_file.close()
+        resumed = self.make_executor(ex.root)
+        with mock.patch.object(resumed, 'recover') as recover:
+            self.assertEqual(resumed.run(), 1)
+            recover.assert_not_called()
 
     def test_reports_use_memory_despite_file_tampering(self):
         ex = self.fixture({'claude': ['failed']})
@@ -1996,6 +2266,55 @@ print(json.dumps({'result' if name == 'claude' else 'text': text}))
         self.assertGreater(len(self.calls('claude')), count)
         self.assert_state(ex, 'passed', 'completed')
 
+    def test_fix2_blocked_resume_counts_completed_fixes_only(self):
+        ex = self.fixture({'claude': ['failed']}, blocked='fix2')
+        self.assertEqual(ex.run(), 2)
+        self.assertEqual(ex.load_index()['review']['fixes'], 1)
+        data = ex.load_index()
+        data['review']['status'] = 'pending'
+        data['review'].pop('blocked_reason')
+        ex.save_index(data)
+        os.environ['FIX_BLOCKED'] = ''
+        ex._lock_file.close()
+        self.assertEqual(self.make_executor(ex.root).run(), 3)
+        self.assertEqual(self.units(), ['step0', 'step1', 'fix1', 'fix2', 'fix3'])
+        self.assertEqual(ex.load_index()['review']['fixes'], 0)
+        self.assertEqual(ex.changed_paths(), [])
+
+    def test_fix_spawn_failure_does_not_refresh_budget(self):
+        ex = self.fixture({'claude': ['failed']})
+        original = ex.run_fix
+        def fix(round_no, *args, **kw):
+            if round_no == 2:
+                raise OSError('preflight failed before spawn')
+            return original(round_no, *args, **kw)
+        with mock.patch.object(ex, 'run_fix', side_effect=fix):
+            self.assertEqual(ex.run(), 1)
+        self.assertEqual(ex.load_index()['review']['fixes'], 1)
+        self.assertEqual(ex.changed_paths(), [])
+        ex._lock_file.close()
+        self.assertEqual(self.make_executor(ex.root).run(), 3)
+        self.assertEqual(self.units(), ['step0', 'step1', 'fix1', 'fix3'])
+        self.assertEqual(ex.load_index()['review']['fixes'], 0)
+
+    def test_fix_git_error_is_committed_and_exits_1(self):
+        ex = self.fixture({'claude': ['failed']})
+        original = ex.run_codex
+        def session(unit, *args, **kw):
+            child = original(unit, *args, **kw)
+            if unit.startswith('fix'):
+                ex.git('config', 'core.fsmonitor', 'false')
+            return child
+        with mock.patch.object(ex, 'run_codex', side_effect=session):
+            self.assertEqual(ex.run(), 1)
+        self.assertEqual(self.units(), ['step0', 'step1', 'fix1'])
+        self.assertEqual(ex.changed_paths(), [])
+        self.assertFalse(ex.marker_path.exists())
+        self.assertEqual(ex.load_index()['review']['fixes'], 0)
+        ex._lock_file.close()
+        os.environ['FIX_REVIEWS'] = '{}'
+        self.assertEqual(self.make_executor(ex.root).run(), 0)
+
     def test_push_no_force(self):
         ex = self.fixture(push=True)
         remote = self.temp_dir / 'remote.git'
@@ -2106,6 +2425,7 @@ print(json.dumps({'result' if name == 'claude' else 'text': text}))
         self.seed_resume(ex)
         data = ex.load_index()
         data['review']['round'] = 2
+        data['review']['fixes'] = 1
         ex.save_index(data)
         ex.commit_meta('second review fixture')
         ex.save_marker({'unit': 'fix2', 'k': 1, 'stage': 'running', 'pre_sha': ex.head(),
@@ -2122,7 +2442,7 @@ print(json.dumps({'result' if name == 'claude' else 'text': text}))
         self.seed_resume(ex)
         ex.clear_marker()
         data = ex.load_index()
-        data['review'].update(status='pending', round=2)
+        data['review'].update(status='pending', round=2, fixes=2)
         ex.save_index(data)
         ex.commit_meta('fix2 completed fixture')
         resumed = self.make_executor(ex.root)

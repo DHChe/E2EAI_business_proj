@@ -30,8 +30,8 @@ Single-context: 저장소 루트에 `CONTEXT.md` 하나와 `docs/adr/`를 둔다
 Codex 세션은 `.codex/hooks.json`으로 같은 `guard-bash.py`를 받는다.
 `--ignore-user-config`는 이 훅을 끄므로 쓰지 않는다.
 Grok은 이 가드를 실행하지 않는다(가드 밖). Grok 리뷰어의 보호는 사후 HEAD·트리 검사와
-되돌림, Git config·hooks·info 해시 검사, 계약문에 기댄다. env의 토큰 변수 제거와 credential.helper 비우기. 파일·키체인의 자격 자체는 남는다.
-모든 자식에서 ORCA_*·BASH_ENV·ENV도 제거한다. marker는 `.git`의 `harness/{phase}/attempt.json`에 두고 `.run/` 리뷰 원문은 되읽지 않는다. 새 무시 산출물은 unit 허용 경로 안에서만 허용하며 실패 롤백 시 그 새 파일만 지운다.
+되돌림, 저장소 공용 config(`branch.*` 제외)·hooks·info 검사, 차이는 git 호출 전에 복원. 전역 `~/.gitconfig`는 검사 밖. 계약문에도 기댄다. env의 토큰 변수 제거와 credential.helper 비우기. 파일·키체인의 자격 자체는 남는다.
+모든 자식에서 ORCA_*·BASH_ENV·ENV도 제거한다. marker는 `.git`의 `harness/{phase}/attempt.json`에 두고 `.run/` 리뷰 원문은 되읽지 않는다. 새 무시 산출물은 unit 허용 경로 안에서 허용한다. ⑤ 판정·롤백은 `status --ignored=matching`의 접힌 집합 하나를 쓰고 실패 롤백은 그 집합에서 새 허용 항목만 지운다. 기존 무시 디렉토리 안의 새 파일, `graft/`·`.omc/` 도구 상태와 하위, basename `.env`·`.env.*`는 지우지 않는다.
 
 <!-- graft:start -->
 ## Graft — repo context graph
