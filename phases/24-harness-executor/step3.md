@@ -89,7 +89,7 @@
 
 ### 필수 테스트
 
-아래 이름 그대로 `scripts/test_execute.py`에 넣는다. 신호와 복구 테스트는 자식 프로세스를 `fake_bin`의 가짜 실행 파일로 실제로 띄워 검증한다. git 호출을 관찰해야 하면 PATH 앞에 실제 git으로 넘기는 기록용 `git` 래퍼를 둬도 된다(실제 git 경로는 PATH를 바꾸기 전에 `shutil.which`로 구한다). 이전 step 테스트는 계속 통과해야 한다.
+아래 이름 그대로 `scripts/test_execute.py`에 넣는다. 신호와 복구 테스트는 자식 프로세스를 `fake_bin`의 가짜 실행 파일로 실제로 띄워 검증한다. 단, 테스트는 프로세스 목록을 **실제 `ps`로 읽지 않는다.** Codex 샌드박스에서는 `ps`가 `operation not permitted`로 막혀서, 실제 `ps`에 기대는 테스트는 세션 안에서 늘 실패한다. 대신 `fake_bin`에 가짜 `ps`를 둔다. 가짜 `ps`는 테스트가 띄운 가짜 codex 그룹의 `pid pgid command` 줄을 출력하고, command의 basename은 `codex`다. "codex가 아닌 그룹은 죽이지 않는다" 경우는 가짜 `ps`가 다른 command를 출력하게 해서 검증한다. kill 자체는 실제로 일어나야 한다. killpg 뒤 그 가짜 codex 프로세스가 사라졌는지 확인한다. git 호출을 관찰해야 하면 PATH 앞에 실제 git으로 넘기는 기록용 `git` 래퍼를 둬도 된다(실제 git 경로는 PATH를 바꾸기 전에 `shutil.which`로 구한다). 이전 step 테스트는 계속 통과해야 한다.
 
 롤백과 복구 테스트의 임시 저장소는 `make_repo` 뒤 `feat-7-sample` 브랜치로 옮겨 둔다. 다른 브랜치에서는 `rollback`이 브랜치 확인에서 멈춘다.
 
