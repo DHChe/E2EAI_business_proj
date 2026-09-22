@@ -228,6 +228,10 @@ class Executor:
         self.marker = None
         self.resume = None
         self._signal_handlers = {}
+        self._review_text = {}
+        self._git_guard_paths = None
+        self._git_guard_changed = False
+        self._ignored_baselines = {}
 
     def worktree_tree(self, base_sha: str) -> str:
         temporary = None
@@ -264,16 +268,36 @@ class Executor:
             raise HarnessExit(EXIT_ERROR, f"롤백 브랜치가 feat-{self.phase_dir}가 아니다: {ref}")
         self.git("reset", "--hard", target_sha)
         self.git("clean", "-fd")
+        if self.marker and self.marker["unit"] == unit and "ignored_before" in self.marker:
+            new_paths = self.ignored_paths() - set(self.marker["ignored_before"])
+            for name in sorted(new_paths, key=lambda p: len(Path(p).parts), reverse=True):
+                if path_allowed(name, self.marker.get("allowed", [])):
+                    path = self.root / name
+                    # Never follow a session-created directory symlink outside the scope.
+                    parent = path.parent.resolve()
+                    if (parent.is_relative_to(self.root.resolve()) and path_allowed(
+                            str((parent / path.name).relative_to(self.root.resolve())),
+                            self.marker.get("allowed", []))):
+                        if path.is_dir() and not path.is_symlink():
+                            directories = [p for p in path.rglob("*") if p.is_dir() and not p.is_symlink()]
+                            for directory in sorted(directories, key=lambda p: len(p.parts), reverse=True) + [path]:
+                                try:
+                                    directory.rmdir()  # Only empty directories; never remove other contents.
+                                except OSError:
+                                    pass
+                        else:
+                            path.unlink(missing_ok=True)
         if self.git("status", "--porcelain").stdout:
             raise HarnessExit(EXIT_ERROR, f"롤백 뒤 작업 트리가 깨끗하지 않다: {ref}")
         return ref
 
     @property
     def marker_path(self) -> Path:
-        return self.run_dir / "attempt.json"
+        return self.root / os.fsdecode(self.git("rev-parse", "--git-path",
+            f"harness/{self.phase_dir}/attempt.json").stdout).strip()
 
     def save_marker(self, marker: dict) -> None:
-        self.run_dir.mkdir(parents=True, exist_ok=True)
+        self.marker_path.parent.mkdir(parents=True, exist_ok=True)
         self.marker = marker
         write_json_atomic(self.marker_path, self.marker)
 
@@ -294,17 +318,20 @@ class Executor:
             result = subprocess.run(["ps", "-A", "-o", "pid=,pgid=,command="],
                                     capture_output=True, text=True)
             if result.returncode:
-                return
+                raise HarnessExit(EXIT_ERROR, "복구 ps 실패: marker 유지, 롤백 중단")
             for line in result.stdout.splitlines():
                 fields = line.split(None, 2)
                 if len(fields) != 3 or fields[1] != str(pgid):
                     continue
                 if any(os.path.basename(token) in {"codex", "codex.js"}
                        for token in fields[2].split()):
-                    os.killpg(pgid, signal.SIGKILL)
+                    try:
+                        os.killpg(pgid, signal.SIGKILL)
+                    except ProcessLookupError:
+                        pass
                     return
-        except (OSError, ValueError):
-            return
+        except (OSError, ValueError) as exc:
+            raise HarnessExit(EXIT_ERROR, f"복구 프로세스 확인/종료 실패: {exc}") from exc
 
     def recover(self) -> None:
         try:
@@ -338,6 +365,8 @@ class Executor:
         except (OSError, ValueError, HarnessExit) as exc:
             raise HarnessExit(EXIT_ERROR, f"복구 거부 {self.marker_path}: {exc}") from exc
         self.marker = marker
+        if "ignored_before" in marker:
+            self._ignored_baselines[marker["unit"]] = set(marker["ignored_before"])
         if marker["stage"] == "feat_done":
             if match[1] == "fix":
                 data = self.load_index()
@@ -457,15 +486,40 @@ class Executor:
                 and path.name != ".env.example" and path.is_file()}
 
     def ignored_paths(self) -> set[str]:
-        records = iter(self.git("status", "--porcelain=v1", "-z",
-                                "--ignored=matching").stdout.split(b"\0"))
-        paths = set()
+        paths = {os.fsdecode(p) for p in self.git(
+            "ls-files", "--others", "--ignored", "--exclude-standard", "-z").stdout.split(b"\0") if p}
+        records = iter(self.git("status", "--porcelain=v1", "-z", "--ignored=matching").stdout.split(b"\0"))
         for record in records:
             if record[:2] == b"!!":
                 paths.add(os.fsdecode(record[3:]))
             elif b"R" in record[:2] or b"C" in record[:2]:
                 next(records)
         return paths
+
+    def git_fingerprint(self) -> dict[str, str]:
+        if self._git_guard_paths is None:
+            self._git_guard_paths = {name: self.root / os.fsdecode(self.git(
+                "rev-parse", "--git-path", name).stdout).strip()
+                for name in ("config", "hooks", "info")}
+        result = {}
+        def visit(path: Path, name: str) -> None:
+            if path.is_symlink():
+                result[name] = "link:" + os.readlink(path)
+            elif path.is_dir():
+                result[name] = "directory"
+                for child in sorted(path.iterdir()):
+                    visit(child, name + "/" + child.name)
+            elif path.is_file():
+                result[name] = hashlib.sha256(path.read_bytes()).hexdigest()
+            else:
+                result[name] = "missing"
+        for name, path in self._git_guard_paths.items():
+            visit(path, name)
+        return result
+
+    def git_guard_failed(self, before: dict) -> bool:
+        self._git_guard_changed = self.git_fingerprint() != before
+        return self._git_guard_changed
 
     def read_result(self, unit: str) -> dict | None:
         try:
@@ -478,12 +532,15 @@ class Executor:
         return result
 
     def run_ac(self, lines: Sequence[str]) -> str | None:
+        git_before = self.git_fingerprint()
         before = self.head()
         tree = self.worktree_tree(before)
         failure = None
         for line in lines:
             result = self.run_child(["bash", "-o", "pipefail", "-c", line],
                                     env=self.child_env(), timeout=self.ac_timeout)
+            if self.git_guard_failed(git_before):
+                return "④ Git config/hooks/info 변경: 수동 확인 필요 (되돌리지 않음)"
             if result.timed_out or result.returncode != 0:
                 code = "timeout" if result.timed_out else f"종료 코드 {result.returncode}"
                 failure = f"⑥ AC 실패: {line}\n{code}\n{(result.stdout + result.stderr)[-2000:]}"
@@ -497,15 +554,21 @@ class Executor:
     def attempt_unit(self, unit: str, task_text: str, allowed: Sequence[str],
                      ac: Sequence[str], *, start_k: int = 1) -> AttemptOutcome:
         failure = "재개 시 시도 소진"
+        if unit not in self._ignored_baselines:
+            self._ignored_baselines[unit] = self.ignored_paths()
+        ignored_before = self._ignored_baselines[unit]
         for k in range(start_k, MAX_ATTEMPTS + 1):
             if self.changed_paths():
                 raise HarnessExit(EXIT_ERROR, "시도 전 작업 트리가 더럽다")
             pre_sha = self.head()
             self.result_path(unit).unlink(missing_ok=True)
             env_before = self.env_fingerprint()
-            ignored_before = self.ignored_paths()
+            git_before = self.git_fingerprint()
+            prompt = self.build_prompt(unit, task_text, allowed,
+                                       failure=failure if k != start_k else None)
             self.save_marker({"unit": unit, "k": k, "pre_sha": pre_sha,
-                              "stage": "running", "feat_sha": None, "pgid": None})
+                              "stage": "running", "feat_sha": None, "pgid": None,
+                              "ignored_before": sorted(ignored_before), "allowed": list(allowed)})
             spawned = False
 
             def on_spawn(pgid: int) -> None:
@@ -514,14 +577,14 @@ class Executor:
                 self.marker["pgid"] = pgid
                 self.save_marker(self.marker)
 
-            prompt = self.build_prompt(unit, task_text, allowed,
-                                       failure=failure if k != start_k else None)
             try:
                 child = self.run_codex(unit, prompt, on_spawn=on_spawn)
-            except HarnessExit:
+            except BaseException:
                 if not spawned:
                     self.clear_marker()
                 raise
+            if self.git_guard_failed(git_before):
+                raise HarnessExit(EXIT_ERROR, "④ Git config/hooks/info 변경: 재시도·되돌림 없이 중단")
             self.save_marker(self.marker)
             if self.env_fingerprint() != env_before:
                 self.rollback(unit, k, pre_sha)
@@ -547,7 +610,7 @@ class Executor:
                 new_ignored = []
                 for path in self.ignored_paths() - ignored_before:
                     parts = Path(path).parts
-                    if ((parts and parts[0] == "phases" and ".run" in parts[1:])
+                    if (path_allowed(path, allowed) or (parts and parts[0] == "phases" and ".run" in parts[1:])
                             or "__pycache__" in parts or path.endswith(".pyc")):
                         continue
                     new_ignored.append(path)
@@ -557,6 +620,11 @@ class Executor:
                     failure = f"⑤ 새 무시 경로 위반: {sorted(new_ignored)}"
                 else:
                     failure = self.run_ac(ac)
+                    if self.git_guard_failed(git_before):
+                        raise HarnessExit(EXIT_ERROR, "④ Git config/hooks/info 변경: 재시도·되돌림 없이 중단")
+                    if self.env_fingerprint() != env_before:
+                        self.rollback(unit, k, pre_sha)
+                        return AttemptOutcome("error", reason="④ .env 지문 변경: AC 뒤 수동 확인 필요", attempts=k)
                     if failure is None:
                         return AttemptOutcome("completed", summary=result["summary"],
                                               attempts=k, pre_sha=pre_sha)
@@ -785,11 +853,14 @@ class Executor:
     def child_env(self, *, strip_orca: bool = False) -> dict[str, str]:
         env = os.environ.copy()
         for key in list(env):
-            if key in {"GH_TOKEN", "GITHUB_TOKEN", "SSH_AUTH_SOCK"} or (
-                    strip_orca and key.startswith("ORCA_")):
+            if key in {"GH_TOKEN", "GITHUB_TOKEN", "SSH_AUTH_SOCK", "BASH_ENV", "ENV"} or key.startswith("ORCA_"):
                 del env[key]
         if self._gh_config is None:
             self._gh_config = tempfile.TemporaryDirectory(prefix="harness-gh-")
+        count = int(env.get("GIT_CONFIG_COUNT", "0"))
+        env[f"GIT_CONFIG_KEY_{count}"] = "credential.helper"
+        env[f"GIT_CONFIG_VALUE_{count}"] = ""
+        env["GIT_CONFIG_COUNT"] = str(count + 1)
         env["GH_CONFIG_DIR"] = self._gh_config.name
         env["PYTHONDONTWRITEBYTECODE"] = "1"
         return env
@@ -987,25 +1058,19 @@ class Executor:
         unit = f"review-r{round_no}-{reviewer}"
         self.run_dir.mkdir(parents=True, exist_ok=True)
         report = self.run_dir / f"{unit}.txt"
+        notes = []
         for _ in range(2):
             branch = self.git("symbolic-ref", "-q", "HEAD", check=False)
             if (branch.returncode or branch.stdout.decode().strip() != f"refs/heads/{self.branch}"
                     or self.head() != end_sha or self.git("status", "--porcelain").stdout):
                 raise HarnessExit(EXIT_ERROR, "리뷰 실행 전 브랜치/HEAD/작업 트리 불일치")
             fingerprint = self.env_fingerprint()
+            git_before = self.git_fingerprint()
             try:
                 child = self.run_child(self.review_argv(reviewer, scope),
                                        env=self.child_env(), timeout=self.review_timeout)
             except OSError as exc:
                 child = ChildResult(None, False, "", str(exc))
-            branch = self.git("symbolic-ref", "-q", "HEAD", check=False)
-            if branch.returncode or branch.stdout.decode().strip() != f"refs/heads/{self.branch}":
-                ref = self.snapshot(unit, 1, end_sha)
-                raise HarnessExit(EXIT_ERROR, f"리뷰어가 브랜치를 바꿨다: {ref}")
-            changed = (self.head() != end_sha or bool(self.git("status", "--porcelain").stdout)
-                       or self.env_fingerprint() != fingerprint)
-            if changed:
-                self.rollback(unit, 1, end_sha)
             text = child.stdout
             valid_json = False
             try:
@@ -1015,17 +1080,57 @@ class Executor:
                     text, valid_json = value, True
             except (ValueError, AttributeError):
                 pass
-            report.write_text(text, encoding="utf-8")
-            if changed:
-                return "unverifiable"
             verdict = parse_verdict(text)
+            terminal = False
+            branch_error = None
+            reasons = []
+            if self.git_guard_failed(git_before):
+                terminal = True
+                reasons.append("Git config/hooks/info 변경: 스냅샷 대상 밖이므로 되돌리지 않음; 수동 확인 필요")
+            else:
+                branch = self.git("symbolic-ref", "-q", "HEAD", check=False)
+                if branch.returncode or branch.stdout.decode().strip() != f"refs/heads/{self.branch}":
+                    ref = self.snapshot(unit, 1, end_sha)
+                    branch_error = f"리뷰어가 브랜치를 바꿨다: {ref}"
+                    reasons.append(branch_error)
+                elif (self.head() != end_sha or bool(self.git("status", "--porcelain").stdout)
+                      or self.env_fingerprint() != fingerprint):
+                    ref = self.rollback(unit, 1, end_sha)
+                    terminal = True
+                    reasons.append(f"리뷰어가 작업 트리 또는 .env를 바꿔 되돌림: {ref} (.env는 수동 확인)")
+            if child.timed_out:
+                reasons.append("리뷰어 timeout")
+            if child.returncode != 0:
+                reasons.append(f"리뷰어 비정상 종료: {child.returncode}; {child.stderr.strip()}")
+            if not valid_json or not verdict:
+                reasons.append("리뷰 판정 누락 또는 잘못된 JSON/REVIEW_RESULT")
+            for reason in reasons:
+                note = "[executor] " + reason.replace("\n", " ")
+                notes.append(note)
+                print(note, file=sys.stderr)
+            body = text + ("\n" + "\n".join(notes) if notes else "")
+            report.write_text(body, encoding="utf-8")
+            self._review_text[(round_no, reviewer)] = body
+            if branch_error:
+                raise HarnessExit(EXIT_ERROR, branch_error)
+            if terminal:
+                return "unverifiable"
             if valid_json and verdict and child.returncode == 0 and not child.timed_out:
                 return verdict
         return "unverifiable"
 
     def run_baseline(self, specs: list[StepSpec]) -> str | None:
+        end_sha = self.head()
+        env_before = self.env_fingerprint()
+        git_before = self.git_fingerprint()
         for spec in sorted(specs, key=lambda item: item.step):
             failure = self.run_ac(spec.ac)
+            if self.git_guard_failed(git_before):
+                return "④ 기준선 Git config/hooks/info 변경: 되돌리지 않음; 수동 확인 필요"
+            if failure and "⑦" in failure:
+                self.rollback(f"baseline-step{spec.step}", 1, end_sha)
+            if self.env_fingerprint() != env_before:
+                return "④ 기준선 .env 지문 변경: 수동 확인 필요"
             if failure is not None:
                 return f"step{spec.step}: {failure}"
         return None
@@ -1035,6 +1140,8 @@ class Executor:
         verdicts = {}
         for reviewer in ("claude", "grok"):
             verdicts[reviewer] = self.run_reviewer(reviewer, round_no, end_sha, scope)
+            if self._git_guard_changed:
+                break
         return verdicts
 
     def run_fix(self, round_no: int, specs: list[StepSpec], scope: str,
@@ -1050,8 +1157,7 @@ class Executor:
     def review_reports(self, round_no: int) -> str:
         reports = []
         for reviewer in ("claude", "grok"):
-            path = self.run_dir / f"review-r{round_no}-{reviewer}.txt"
-            body = path.read_text(encoding="utf-8") if path.exists() else "리뷰 원문 없음"
+            body = self._review_text.get((round_no, reviewer), "리뷰 원문 없음")
             reports.append(f"{reviewer}:\n{body}")
         return "\n\n".join(reports)
 
@@ -1086,32 +1192,25 @@ class Executor:
         if (any(step["status"] != "completed" for step in data["steps"])
                 or data.get("review", {}).get("status") == "passed"):
             raise HarnessExit(EXIT_ERROR, "리뷰 관문 진입 조건 불일치")
-        round_no, fixes_used = 1, 0
+        round_no, fixes_used, start_k = 1, 0, 1
         if self.resume and re.fullmatch(r"fix[1-9]\d*", self.resume["unit"]):
-            round_no = int(self.resume["unit"][3:])
+            round_no = max(int(self.resume["unit"][3:]), data["review"]["round"])
+            fixes_used = round_no - 1
             start_k = self.resume["next_k"]
             self.resume = None
-            scope = f"{data['base_commit']}..{data['review']['end_sha']}"
             if start_k > MAX_ATTEMPTS:
                 return self.finish_fix(round_no, AttemptOutcome("error", reason="재개 시 시도 소진"))
-            if all((self.run_dir / f"review-r{round_no}-{name}.txt").is_file()
-                   for name in ("claude", "grok")):
-                outcome = self.run_fix(round_no, specs, scope, start_k=start_k)
-                fixes_used += 1
-                code = self.finish_fix(round_no, outcome)
-                if code is not None:
-                    return code
-                round_no += 1
-            else:
-                self.commit_meta(f"fix{round_no} 재개 버림")
-                self.clear_marker()
-                round_no = 1
+            # Reports in .run are untrusted. Re-review, preserving the fix/attempt budget.
+        elif data["review"]["status"] == "pending" and data["review"]["round"]:
+            fixes_used = data["review"]["round"]
+            round_no = fixes_used + 1
         while True:
             end_sha = self.head()
             failure = self.run_baseline(specs)
             if failure is not None:
                 self.set_top_status("error")
-                self.commit_meta("review baseline error")
+                if not self._git_guard_changed:
+                    self.commit_meta("review baseline error")
                 self.issue_comment(f"review baseline error: {failure}")
                 return EXIT_ERROR
             verdicts = self.review_round(round_no, end_sha)
@@ -1124,14 +1223,14 @@ class Executor:
             self.save_index(data)
             if status != "failed":
                 self.set_top_status("completed" if status == "passed" else "error")
-            self.commit_meta("phase completed" if status == "passed" else f"review {status}")
+            if not self._git_guard_changed:
+                self.commit_meta("phase completed" if status == "passed" else f"review {status}")
             if status != "failed":
                 if status == "passed":
                     self.issue_comment(f"{self.phase_dir} completed\n" + "\n".join(
                         f"step{s['step']}: {s.get('summary', '')}" for s in data["steps"]))
                 for reviewer, verdict in verdicts.items():
-                    report = self.run_dir / f"review-r{round_no}-{reviewer}.txt"
-                    body = report.read_text(encoding="utf-8") if report.exists() else "리뷰 원문 없음"
+                    body = self._review_text.get((round_no, reviewer), "리뷰 원문 없음")
                     self.issue_comment(f"{reviewer}: {verdict}\n{body}")
                 return EXIT_OK if status == "passed" else EXIT_REVIEW
             if fixes_used >= MAX_FIX_ROUNDS:
@@ -1140,7 +1239,8 @@ class Executor:
                 self.issue_comment(self.review_reports(round_no))
                 return EXIT_REVIEW
             scope = f"{data['base_commit']}..{end_sha}"
-            outcome = self.run_fix(round_no, specs, scope)
+            outcome = self.run_fix(round_no, specs, scope, start_k=start_k)
+            start_k = 1
             fixes_used += 1
             code = self.finish_fix(round_no, outcome)
             if code is not None:

@@ -288,7 +288,9 @@ class PhaseStateTests(HarnessTestCase):
         self.assertEqual(list(folder.iterdir()), [])
         self.assertFalse(folder.is_relative_to(executor.root))
         self.assertEqual(env["PYTHONDONTWRITEBYTECODE"], "1")
-        self.assertEqual(env["ORCA_SAMPLE"], "keep")
+        self.assertNotIn("ORCA_SAMPLE", env)
+        self.assertEqual(env["GIT_CONFIG_KEY_0"], "credential.helper")
+        self.assertEqual(env["GIT_CONFIG_VALUE_0"], "")
         stripped = executor.child_env(strip_orca=True)
         self.assertNotIn("ORCA_SAMPLE", stripped)
         self.assertEqual(stripped["GH_CONFIG_DIR"], str(folder))
@@ -788,6 +790,26 @@ os.execv({real!r}, [{real!r}, *sys.argv[1:]])
                 self.assertEqual((ex.root / '.env').read_text(), 'preserved')
                 self.assertTrue(self.git(ex.root, 'for-each-ref', 'refs/harness/'))
 
+    def test_recover_ps_failure_keeps_marker_without_rollback(self):
+        for mode in ('exit', 'exception'):
+            ex = self.fixture()
+            ex.save_marker(self.marker_for(ex, os.getpgrp() + 10000))
+            before = ex.marker_path.read_bytes()
+            (ex.root / 'src/keep.txt').write_text('dirty')
+            real_run = execute.subprocess.run
+            def run(argv, **kwargs):
+                if argv[0] == 'ps':
+                    if mode == 'exception':
+                        raise OSError('ps unavailable')
+                    return subprocess.CompletedProcess(argv, 1, '', 'failed')
+                return real_run(argv, **kwargs)
+            with mock.patch.object(execute.subprocess, 'run', side_effect=run), \
+                    mock.patch.object(ex, 'rollback') as rollback:
+                self.assert_exit(1, ex.recover)
+                rollback.assert_not_called()
+            self.assertEqual(ex.marker_path.read_bytes(), before)
+            self.assertEqual((ex.root / 'src/keep.txt').read_text(), 'dirty')
+
     def test_recover_moved_head_touches_nothing(self):
         ex = self.fixture()
         marker = self.marker_for(ex)
@@ -891,7 +913,10 @@ finally:
             result = subprocess.CompletedProcess([], 0, f'123 {pgid} node /tmp/codex.js', '')
             with mock.patch.object(execute.subprocess, 'run', return_value=result) as ps, \
                     mock.patch.object(execute.os, 'killpg', side_effect=failure) as kill:
-                ex._kill_stale_codex(pgid)
+                if failure is PermissionError:
+                    self.assert_exit(1, ex._kill_stale_codex, pgid)
+                else:
+                    ex._kill_stale_codex(pgid)
                 self.assertEqual(ps.call_args.args[0], ['ps', '-A', '-o', 'pid=,pgid=,command='])
                 kill.assert_called_once_with(pgid, signal.SIGKILL)
         ex.clear_marker()
@@ -965,6 +990,115 @@ sys.exit(scenario.get('exit', 0))
                 self.assertIn(line, out.reason)
                 self.assertIn('종료 코드 1', out.reason)
 
+    def test_bash_env_cannot_skip_ac(self):
+        ex, _, _ = self.fixture()
+        startup = self.temp_dir / 'startup'
+        startup.write_text('exit 0\n')
+        os.environ.update(BASH_ENV=str(startup), ENV=str(startup), ORCA_TOKEN='secret')
+        reason = ex.run_ac(['echo RAN; exit 1'])
+        self.assertIn('\nRAN\n', reason)
+        self.assertIn('종료 코드 1', reason)
+        for key in ('BASH_ENV', 'ENV', 'ORCA_TOKEN'):
+            self.assertNotIn(key, ex.child_env())
+
+    def test_allowed_ignored_artifact_and_rollback(self):
+        for status in ('completed', 'error', 'blocked'):
+            with self.subTest(status=status):
+                ex, _, _ = self.fixture([{'files': {'src/build.log': 'new', 'tool.log': 'protected'},
+                    'result': {'status': status, 'summary': 'ok'}}])
+                # The tool state is preexisting and must survive every rollback.
+                (ex.root / 'tool.log').write_text('protected')
+                (ex.root / 'src/existing.log').write_text('keep')
+                out = self.attempt(ex)
+                self.assertEqual(out.status, status)
+                self.assertEqual((ex.root / 'src/build.log').exists(), status == 'completed')
+                self.assertTrue((ex.root / 'tool.log').exists())
+                self.assertEqual((ex.root / 'src/existing.log').read_text(), 'keep')
+        ex, counter, _ = self.fixture()
+        out = self.attempt(ex, ['echo artifact > src/build.log; false'])
+        self.assertEqual((out.status, counter.read_text()), ('error', '3'))
+        self.assertFalse((ex.root / 'src/build.log').exists())
+
+    def test_allowed_ignored_directory_rollback(self):
+        ex, _, _ = self.fixture([{'files': {'src/dist/deep/output': 'built'}}])
+        (ex.root / '.gitignore').open('a').write('dist/\n')
+        ex.git('add', '--', '.gitignore')
+        ex.git('commit', '-qm', 'ignore build fixture')
+        out = self.attempt(ex, ['false'])
+        self.assertEqual(out.status, 'error')
+        self.assertFalse((ex.root / 'src/dist').exists())
+
+    def test_ignored_baseline_survives_crash_recovery(self):
+        ex, counter, _ = self.fixture([{'files': {'outside.log': 'new', 'src/build.log': 'new'}}])
+        baseline = ex.ignored_paths()
+        ex.save_marker({'unit': 'step4', 'k': 1, 'stage': 'running', 'pre_sha': ex.head(),
+                        'feat_sha': None, 'pgid': None, 'allowed': ['src/'],
+                        'ignored_before': sorted(baseline)})
+        (ex.root / 'outside.log').write_text('new')
+        (ex.root / 'src/build.log').write_text('new')
+        resumed = self.make_executor(ex.root)
+        resumed.recover()
+        self.assertFalse((ex.root / 'src/build.log').exists())
+        self.assertTrue((ex.root / 'outside.log').exists())
+        out = self.attempt(resumed, start_k=resumed.resume['next_k'])
+        self.assertEqual((out.status, out.attempts, counter.read_text()), ('error', 3, '2'))
+        self.assertIn('⑤', out.reason)
+        self.assertTrue((ex.root / 'outside.log').exists())
+
+    def test_old_run_marker_is_not_trusted(self):
+        ex, _, _ = self.fixture()
+        ex.run_dir.mkdir(parents=True)
+        (ex.run_dir / 'attempt.json').write_text('{"stage": "feat_done"}')
+        ex.recover()
+        self.assertIsNone(ex.resume)
+        self.assertIsNone(ex.load_marker())
+        expected = ex.root / ex.git('rev-parse', '--git-path',
+                                   f'harness/{PHASE}/attempt.json').stdout.decode().strip()
+        self.assertEqual(ex.marker_path, expected)
+
+    def test_ac_env_change_errors_without_retry(self):
+        ex, counter, _ = self.fixture()
+        out = self.attempt(ex, ['echo changed > .env'])
+        self.assertEqual((out.status, out.attempts, counter.read_text()), ('error', 1, '1'))
+        self.assertIn('④', out.reason)
+
+    def test_spawn_errors_do_not_leave_marker(self):
+        ex, _, _ = self.fixture()
+        (ex.root / 'docs/adr/0001-sample.md').write_bytes(b'\xff')
+        ex.git('add', '--', 'docs/adr/0001-sample.md')
+        ex.git('commit', '-qm', 'invalid encoding fixture')
+        with self.assertRaises(UnicodeDecodeError):
+            self.attempt(ex)
+        self.assertFalse(ex.marker_path.exists())
+        with mock.patch.object(ex, 'build_prompt', return_value='prompt'), \
+                mock.patch.object(ex, 'codex_preflight', return_value=[]), \
+                mock.patch.object(execute.subprocess, 'Popen', side_effect=OSError('spawn failed')):
+            # Mock only the Codex call so git reads remain real.
+            with mock.patch.object(ex, 'changed_paths', return_value=[]), \
+                    mock.patch.object(ex, 'head', return_value='a' * 40), \
+                    mock.patch.object(ex, 'ignored_paths', return_value=set()), \
+                    mock.patch.object(type(ex), 'marker_path', new_callable=mock.PropertyMock,
+                                      return_value=ex.root / '.git/harness/attempt.json'), \
+                    mock.patch.object(ex, 'git_fingerprint', return_value={}):
+                with self.assertRaises(OSError):
+                    self.attempt(ex)
+        self.assertFalse((ex.root / '.git/harness/attempt.json').exists())
+
+    def test_git_metadata_session_and_ac_stop_without_retry(self):
+        for target in ('.git/config', '.git/hooks/new-hook', '.git/info/new-info'):
+            for in_ac in (False, True):
+                with self.subTest(target=target, in_ac=in_ac):
+                    ex, counter, _ = self.fixture()
+                    content = '# changed\n'
+                    if not in_ac:
+                        os.environ['ATTEMPT_SCENARIOS'] = json.dumps([{'files': {target: content}}])
+                    ac = [f"echo '# changed' >> {target}"] if in_ac else ['true']
+                    with mock.patch.object(ex, 'rollback', wraps=ex.rollback) as rollback:
+                        self.assert_exit(1, self.attempt, ex, ac)
+                        rollback.assert_not_called()
+                    self.assertEqual(counter.read_text(), '1')
+                    self.assertTrue(ex.marker_path.exists())
+
     def test_change_outside_allowed_fails(self):
         ex, _, _ = self.fixture([{'files': {'AGENTS.md': 'changed'}}])
         original = (ex.root / 'AGENTS.md').read_bytes()
@@ -1001,8 +1135,10 @@ sys.exit(scenario.get('exit', 0))
 
     def test_new_ignored_outside_run_fails(self):
         ex, _, _ = self.fixture([{'files': {'build.log': 'new'}}])
-        out = self.attempt(ex, start_k=3)
-        self.assertEqual(out.status, 'error')
+        out = self.attempt(ex, start_k=1)
+        self.assertEqual((out.status, out.attempts), ('error', 3))
+        self.assertEqual(len([a for a in self.calls('codex') if a[0] == 'exec']), 3)
+        self.assertTrue((ex.root / 'build.log').exists())
         self.assertIn('⑤', out.reason)
         self.assertIn('build.log', out.reason)
         ex, _, _ = self.fixture([{'files': {
@@ -1305,6 +1441,7 @@ last.with_name(unit + '-result.json').write_text(json.dumps(scenario.get(
                           'stage': 'feat_done', 'feat_sha': ex.head(), 'pgid': None}
                 ex.save_marker(marker)
                 if result is not None:
+                    ex.run_dir.mkdir(parents=True, exist_ok=True)
                     execute.write_json_atomic(ex.result_path('step0'), result)
                 before = ex.head()
                 self.assert_exit(1, ex.recover)
@@ -1569,6 +1706,61 @@ if mode == 'exit':
         self.assertIn('step0', self.calls('gh')[0][-1])
         self.assertEqual(ex.load_index()['review']['status'], 'pending')
 
+    def test_baseline_env_and_tree_mutation(self):
+        for command in ('echo changed > .env', 'echo changed > src/keep.txt',
+                        'git commit --allow-empty -qm ac-mutation'):
+            ex = self.fixture(ac=[command])
+            before = ex.head()
+            self.assertEqual(ex.review_gate(ex.load_step_specs()), 1)
+            self.assertEqual(ex.load_top_index()['phases'][0]['status'], 'error')
+            if '.env' not in command:
+                self.assertEqual((ex.root / 'src/keep.txt').read_text(), 'keep\n')
+                self.assertEqual(ex.git('rev-parse', 'HEAD^').stdout.decode().strip(), before)
+                self.assertTrue(ex.git('for-each-ref', 'refs/harness/').stdout)
+
+    def test_review_git_metadata_change_and_reason(self):
+        for target in ('.git/config', '.git/hooks/new-hook', '.git/info/new-info'):
+            ex = self.fixture()
+            self.fake_bin('claude', f"Path({target!r}).open('a').write('# changed\\n')\n"
+                          "print(json.dumps({'result': 'REVIEW_RESULT: passed'}))\n")
+            with mock.patch.object(ex, 'rollback') as rollback:
+                self.assertEqual(ex.review_gate(ex.load_step_specs()), 3)
+                rollback.assert_not_called()
+            self.assertEqual(ex.load_index()['review']['status'], 'unverifiable')
+            body = (ex.run_dir / 'review-r1-claude.txt').read_text()
+            self.assertIn('[executor] Git config/hooks/info', body)
+            self.assertIn(body, self.calls('gh')[-1][-1])
+            self.assertEqual(self.calls('grok'), [])
+
+    def test_reports_use_memory_despite_file_tampering(self):
+        ex = self.fixture({'claude': ['failed']})
+        self.assertEqual(self.review(ex), 'failed')
+        (ex.run_dir / 'review-r1-claude.txt').write_text('FORGED')
+        self.assertNotIn('FORGED', ex.review_reports(1))
+        self.assertIn('REVIEW_RESULT: failed', ex.review_reports(1))
+
+    def test_credential_helper_is_reset_after_parent_config(self):
+        ex = self.fixture()
+        helper = self.temp_dir / 'credential-helper'
+        helper.write_text('#!/bin/sh\necho username=test\necho password=fake\n')
+        helper.chmod(0o755)
+        os.environ.update(GIT_CONFIG_COUNT='1', GIT_CONFIG_KEY_0='credential.helper',
+                          GIT_CONFIG_VALUE_0=str(helper), GIT_TERMINAL_PROMPT='0')
+        env = ex.child_env()
+        self.assertEqual(env['GIT_CONFIG_COUNT'], '2')
+        self.assertEqual(env['GIT_CONFIG_VALUE_0'], str(helper))
+        self.assertEqual(env['GIT_CONFIG_KEY_1'], 'credential.helper')
+        self.assertEqual(env['GIT_CONFIG_VALUE_1'], '')
+        # credential fill never accesses a network; the parent helper succeeds, child cannot.
+        request = b'protocol=https\nhost=example.invalid\n\n'
+        parent = subprocess.run(['git', 'credential', 'fill'], cwd=ex.root,
+                                input=request, capture_output=True)
+        child = subprocess.run(['git', 'credential', 'fill'], cwd=ex.root, env=env,
+                               input=request, capture_output=True)
+        self.assertEqual(parent.returncode, 0)
+        self.assertNotEqual(child.returncode, 0)
+        self.assertNotIn(b'password=', child.stdout)
+
     def test_missing_verdict_retry_then_unverifiable(self):
         ex = self.fixture({'claude': ['missing']})
         self.assertEqual(ex.review_gate(ex.load_step_specs()), 3)
@@ -1622,13 +1814,16 @@ if mode == 'exit':
             self.assertIn(value, grok[2])
         self.assertNotIn('hidden metadata', grok[2])
         self.assertNotIn('\n', execute.REVIEW_CONTRACT)
-        os.environ.update(GH_TOKEN='fake', GITHUB_TOKEN='fake', SSH_AUTH_SOCK='fake')
+        os.environ.update(GH_TOKEN='fake', GITHUB_TOKEN='fake', SSH_AUTH_SOCK='fake',
+                          ORCA_REVIEW='secret', BASH_ENV='unused', ENV='unused')
         self.assertEqual(ex.review_round(1, ex.head()), {'claude': 'passed', 'grok': 'passed'})
         self.assertEqual(self.calls('claude')[-1], expected[1:])
         self.assertEqual(self.calls('grok')[-1], grok[1:])
         for record in self.records():
-            for key in ('GH_TOKEN', 'GITHUB_TOKEN', 'SSH_AUTH_SOCK'):
+            for key in ('GH_TOKEN', 'GITHUB_TOKEN', 'SSH_AUTH_SOCK', 'ORCA_REVIEW', 'BASH_ENV', 'ENV'):
                 self.assertNotIn(key, record['env'])
+            self.assertEqual(record['env']['GIT_CONFIG_KEY_0'], 'credential.helper')
+            self.assertEqual(record['env']['GIT_CONFIG_VALUE_0'], '')
             self.assertTrue(record['gh_empty'])
             self.assertEqual(record['env']['PYTHONDONTWRITEBYTECODE'], '1')
 
@@ -1679,6 +1874,9 @@ if mode == 'exit':
                 ex.review_timeout = .05 if mode == 'timeout' else 5
                 self.assertEqual(self.review(ex), 'unverifiable')
                 self.assertEqual(len(self.calls('claude')) - before, 2)
+                reason = {'raw': '판정 누락', 'exit': '비정상 종료', 'timeout': 'timeout'}[mode]
+                self.assertIn(reason, ex.review_reports(1))
+                self.assertIn('[executor]', (ex.run_dir / 'review-r1-claude.txt').read_text())
         ex = self.fixture()
         command = ex.root / '.claude/commands/review.md'
         command.write_text('---\ndescription: secret\n---\nReview $ARGUMENTS\n')
@@ -1721,7 +1919,9 @@ last = Path(sys.argv[sys.argv.index('-o') + 1])
 unit = last.name.removesuffix('-last.txt')
 prompt = sys.stdin.read()
 with (Path(os.environ['HARNESS_CALLS_DIR']) / 'prompts').open('a') as log:
-    log.write(json.dumps({'unit': unit, 'prompt': prompt}) + '\n')
+    import subprocess
+    marker = Path(subprocess.check_output(['git', 'rev-parse', '--git-path', 'harness/7-sample/attempt.json']).decode().strip())
+    log.write(json.dumps({'unit': unit, 'prompt': prompt, 'k': json.loads(marker.read_text())['k']}) + '\n')
 if unit == os.environ['FIX_BLOCKED']:
     result = {'status': 'blocked', 'blocked_reason': 'human decision'}
 else:
@@ -1887,15 +2087,52 @@ print(json.dumps({'result' if name == 'claude' else 'text': text}))
         return reviewed
 
     def test_fix_running_recovery_uses_recorded_scope(self):
-        ex = self.fixture()
-        reviewed = self.seed_resume(ex)
+        ex = self.fixture({'claude': ['failed', 'passed']})
+        self.seed_resume(ex)
+        reviewed = ex.head()
         self.assertEqual(ex.run(), 0)
         self.assertEqual(self.units(), ['fix1'])
         prompt = json.loads((self.log_dir / 'prompts').read_text().splitlines()[0])['prompt']
         self.assertIn(ex.load_index()['base_commit'] + '..' + reviewed, prompt)
-        self.assertIn('claude saved report', prompt)
-        self.assertEqual(len(self.calls('claude')), 1)
+        self.assertNotIn('saved report', prompt)
+        self.assertIn('claude original report 1', prompt)
+        record = json.loads((self.log_dir / 'prompts').read_text().splitlines()[0])
+        self.assertEqual(record['k'], 2)
+        self.assertEqual(len(self.calls('claude')), 2)
         self.assert_state(ex, 'passed', 'completed')
+
+    def test_fix2_crash_resume_preserves_round_budget(self):
+        ex = self.fixture({'claude': ['failed']})
+        self.seed_resume(ex)
+        data = ex.load_index()
+        data['review']['round'] = 2
+        ex.save_index(data)
+        ex.commit_meta('second review fixture')
+        ex.save_marker({'unit': 'fix2', 'k': 1, 'stage': 'running', 'pre_sha': ex.head(),
+                        'feat_sha': None, 'pgid': None})
+        resumed = self.make_executor(ex.root)
+        self.assertEqual(resumed.run(), 3)
+        records = [json.loads(line) for line in (self.log_dir / 'prompts').read_text().splitlines()]
+        self.assertEqual([(r['unit'], r['k']) for r in records], [('fix2', 2)])
+        self.assertEqual(resumed.load_index()['review']['round'], 3)
+        self.assertNotIn('fix3', self.units())
+
+    def test_fix2_completed_crash_resume_has_no_new_budget(self):
+        ex = self.fixture({'claude': ['failed']})
+        self.seed_resume(ex)
+        ex.clear_marker()
+        data = ex.load_index()
+        data['review'].update(status='pending', round=2)
+        ex.save_index(data)
+        ex.commit_meta('fix2 completed fixture')
+        resumed = self.make_executor(ex.root)
+        self.assertEqual(resumed.run(), 3)
+        self.assertEqual(self.calls('codex'), [])
+        self.assertEqual(resumed.load_index()['review']['round'], 3)
+        # A new invocation after finalized failure receives a fresh two-fix budget.
+        resumed._lock_file.close()
+        self.assertEqual(self.make_executor(ex.root).run(), 3)
+        self.assertEqual(self.units(), ['fix1', 'fix2'])
 
     def test_fix_resume_exhausted_and_missing_reports(self):
         for exhausted in (True, False):
