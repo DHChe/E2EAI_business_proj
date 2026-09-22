@@ -20,7 +20,9 @@
     {
       "step": 2,
       "name": "session-runner",
-      "status": "pending"
+      "status": "completed",
+      "summary": "scripts/execute.py: ChildResult(returncode, timed_out, stdout, stderr), CODEX_CONFIG_FLAGS, codex_mcp_overrides(servers), Executor.run_child(argv, *, env, timeout, stdin_text=None, stdout_path=None, on_spawn=None), codex_preflight(), codex_argv(overrides, last_path), result_path(unit), build_prompt(unit, task_text, allowed, failure=None), run_codex(unit, prompt, *, on_spawn=None) 추가. session_timeout=1800, child_pgid 및 그룹 정리 구현; run() 미연결. scripts/test_execute.py: 필수 6개와 콜백 예외/SIGKILL/그룹 안전성 테스트 추가. AC 9줄 모두 종료 0, 전체 35개 및 Bash 가드 54/54 통과.",
+      "completed_at": "2026-09-22T20:15:52+09:00"
     },
     {
       "step": 3,
