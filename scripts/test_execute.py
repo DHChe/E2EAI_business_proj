@@ -10,6 +10,8 @@ import os
 import shutil
 import subprocess
 import tempfile
+import time
+import signal
 import unittest
 from unittest import mock
 
@@ -458,6 +460,184 @@ class StepSpecTests(HarnessTestCase):
             self.assertEqual(execute.parse_ac(step_md(0, "alpha", ["src/"], commands)),
                              commands)
         self.assertFalse(marker.exists())
+
+
+class SessionRunnerTests(HarnessTestCase):
+    def fake_codex(self, listing="print('[]')", body="print('session output')"):
+        self.fake_bin("codex", r"""
+record = {'argv': sys.argv[1:], 'env': dict(os.environ), 'cwd': os.getcwd()}
+if sys.argv[1] == 'exec':
+    record['stdin'] = sys.stdin.read()
+with (Path(os.environ['HARNESS_CALLS_DIR']) / 'records').open('a') as log:
+    log.write(json.dumps(record) + '\n')
+if sys.argv[-3:] == ['mcp', 'list', '--json']:
+""" +
+                      "\n".join("    " + line for line in listing.splitlines()) +
+                      "\n    sys.exit(0)\n" + body)
+
+    def records(self):
+        return [json.loads(line) for line in (self.log_dir / 'records').read_text().splitlines()]
+
+    def test_codex_argv_verified_flags_no_forbidden(self):
+        executor = self.make_executor(self.make_repo())
+        self.fake_codex(body="print('session output'); print('diagnostic', file=sys.stderr)")
+        spawned = []
+        result = executor.run_codex('step2', 'prompt 한글', on_spawn=spawned.append)
+        flags = [
+            '-c', 'plugins."browser@openai-bundled".enabled=false',
+            '-c', 'plugins."unified-computer-use@openai-bundled".enabled=false',
+            '-c', 'plugins."computer-use@openai-bundled".enabled=false',
+            '--disable', 'apps', '--disable', 'computer_use', '--disable', 'browser_use',
+            '--disable', 'in_app_browser', '-c', 'sandbox_workspace_write.network_access=false']
+        self.assertEqual(execute.CODEX_CONFIG_FLAGS, flags)
+        record = self.records()[-1]
+        self.assertEqual(record['argv'], ['exec', *flags, '-s', 'workspace-write',
+            '--dangerously-bypass-hook-trust', '--ephemeral', '-C', str(executor.root),
+            '--json', '-o', str(executor.run_dir / 'step2-last.txt'), '-'])
+        for flag in ('--ignore-user-config', '--dangerously-bypass-approvals-and-sandbox',
+                     'danger-full-access', '--full-auto'):
+            self.assertNotIn(flag, record['argv'])
+        self.assertEqual(record['stdin'], 'prompt 한글')
+        self.assertEqual(Path(record['cwd']).resolve(), executor.root.resolve())
+        self.assertEqual(len(spawned), 1)
+        self.assertIsNone(executor.child_pgid)
+        self.assertEqual(result.returncode, 0)
+        self.assertFalse(result.timed_out)
+        self.assertEqual(result.stderr, 'diagnostic\n')
+        self.assertEqual(result.stdout, (executor.run_dir / 'step2-session.jsonl').read_text())
+
+    def test_mcp_overrides_by_transport(self):
+        servers = [{'name': 'local_1-x', 'enabled': False, 'transport': {'type': 'stdio'}},
+                   {'name': 'remote', 'enabled': True, 'transport': {'type': 'streamable_http'}}]
+        self.assertEqual(execute.codex_mcp_overrides(servers), [
+            '-c', 'mcp_servers.local_1-x.command="true"',
+            '-c', 'mcp_servers.local_1-x.enabled=false', '-c', 'mcp_servers.remote.enabled=false'])
+        for name in ('a.b', '"x"', '', 'a\n', 'x y'):
+            self.assert_exit(1, execute.codex_mcp_overrides, [{'name': name}])
+
+    def test_preflight_fails_closed(self):
+        executor = self.make_executor(self.make_repo())
+        server = {'name': 'local', 'enabled': True, 'transport': {'type': 'stdio'}}
+        cases = ["print(" + repr(json.dumps([server])) + ")", 'sys.exit(3)',
+                 "print('not json')", "print('{}')", "print('[null]')"]
+        for output in cases:
+            with self.subTest(output=output):
+                self.fake_codex(listing="if sys.argv[1] == 'mcp':\n    print(" +
+                    repr(json.dumps([server])) + ")\nelse:\n    " + output)
+                self.assert_exit(1, executor.run_codex, 'step2', 'prompt')
+                self.assertEqual(self.calls('codex')[-1], [*execute.CODEX_CONFIG_FLAGS,
+                    '-c', 'mcp_servers.local.command="true"', '-c',
+                    'mcp_servers.local.enabled=false', 'mcp', 'list', '--json'])
+        self.fake_codex(listing='sys.exit(4)')
+        self.assert_exit(1, executor.run_codex, 'step2', 'prompt')
+        self.assertFalse(any(args[0] == 'exec' for args in self.calls('codex')))
+        self.fake_codex(listing="print('[]')")
+        self.assertEqual(executor.run_codex('step2', 'ok').returncode, 0)
+
+    def test_prompt_contents(self):
+        executor = self.make_executor(self.make_repo(files={
+            'docs/adr/0002-second.md': 'Second decision'}))
+        data = executor.load_index()
+        data['steps'][0].update(status='completed', summary='accumulated summary')
+        data['steps'][1]['summary'] = 'pending summary'
+        executor.save_index(data)
+        prompt = executor.build_prompt('step2', 'task unique', ['scripts/execute.py'])
+        for value in ('Sample agent guardrails', 'Sample glossary', 'Sample architecture decision',
+                      'Sample product scope', 'step0 alpha: accumulated summary', 'task unique',
+                      'scripts/execute.py', f'phases/{PHASE}/.run/step2-result.json',
+                      'completed', 'error', 'blocked', 'push, gh 쓰기', '커밋하지 마라',
+                      'phases/index.json', f'phases/{PHASE}/index.json'):
+            self.assertIn(value, prompt)
+        self.assertLess(prompt.index('Sample architecture decision'), prompt.index('Second decision'))
+        self.assertNotIn('pending summary', prompt)
+        self.assertNotIn('직전 시도 실패 사유', prompt)
+        self.assertIn('## 직전 시도 실패 사유\nfailed unique',
+                      executor.build_prompt('fix1', 'task', [], 'failed unique'))
+        (executor.root / 'docs/PRD.md').unlink()
+        self.assertNotIn('Sample product scope', executor.build_prompt('fix1', 'task', []))
+
+    def assert_gone(self, pid):
+        deadline = time.monotonic() + 4
+        while time.monotonic() < deadline:
+            try:
+                os.kill(pid, 0)
+            except ProcessLookupError:
+                return
+            time.sleep(0.03)
+        self.fail(f'process {pid} survived')
+
+    def test_session_timeout_kills_group(self):
+        executor = self.make_executor(self.make_repo())
+        executor.session_timeout = 1
+        self.fake_codex(body="""
+import subprocess, signal, time
+child = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(60)'])
+Path(os.environ['HARNESS_CALLS_DIR'], 'grandchild').write_text(str(child.pid))
+def terminate(sig, frame):
+    child.wait(timeout=2)
+    sys.exit(0)
+signal.signal(signal.SIGTERM, terminate)
+time.sleep(60)
+""")
+        spawned = []
+        start = time.monotonic()
+        result = executor.run_codex('step2', 'prompt', on_spawn=spawned.append)
+        self.assertTrue(result.timed_out)
+        self.assertLess(time.monotonic() - start, 5)
+        self.assert_gone(spawned[0])
+        self.assert_gone(int((self.log_dir / 'grandchild').read_text()))
+        self.assertIsNone(executor.child_pgid)
+
+    def test_session_env_strips_orca_and_tokens(self):
+        executor = self.make_executor(self.make_repo())
+        os.environ.update(ORCA_TEST='secret', GH_TOKEN='secret', GITHUB_TOKEN='secret',
+                          SSH_AUTH_SOCK='secret')
+        self.fake_codex()
+        executor.run_codex('step2', 'prompt')
+        records = self.records()
+        self.assertEqual(len(records), 3)
+        for record in records:
+            env = record['env']
+            for key in ('ORCA_TEST', 'GH_TOKEN', 'GITHUB_TOKEN', 'SSH_AUTH_SOCK'):
+                self.assertNotIn(key, env)
+            self.assertEqual(env['PYTHONDONTWRITEBYTECODE'], '1')
+            self.assertEqual(list(Path(env['GH_CONFIG_DIR']).iterdir()), [])
+            self.assertEqual(env, records[0]['env'])
+
+    def test_child_cleanup_callback_exception_and_kill_escalation(self):
+        executor = self.make_executor(self.make_repo())
+        spawned = []
+        def fail(pid):
+            spawned.append(pid)
+            self.assertEqual(executor.child_pgid, pid)
+            raise RuntimeError('callback')
+        with self.assertRaisesRegex(RuntimeError, 'callback'):
+            executor.run_child([sys.executable, '-c', 'import time; time.sleep(60)'],
+                env=executor.child_env(), timeout=1, on_spawn=fail)
+        self.assert_gone(spawned[0])
+        self.assertIsNone(executor.child_pgid)
+        result = executor.run_child([sys.executable, '-c',
+            'import signal,time; signal.signal(signal.SIGTERM, signal.SIG_IGN); time.sleep(60)'],
+            env=executor.child_env(), timeout=0.5)
+        self.assertTrue(result.timed_out)
+        self.assertEqual(result.returncode, -signal.SIGKILL)
+
+    def test_child_group_signal_safety(self):
+        executor = self.make_executor(self.make_repo())
+        for pid in (None, 0, 1, os.getpgrp()):
+            with self.subTest(pid=pid), mock.patch.object(execute.subprocess, 'Popen') as popen, \
+                    mock.patch.object(execute.os, 'killpg') as killpg:
+                popen.return_value.pid = pid
+                popen.return_value.returncode = 0
+                executor.run_child(['fake'], env={}, timeout=1)
+                killpg.assert_not_called()
+                self.assertIsNone(executor.child_pgid)
+        for error in (ProcessLookupError, PermissionError):
+            with mock.patch.object(execute.subprocess, 'Popen') as popen, \
+                    mock.patch.object(execute.os, 'killpg', side_effect=error):
+                popen.return_value.pid = os.getpgrp() + 10000
+                executor.run_child(['fake'], env={}, timeout=1)
+                self.assertIsNone(executor.child_pgid)
 
 
 if __name__ == "__main__":

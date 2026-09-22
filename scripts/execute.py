@@ -8,15 +8,50 @@ import json
 import os
 from pathlib import Path
 import posixpath
+import re
+import signal
 import subprocess
 import sys
 import tempfile
-from typing import Iterable, Sequence
+import time
+from typing import Callable, Iterable, Sequence
 
 EXIT_OK = 0
 EXIT_ERROR = 1
 EXIT_BLOCKED = 2
 EXIT_REVIEW = 3
+
+CODEX_CONFIG_FLAGS: list[str] = [
+    '-c', 'plugins."browser@openai-bundled".enabled=false',
+    '-c', 'plugins."unified-computer-use@openai-bundled".enabled=false',
+    '-c', 'plugins."computer-use@openai-bundled".enabled=false',
+    '--disable', 'apps', '--disable', 'computer_use',
+    '--disable', 'browser_use', '--disable', 'in_app_browser',
+    '-c', 'sandbox_workspace_write.network_access=false',
+]
+
+
+@dataclass
+class ChildResult:
+    returncode: int | None
+    timed_out: bool
+    stdout: str
+    stderr: str
+
+
+def codex_mcp_overrides(servers: list[dict]) -> list[str]:
+    overrides = []
+    for server in servers:
+        name = server.get("name") if isinstance(server, dict) else None
+        if not isinstance(name, str) or not re.fullmatch(r"[A-Za-z0-9_-]+", name):
+            raise HarnessExit(EXIT_ERROR, f"MCP 서버 이름을 안전하게 끌 수 없다: {name!r}")
+        transport = server.get("transport", {})
+        if not isinstance(transport, dict):
+            raise HarnessExit(EXIT_ERROR, "잘못된 MCP transport")
+        if transport.get("type") == "stdio":
+            overrides.extend(["-c", f'mcp_servers.{name}.command="true"'])
+        overrides.extend(["-c", f"mcp_servers.{name}.enabled=false"])
+    return overrides
 
 
 class HarnessExit(Exception):
@@ -157,6 +192,127 @@ class Executor:
         self.branch = f"feat-{phase_dir}"
         self._lock_file = None
         self._gh_config = None
+        self.session_timeout = 1800
+        self.child_pgid = None
+
+    def run_child(self, argv: list[str], *, env: dict[str, str], timeout: float,
+                  stdin_text: str | None = None, stdout_path: Path | None = None,
+                  on_spawn: Callable[[int], None] | None = None) -> ChildResult:
+        # Files avoid pipe deadlocks, including inherited pipes held by descendants.
+        with tempfile.TemporaryFile() as out, tempfile.TemporaryFile() as err:
+            child = subprocess.Popen(
+                argv, cwd=self.root, env=env, start_new_session=True,
+                stdin=subprocess.PIPE if stdin_text is not None else subprocess.DEVNULL,
+                stdout=out, stderr=err)
+            pgid = child.pid
+            self.child_pgid = pgid
+            timed_out = False
+
+            def send_group(sig: int) -> bool:
+                if pgid is None or pgid <= 1 or pgid == os.getpgrp():
+                    return False
+                try:
+                    os.killpg(pgid, sig)
+                    return True
+                except (ProcessLookupError, PermissionError):
+                    return False
+
+            try:
+                if on_spawn is not None:
+                    on_spawn(pgid)
+                try:
+                    child.communicate(
+                        input=stdin_text.encode("utf-8") if stdin_text is not None else None,
+                        timeout=timeout)
+                except subprocess.TimeoutExpired:
+                    timed_out = True
+            finally:
+                try:
+                    if send_group(signal.SIGTERM):
+                        deadline = time.monotonic() + 0.3
+                        while time.monotonic() < deadline and send_group(0):
+                            child.poll()  # Reap the leader while descendants terminate.
+                            time.sleep(0.02)
+                        if send_group(0):
+                            send_group(signal.SIGKILL)
+                    child.wait()
+                    if child.stdin is not None:
+                        child.stdin.close()
+                finally:
+                    self.child_pgid = None
+            out.seek(0)
+            err.seek(0)
+            stdout = out.read().decode("utf-8", errors="replace")
+            stderr = err.read().decode("utf-8", errors="replace")
+            if stdout_path is not None:
+                stdout_path.write_text(stdout, encoding="utf-8")
+            return ChildResult(child.returncode, timed_out, stdout, stderr)
+
+    def codex_preflight(self) -> list[str]:
+        env = self.child_env(strip_orca=True)
+
+        def listing(flags: list[str]) -> list[dict]:
+            try:
+                result = self.run_child(["codex", *flags, "mcp", "list", "--json"],
+                                        env=env, timeout=120)
+                if result.timed_out or result.returncode != 0:
+                    raise ValueError(f"MCP 목록 명령 실패: {result.stderr}")
+                servers = json.loads(result.stdout)
+                if not isinstance(servers, list) or any(
+                        not isinstance(s, dict) or type(s.get("enabled")) is not bool
+                        for s in servers):
+                    raise ValueError("MCP 목록은 enabled 불리언을 가진 객체의 JSON 배열이어야 한다")
+                return servers
+            except (OSError, ValueError) as exc:
+                raise HarnessExit(EXIT_ERROR, f"Codex preflight 실패: {exc}") from exc
+
+        overrides = codex_mcp_overrides(listing([]))
+        if any(s["enabled"] for s in listing([*CODEX_CONFIG_FLAGS, *overrides])):
+            raise HarnessExit(EXIT_ERROR, "Codex preflight: 켜진 MCP 서버가 남아 있다")
+        return overrides
+
+    def codex_argv(self, overrides: list[str], last_path: Path) -> list[str]:
+        return ["codex", "exec", *CODEX_CONFIG_FLAGS, *overrides,
+                "-s", "workspace-write", "--dangerously-bypass-hook-trust", "--ephemeral",
+                "-C", str(self.root), "--json", "-o", str(last_path), "-"]
+
+    def result_path(self, unit: str) -> Path:
+        return self.run_dir / f"{unit}-result.json"
+
+    def build_prompt(self, unit: str, task_text: str, allowed: Sequence[str],
+                     failure: str | None = None) -> str:
+        parts = ["너는 이 저장소의 구현 세션이다. 이 세션은 시도 하나다. "
+                 "작업하고 AC를 직접 돌려 본 뒤 결과를 한 번 보고하고 끝낸다."]
+        docs = [self.root / "AGENTS.md", self.root / "CONTEXT.md",
+                *sorted((self.root / "docs/adr").glob("*.md")), self.root / "docs/PRD.md"]
+        for path in docs:
+            if path.is_file():
+                parts.append(f"## {path.relative_to(self.root)}\n{path.read_text(encoding='utf-8')}")
+        summaries = [f"step{s['step']} {s['name']}: {s.get('summary', '')}"
+                     for s in self.load_index()["steps"] if s["status"] == "completed"]
+        parts.extend(["## 완료된 step 요약\n" + "\n".join(summaries),
+                      "## 작업 본문\n" + task_text,
+                      "## 변경 허용 경로\n" + "\n".join(allowed),
+                      f"## 결과 계약\n{self.result_path(unit).relative_to(self.root)}에 JSON 객체 하나를 쓴다. "
+                      '필드는 status("completed" | "error" | "blocked"), summary, '
+                      'error 상태의 error_message 또는 blocked 상태의 blocked_reason이다. '
+                      "blocked는 사람만 풀 수 있는 자격 증명, 외부 인증, 수동 설정에만 쓴다.",
+                      f"## 금지\nphases/index.json과 phases/{self.phase_dir}/index.json을 쓰지 마라.\n"
+                      "커밋하지 마라.\npush, gh 쓰기, 외부 게시, 원격 DB 변경을 하지 마라.\n"
+                      "허용 경로 밖을 바꾸지 마라."])
+        if failure is not None:
+            parts.append("## 직전 시도 실패 사유\n" + failure)
+        return "\n\n".join(parts)
+
+    def run_codex(self, unit: str, prompt: str, *,
+                  on_spawn: Callable[[int], None] | None = None) -> ChildResult:
+        overrides = self.codex_preflight()
+        self.run_dir.mkdir(parents=True, exist_ok=True)
+        return self.run_child(
+            self.codex_argv(overrides, self.run_dir / f"{unit}-last.txt"),
+            env=self.child_env(strip_orca=True), timeout=self.session_timeout,
+            stdin_text=prompt, stdout_path=self.run_dir / f"{unit}-session.jsonl",
+            on_spawn=on_spawn)
 
     @property
     def issue(self) -> int:
