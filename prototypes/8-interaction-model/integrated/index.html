@@ -1,0 +1,2421 @@
+<!-- PROTOTYPE — 버리는 코드 (#8, 통합안). codex 기한순 대조표 + claude 재량 관문·두 열 대조·시계 부족. -->
+<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>한성워크 · #8 통합안</title><style>
+:root{--ink:#172e32;--muted:#5c6b6d;--line:#cad4d2;--paper:#fff;--wash:#f0f3f1;--green:#0b6459;--pale:#e5f2ed;--amber:#855110;--amberbg:#fff3d9;--red:#a5372b;--redbg:#fff0ec}
+*{box-sizing:border-box}body{margin:0;color:var(--ink);background:var(--wash);font:14px/1.55 -apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic",sans-serif}button,input,textarea,select{font:inherit;color:inherit}button{cursor:pointer;background:white;border:1px solid var(--line);padding:8px 12px;border-radius:4px}button:hover{border-color:var(--green);background:var(--pale)}button:disabled{cursor:default;opacity:.48}button:disabled:hover{background:white;border-color:var(--line)}button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,summary:focus-visible{outline:3px solid #cc8b31;outline-offset:2px}.primary{background:var(--green);color:#fff;border-color:var(--green)}.primary:hover{background:#084f47}.quiet{background:transparent;border:0;padding:2px 0;text-decoration:underline;text-underline-offset:3px;color:var(--green)}h1,h2,h3,p{margin:0}h1{font-size:27px;letter-spacing:-1px}h2{font-size:21px;letter-spacing:-.5px}h3{font-size:16px}small,.muted{color:var(--muted)}small{font-size:12px}b,strong{font-weight:650}.mono{font-variant-numeric:tabular-nums;font-family:ui-monospace,SFMono-Regular,monospace}header{background:#16383a;color:white;padding:14px 28px;display:flex;align-items:center;justify-content:space-between;gap:20px}header small{color:#b9d5ce}.prototype{font-size:11px;letter-spacing:1px;color:#f6cf88;margin-bottom:4px}.brand{font-weight:650;letter-spacing:.5px}.shell{max-width:1720px;margin:auto;padding:24px 28px 116px}.topline{display:flex;justify-content:space-between;align-items:flex-start;gap:20px}.intro{margin:6px 0 16px;max-width:820px;color:var(--muted)}.tools{display:flex;gap:8px;align-items:center;flex-wrap:wrap}select,input,textarea{border:1px solid var(--line);border-radius:3px;background:white;padding:8px;max-width:100%}textarea{width:100%;min-height:80px;resize:vertical}.bar{margin:16px 0;padding:12px 16px;border:1px solid var(--line);background:#fff;display:flex;gap:22px;flex-wrap:wrap}.bar b{font-size:19px;margin-right:5px}.notice{border-left:3px solid var(--amber);padding:9px 14px;background:var(--amberbg);font-size:13px;margin:10px 0}.state{padding:10px 14px;background:#e4ebe8;display:flex;gap:18px;flex-wrap:wrap;font-size:12px;margin:12px 0}.state strong{color:var(--green)}.split{display:grid;grid-template-columns:minmax(385px,31%) minmax(0,1fr);gap:20px;align-items:start}.queue{position:sticky;top:12px;max-height:calc(100vh - 112px);overflow:auto;background:white;border:1px solid var(--line)}.qhead{padding:14px;border-bottom:2px solid var(--ink);background:#f8faf9}.qhead p{font-size:12px;color:var(--muted);margin-top:4px}.row{width:100%;border:0;border-bottom:1px solid var(--line);border-radius:0;text-align:left;padding:13px 14px;background:white}.row.selected{background:var(--pale);box-shadow:inset 4px 0 var(--green)}.rowline{display:flex;align-items:baseline;justify-content:space-between;gap:10px}.rowtitle{font-size:15px;font-weight:650}.rowmeta{font-size:12px;color:var(--muted);margin:5px 0}.chip{display:inline-block;font-size:11px;line-height:1.5;padding:2px 6px;background:#eef2f0;border:1px solid #d3ddda;border-radius:3px;vertical-align:middle;white-space:normal}.chip.stage{border:0;border-left:2px solid var(--green);border-radius:0;background:#e7f2ee}.red{color:var(--red)}.amber{color:var(--amber)}.signal{background:var(--redbg);color:var(--red);border-color:#edc8c0}.policychip{background:#f1eee7;color:#655a38;border-color:#dfd6c0}.panel{border:1px solid var(--line);background:#fff;min-width:0}.phead{padding:20px 24px;border-bottom:1px solid var(--line)}.phead .rowline{align-items:center}.kicker{font-size:11px;letter-spacing:1px;text-transform:uppercase;color:var(--green);margin-bottom:7px}.docmeta{margin-top:7px;font-size:13px;color:var(--muted)}.body{padding:0 24px 24px}.section{padding:20px 0;border-bottom:1px solid var(--line)}.section:last-child{border:0}.section h3{margin-bottom:10px}.section p{margin:7px 0}.metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--line);border:1px solid var(--line);margin:12px 0}.metric{background:#fafcfb;padding:13px}.metric b{display:block;font-size:21px;margin-top:4px}.route{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:10px 0}.route span{padding:4px 8px;background:#f1f4f2;border:1px solid var(--line);font-size:12px}.route .current{border:2px solid var(--green);background:var(--pale)}.route .done{color:var(--muted)}table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:9px 8px;text-align:left;border-bottom:1px solid #dde4e1;vertical-align:top}th{font-weight:550;background:#f3f6f4;color:#536564}td.amount{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}.changed td{background:#fff7e8}.tablewrap{overflow:auto}.policy{border-left:3px solid var(--green);padding:12px 15px;background:#f5f8f5;margin:12px 0}.policy blockquote{margin:7px 0;font-size:13px}.policyhead{font-weight:650;font-size:13px}.policy details{margin-top:9px}.policy details summary{font-size:12px;color:var(--green)}pre{white-space:pre-wrap;word-break:break-word;font:12px/1.6 ui-monospace,SFMono-Regular,monospace;padding:12px;background:#ebefec;max-height:360px;overflow:auto;margin:8px 0}summary{cursor:pointer}.calc{display:grid;grid-template-columns:repeat(3,1fr);border:1px solid var(--line);margin:10px 0}.calc>div{padding:12px;border-right:1px solid var(--line)}.calc>div:last-child{border:0;background:var(--pale)}.calc b{display:block;margin:6px 0}.actionbox{background:#f5f8f6;padding:16px;border:1px solid var(--line);margin-top:15px}.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}.twocol{display:grid;grid-template-columns:1fr 1fr;gap:18px}.fact{margin:8px 0}.fact small{display:block}.signalgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.signalcell{padding:10px 12px;border:1px solid var(--line)}.signalcell.on{border-color:#e1ada2;background:var(--redbg)}.signalcell b{font-size:18px;margin-left:5px}.timeline{padding:0;list-style:none}.timeline li{border-left:2px solid var(--line);padding:4px 0 12px 14px}.timeline li strong{display:block}.evidence{border:1px solid var(--line);padding:12px;background:#f5f3ec;margin-top:10px}.evidence svg{display:block;max-width:100%;max-height:390px;margin:10px auto;background:#fff}.empty{padding:40px;color:var(--muted)}.toast{padding:12px 16px;border:1px solid var(--green);background:var(--pale);margin:12px 0}.bottomnote{font-size:12px;color:var(--muted);margin-top:20px}dialog{border:1px solid var(--line);padding:24px;max-width:600px}dialog::backdrop{background:#18343388}
+@media(max-width:1050px){.split{grid-template-columns:340px minmax(0,1fr)}.sectiongrid{grid-template-columns:1fr 1fr}.calc{grid-template-columns:1fr}.calc>div{border:0;border-bottom:1px solid var(--line)}.twocol{grid-template-columns:1fr}.shell{padding:20px 16px 116px}.body{padding:0 16px 20px}.phead{padding:16px}.metrics .metric b{font-size:17px}}
+@media(max-width:740px){header{padding:12px 16px}.brand{font-size:12px}.topline{display:block}.tools{margin-top:12px}.split{display:block}.queue{position:static;max-height:320px;margin-bottom:18px}.sectiongrid{grid-template-columns:1fr}.switcher label{display:none}.switcher button{font-size:12px;padding:7px}.state{gap:7px}.pointerlist .rows{grid-template-columns:1fr}.metrics{grid-template-columns:1fr}.signalgrid{grid-template-columns:1fr}.pointerhead .number{font-size:24px}h1{font-size:24px}}
+
+.selfcheck{border:1px solid var(--green);background:var(--pale);padding:10px 14px;margin-bottom:18px;font-size:13px}.selfcheck.bad{border-color:var(--red);background:var(--redbg)}.config{display:flex;flex-wrap:wrap;align-items:center;gap:12px;background:white;border:1px solid var(--line);padding:12px 16px;margin:14px 0}.config label{display:flex;align-items:center;gap:7px}.config input{width:18px;height:18px;accent-color:var(--green)}.config button[aria-pressed=true]{background:var(--pale);border-color:var(--green)}.statusbar{position:fixed;bottom:0;left:0;right:0;z-index:10;background:#16383a;color:white;padding:10px 24px;display:flex;gap:18px;flex-wrap:wrap;font-size:12px}.qband{background:#e7eeea;padding:9px 14px;font-size:12px;border-top:1px solid var(--line)}.row.upcoming{background:#f8faf9}.shortage{display:block;color:var(--amber);margin-top:6px;font-size:12px;font-weight:600}.questions{padding-left:24px;margin:12px 0}.questions li{padding:5px 0}.questions small{display:block}.judgment{border-top:1px solid var(--line);padding-top:12px;margin-top:12px}.judgment textarea{margin:7px 0}.readonly{background:#f0f2f0;padding:10px;margin:10px 0}.comparison-table{table-layout:fixed;min-width:520px}.comparison-table th:first-child{width:23%}.comparison-table th.marker{width:16%}.comparison-table td{overflow-wrap:anywhere}.comparison-table .marker{text-align:center;font-size:12px}.unknown td{background:#f2f3f5}.proof{font-size:12px}.proof td{padding:6px 8px}.titletools{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}.toast{position:sticky;top:0;z-index:5}.section>details{margin-top:12px}@media(max-width:740px){.shell{padding-bottom:130px}.statusbar{gap:6px 14px;padding:8px 12px}.config{padding:10px}.comparison-table{min-width:460px}.qhead{position:sticky;top:0}.topline h1{font-size:23px}}
+</style></head><body>
+<header><div><div class="prototype">PROTOTYPE — 버리는 코드 (#8, 통합안)</div><div class="brand">한성정밀공업(주) / 한성워크</div></div><div><small>통합안 · 합성 사례 14건</small><br><small>메모리에서만 동작 · 실제 송부·결재 없음</small></div></header>
+<main class="shell" id="app"></main><footer class="statusbar" id="statusbar" aria-label="비교 설정과 기준 시각"></footer><script>
+'use strict';
+// 원본 구조화 블록의 읽기 전용 스냅샷. 네트워크나 저장소를 읽지 않는다.
+const POLICY = {
+  "TRV-12-1": {
+    "title": "제12조(한도 초과 청구)",
+    "prose": "출장자는 다음 각 호의 **부득이한 사유**로 한도를 넘은 경우에 한하여, 사유를 적어 초과분의 지급을 청구할 수 있다. 이 청구를 **한도 초과 청구**라 한다.\n1. 해외 전시회 기간 중 개최 도시의 숙박 요금이 상한을 넘는 경우\n2. 현지 치안 또는 방역상의 이유로 지정된 숙소나 이동 수단을 써야 하는 경우\n3. 결항 · 지연 · 파업 등 출장자의 책임 없는 사유로 일정이 바뀐 경우\n4. 그 밖에 앞의 세 호에 준하는 사유가 있는 경우",
+    "path": "docs/company/travel-policy.md",
+    "line": 241,
+    "block": "clause: TRV-12-1\nkind: rule\ndiscretion: true\ndiscretion_basis: 부득이한 사유 / 그 밖에 앞의 세 호에 준하는 사유\ncheckable_facts:\n  - 1호: 전시회 기간과 숙박일의 겹침\n  - 2호: 공공기관·현지 사업장의 지정 사실\n  - 3호: 운송사업자의 결항·지연 통지\nevidence: [초과 금액, 사유, 대체안의 견적, 같은 지역 동행자의 숙박 요금]\neffect: {approval_step_up: 1, ref: APV-7}\nfacts_to_ask:            # 물어볼 사실\n  - 한도 안의 대체 숙소나 이동 수단이 있었는지\n  - 대체안을 쓰지 않은 이유\n  - 사유가 제1항의 어느 호에 해당하는지\ndecided_by: 결재권자       # 판단 책임자. 올라간 결재권자가 초과분의 지급을 정한다(TRV-12-2)\nmust_not_auto_decide:    # 금지된 자동 확정\n  - 부득이한 사유의 인정\n  - 초과분의 지급\nrefs: [TRV-11-1, TRV-12-2, APV-7-1, APV-10-2]",
+    "edition": 1
+  },
+  "TRV-12-3": {
+    "title": "제12조(한도 초과 청구)",
+    "prose": "사전승인에서 인정된 한도 초과 청구는, 정산의 청구액이 그 인정된 금액 안에 있으면 정산에서 다시 한도 초과 청구로 보지 않는다.",
+    "path": "docs/company/travel-policy.md",
+    "line": 249,
+    "block": "",
+    "edition": 1
+  },
+  "TRV-14-1": {
+    "title": "제14조(외화의 원화 환산)",
+    "prose": "외화로 지출한 여비는 **환율 기준일의 매매기준율**로 원화로 환산한다. 이 규정의 **환율 기준일은 지출일**로 한다.",
+    "path": "docs/company/travel-policy.md",
+    "line": 313,
+    "block": "clause: TRV-14-1\nkind: rule\nname: 환율 기준일\nvalue: 지출일\nrejected: [정산일, 카드 청구일]\nrefs: [TRV-3-5, TRV-15-1]",
+    "edition": 1
+  },
+  "TRV-6-2": {
+    "title": "제6조(숙박비)",
+    "prose": "숙박비 상한은 출장자의 **직급**과 **지역 등급**에 따라 아래 블록과 같다. 지급액은 **블록의 상한에 지급 대상인 밤의 수를 곱한 금액**을 넘지 않는 실비로 하며, 밤마다 따로 비교하지 않는다.",
+    "path": "docs/company/travel-policy.md",
+    "line": 116,
+    "block": "clause: TRV-6-2\nkind: table\nname: 숙박비 상한\ninput: [지역 등급, 직급]\ncurrency: KRW\nper: 1박\ncompare: 합계   # 밤마다가 아니라 (1박 상한 × 밤의 수) 합계와 비교한다\ngrades: [사원, 주임, 대리, 과장, 차장, 부장, 임원]\nvalues:\n  가: [200000, 200000, 200000, 230000, 230000, 260000, 330000]\n  나: [150000, 150000, 150000, 170000, 170000, 200000, 250000]\n  다: [120000, 120000, 120000, 140000, 140000, 160000, 200000]\n  국내: [80000, 80000, 80000, 90000, 90000, 100000, 130000]",
+    "edition": 1
+  },
+  "TRV-8-1": {
+    "title": "제8조(교통비)",
+    "prose": "항공 좌석 등급은 출장자의 **직급**과 **구간별 운항 예정 시간**에 따라 아래 블록과 같다. 운항 예정 시간은 탑승 구간마다 따로 보며, 환승 대기 시간은 넣지 않는다.",
+    "path": "docs/company/travel-policy.md",
+    "line": 166,
+    "block": "clause: TRV-8-1\nkind: table\nname: 항공 좌석 등급\ninput: [직급, 구간 운항 예정 시간]\nrows:\n  - grades: [임원]\n    seat: 비즈니스\n  - grades: [부장]\n    seat: 비즈니스\n    when: {flight_hours_gte: 8}\n  - grades: [부장]\n    seat: 이코노미\n    when: {flight_hours_lt: 8}\n  - grades: [사원, 주임, 대리, 과장, 차장]\n    seat: 이코노미",
+    "edition": 1
+  },
+  "TRV-8-2": {
+    "title": "제8조(교통비)",
+    "prose": "제1항의 등급보다 상위 좌석을 이용한 경우 그 차액은 출장자 본인이 부담한다. 다만 출장자 본인의 마일리지로 좌석을 올린 경우에는 차액이 발생하지 않은 것으로 본다.",
+    "path": "docs/company/travel-policy.md",
+    "line": 186,
+    "block": "",
+    "edition": 1
+  },
+  "APV-10-2": {
+    "title": "제10조(검토 범위의 분담)",
+    "prose": "결재권자는 다음을 본다.\n1. 출장과 지출의 업무상 필요\n2. 사전승인과 정산의 차이와 그 사유\n3. 여비규정의 재량 조항(`TRV-7-1`, `TRV-12-1`, `TRV-13-4`)에 대한 판단",
+    "path": "docs/company/approval-matrix.md",
+    "line": 245,
+    "block": "",
+    "edition": 1
+  },
+  "APV-5-2": {
+    "title": "제5조(금액 기준)",
+    "prose": "금액에 따른 전결 단계는 아래 블록과 같다. 두 금액에 같은 블록을 쓴다. 해외 사업장 방문은 금액과 무관하게 본부장부터 시작한다.",
+    "path": "docs/company/approval-matrix.md",
+    "line": 83,
+    "block": "clause: APV-5-2\nkind: table\nname: 금액 기준\ninput: [총액, 한도 적용 금액]\ncurrency: KRW\napplies_to: [사전승인, 정산]\nrows:\n  - 출장유형: [해외 사업장 방문]\n    steps:\n      - {결재권자: 본부장, lte: 15000000}\n      - {결재권자: 대표이사, gt: 15000000}\n  - 출장유형: [해외 전시회 참가]\n    steps:\n      - {결재권자: 팀장, lte: 5000000}\n      - {결재권자: 본부장, gt: 5000000, lte: 15000000}\n      - {결재권자: 대표이사, gt: 15000000}\n  - 출장유형: [국내 출장]\n    steps:\n      - {결재권자: 팀장, lte: 1000000}\n      - {결재권자: 본부장, gt: 1000000}\nrefs: [APV-5-1, TRV-3-7]",
+    "edition": 1
+  },
+  "APV-7-1": {
+    "title": "제7조(상향 사유)",
+    "prose": "다음 각 호의 사유가 하나라도 있으면 제5조의 **한도 적용 금액 단계를 한 단계 올린다.** 사유가 둘 이상이어도 한 단계만 올린다. 총액 단계는 올리지 않는다.\n1. 여비규정 `TRV-12-1`의 한도 초과 청구가 있는 경우\n2. 사전승인이 완료되기 전에 출발한 출장의 정산인 경우",
+    "path": "docs/company/approval-matrix.md",
+    "line": 115,
+    "block": "clause: APV-7-1\nkind: rule\nname: 전결 단계 상향\napplies_to: 한도 적용 금액 단계   # 총액 단계에는 붙지 않는다\nstep_up: 1\nidempotent: true      # 사유가 여럿이어도 한 단계만\ncap: 대표이사\nreasons:\n  - {id: 한도 초과 청구, ref: TRV-12-1}\n  - {id: 사전승인 미완료 출발, ref: PRC-4-1}\nrefs: [APV-5-1, TRV-12-1, TRV-12-3, PRC-4-1]",
+    "edition": 1
+  },
+  "APV-7-4": {
+    "title": "제7조(상향 사유)",
+    "prose": "기준 단계는 **총액 단계와, 제1항을 거친 한도 적용 금액 단계 중 높은 단계**로 한다. 두 단계를 더하지 않는다. 한도 초과 청구는 이 둘 중 높은 쪽을 통해 **한 번만** 결재선을 움직인다.",
+    "path": "docs/company/approval-matrix.md",
+    "line": 123,
+    "block": "clause: APV-7-4\nkind: rule\nname: 기준 단계\nvalue: \"max(총액 단계, 상향을 거친 한도 적용 금액 단계)\"\nadditive: false       # 총액 단계와 상향을 더하지 않는다\nrefs: [APV-5-1, APV-7-1]",
+    "edition": 1
+  },
+  "APV-7.2-1": {
+    "title": "제7조의2(정산의 하한)",
+    "prose": "그 출장에 사전승인 문서가 있으면, 정산 문서의 전결 단계는 **그 사전승인 문서의 전결권자의 단계**보다 낮게 정하지 않는다. 사전승인 문서의 전결권자는 그 문서의 기안 시점에 계산된 사람이며(사전승인이 완료되기 전에 출발한 경우도 같다), 그 단계는 제3조로 정한다. 사전승인 문서 없이 출발한 출장의 정산에는 하한이 없고, 제7조 제1항 제2호가 그 정산을 다룬다.",
+    "path": "docs/company/approval-matrix.md",
+    "line": 150,
+    "block": "clause: APV-7.2-1\nkind: rule\nname: 정산의 하한\napplies_to: [정산]\nwhen: 그 출장에 사전승인 문서가 있을 것\nfloor: 사전승인 문서의 전결권자의 단계   # 기안 시점에 계산된 전결권자. 완료 전 출발이어도 같다\nwhen_absent: 하한 없음                   # APV-7-1 제2호가 다룬다\noperation: \"max(기준 단계, floor)\"\nsource: ADR-0006\nrefs: [APV-3-1, APV-3-2, APV-7-4, APV-11-1]",
+    "edition": 1
+  },
+  "APV-8-1": {
+    "title": "제8조(결재선의 계산)",
+    "prose": "결재선은 다음 각 호의 순서로 계산한다.\n1. 기안자의 소속 계통에서 **기안자보다 위에 있는 직책자**를 아래에서 위로 늘어놓는다. 기안자에게 직책이 없으면 소속 팀의 팀장부터, 기안자가 팀장이면 그 본부의 본부장부터, 기안자가 본부장이면 대표이사부터 시작한다.\n2. 제5조로 총액 단계를 구한다.\n3. 제5조로 한도 적용 금액 단계를 구하고, 제7조의 상향 사유가 있으면 그 단계를 한 단계 올린다.\n4. 제7조 제4항에 따라 제2호와 제3호 중 높은 단계를 기준 단계로 한다.\n5. 정산 문서이고 그 출장에 사전승인 문서가 있으면 제7조의2에 따라 기준 단계를 사전승인 문서의 전결권자의 단계 아래로 내리지 않는다. 그 결과를 최종 단계로 한다.\n6. 제1호의 목록에서 최종 단계 이상인 직책자 중 **가장 아래에 있는 사람**을 전결권자로 한다.\n7. 결재선은 제1호 목록의 처음부터 전결권자까지로 한다.",
+    "path": "docs/company/approval-matrix.md",
+    "line": 167,
+    "block": "clause: APV-8-1\nkind: algorithm\nname: 결재선 계산\nsteps:\n  - {step: 1, name: chain, value: \"기안자 소속 계통에서 기안자보다 상위인 직책자 목록(아래에서 위로)\"}\n  - {step: 2, name: total_step, from: APV-5-2, input: 총액}\n  - {step: 3, name: limit_step, from: APV-5-2, input: 한도 적용 금액}\n  - {step: 4, name: raised_limit_step, value: \"min(limit_step + 1, 대표이사) if APV-7-1 else limit_step\", from: APV-7-1}\n  - {step: 5, name: base_step, value: \"max(total_step, raised_limit_step)\", from: APV-7-4}\n  - {step: 6, name: final_step, value: \"max(base_step, 사전승인 전결권자의 단계) if 정산 and 사전승인 문서 있음 else base_step\", from: APV-7.2-1}\n  - {step: 7, name: approver, value: \"chain 중 level >= final_step 인 첫 사람\"}\n  - {step: 8, name: line, value: \"chain 의 처음부터 approver 까지\"}\nself_approval: forbidden\nrefs: [APV-5-2, APV-7-1, APV-7-4, APV-7.2-1, APV-3-4]",
+    "edition": 1
+  },
+  "APV-8-2": {
+    "title": "제8조(결재선의 계산)",
+    "prose": "제1항 제1호에 따라 **기안자 본인은 자기 문서의 결재자가 되지 않는다.** 기안자가 전결 단계에 해당하는 직책을 갖고 있으면 그 위 직책자가 전결권자가 된다.",
+    "path": "docs/company/approval-matrix.md",
+    "line": 176,
+    "block": "",
+    "edition": 1
+  },
+  "APV-9-2": {
+    "title": "제9조(재무합의)",
+    "prose": "재무합의자는 아래 블록과 같고, 순서대로 합의한다.",
+    "path": "docs/company/approval-matrix.md",
+    "line": 207,
+    "block": "clause: APV-9-2\nkind: table\nname: 재무합의자\ninput: 청구 총액   # 여비로 청구한 금액의 합계. 한도 초과 청구분을 포함한다\ncurrency: KRW\nsequence:\n  - {단계: 1, 재무합의자: 재무팀 담당자, 조건: 항상}\n  - {단계: 2, 재무합의자: 재무팀장, 조건: {gt: 5000000}}",
+    "edition": 1
+  },
+  "APV-9-3": {
+    "title": "제9조(재무합의)",
+    "prose": "재무합의의 성질은 아래 블록과 같다. 이 세 값은 고정 상수가 아니라 **드러낸 설정값**이며, 값이 있는 자리는 이 조항이다.",
+    "path": "docs/company/approval-matrix.md",
+    "line": 220,
+    "block": "clause: APV-9-3\nkind: rule\nname: 재무합의의 성질\nsequential: true          # 재무합의자가 둘이면 순서대로\nblocking: true            # 동의해야 다음 단계로 간다\nreject_always_allowed: true  # 반려 권한을 설정으로 끌 수 없다\nexposed_setting: true\nsource: ADR-0001",
+    "edition": 1
+  },
+  "PRC-10-1": {
+    "title": "제10조(정산 기안 기한)",
+    "prose": "정산은 복귀일부터 아래 블록에 적힌 영업일 수 이내에 기안한다.",
+    "path": "docs/company/travel-procedure.md",
+    "line": 166,
+    "block": "clause: PRC-10-1\nkind: deadline\nname: 정산 기안 기한\nanchor: 복귀일\ndirection: after\nunit: 영업일\nvalue: 10\nrefs: [PRC-3-3]",
+    "edition": 1
+  },
+  "PRC-12-1": {
+    "title": "제12조(사내 증빙 제출 의무)",
+    "prose": "일비를 제외한 **모든 청구 항목**에는 지출 사실과 내용을 보이는 문서를 첨부한다. 숙박은 숙박 명세서, 항공은 전자항공권과 탑승권, 철도·대중교통은 승차권 또는 이용 내역, 등록비는 등록 확인서로 한다.",
+    "path": "docs/company/travel-procedure.md",
+    "line": 196,
+    "block": "",
+    "edition": 1
+  },
+  "PRC-13-1": {
+    "title": "제13조(법정 판정이 `판정 불가`인 지출)",
+    "prose": "법정 증빙 수취 의무의 판정이 `판정 불가`인 지출은 **그 지출의 대사 결과로 처리를 가른다.** 대사 결과가 `대사 완료`인 지출은 **사내 처리에서 `의무 있음`으로 보고** 제2항과 제3항에 따르며, `대사 완료`가 아닌 모든 지출은 제4항과 제5항에 따른다. **증빙에서 읽어낸 결제수단은 이 분기에 쓰지 않는다.** 이 간주와 분기는 사내 처리의 기준일 뿐이며 법정 판정 값을 바꾸지 않는다.",
+    "path": "docs/company/travel-procedure.md",
+    "line": 215,
+    "block": "clause: PRC-13-1\nkind: rule\nname: 판정 불가의 사내 처리\ninput: [법정 판정, 대사 결과]\nvalues: [의무 있음, 의무 면제, 판정 불가]\ninternal_treatment:\n  의무 있음: 적격증빙 확인\n  의무 면제: 사내 증빙 의무만 적용\n  판정 불가:\n    branch_on: 대사 결과              # #18의 대사 상태 어휘를 이름으로만 쓴다\n    not_branch_on: [증빙에서 읽어낸 결제수단]\n    대사 완료: {treat_as: 의무 있음, then: [PRC-13-2, PRC-13-3], blocks_settlement: false}\n    그 밖: {then: [PRC-13-4, PRC-13-5]}   # 대사 완료가 아닌 모든 지출\nchanges_legal_value: false\nrefs: [PRC-12-2, PRC-13-2, PRC-13-3, PRC-13-4, PRC-13-5, APV-10-1]",
+    "edition": 1
+  },
+  "PRC-13-2": {
+    "title": "제13조(법정 판정이 `판정 불가`인 지출)",
+    "prose": "제1항에 따라 `의무 있음`으로 보는 지출에 적격증빙이 없으면 재무합의자는 그 지출을 **적격증빙을 받지 못한 지출로 기록한다.**",
+    "path": "docs/company/travel-procedure.md",
+    "line": 217,
+    "block": "",
+    "edition": 1
+  },
+  "PRC-13-3": {
+    "title": "제13조(법정 판정이 `판정 불가`인 지출)",
+    "prose": "제1항의 간주를 이유로 정산을 반려하지 않는다. 법령의 불확실성은 출장자가 해소할 수 있는 것이 아니다.",
+    "path": "docs/company/travel-procedure.md",
+    "line": 219,
+    "block": "",
+    "edition": 1
+  },
+  "PRC-13-5": {
+    "title": "제13조(법정 판정이 `판정 불가`인 지출)",
+    "prose": "제4항의 질문 뒤에도 `판정 불가`가 남으면, 재무합의자는 **제출된 자료가 실제 지출과 그 지출의 업무 관련성을 충분히 뒷받침하는 경우**에만 미확인 쟁점 · 검토 자료 · 사내 지급 인정 이유 · 책임자를 남기고 동의한다. 뒷받침할 근거가 없으면 반려한다. 재무합의자가 이 항에서 판단하는 것은 **근거의 충분성**이며, 출장과 지출의 업무상 필요 자체는 판단하지 않는다 — 그것은 결재권자가 본다(`APV-10-2` 제1호). 어느 경우에도 `판정 불가`를 `의무 면제`로 바꾸지 않는다.",
+    "path": "docs/company/travel-procedure.md",
+    "line": 241,
+    "block": "clause: PRC-13-5\nkind: rule\ndiscretion: true\ndiscretion_basis: 제출된 자료가 실제 지출과 그 지출의 업무 관련성을 충분히 뒷받침하는 경우\npreconditions:\n  - 대사 결과가 대사 완료가 아닐 것\n  - 제4항의 질문 뒤에도 판정 불가가 남았을 것\nevidence: [미확인 쟁점, 검토 자료]\nrecord_on_consent: [미확인 쟁점, 검토 자료, 사내 지급 인정 이유, 책임자]\neffect: {뒷받침됨: 동의, 뒷받침되지 않음: 반려}\nchanges_legal_value: false\nfacts_to_ask:            # 물어볼 사실\n  - 판정 불가를 남긴 부족한 사실\n  - 실제 지출을 보이는 다른 자료\n  - 그 지출의 업무 관련성을 보이는 자료\ndecided_by: 재무합의자     # 판단 책임자. APV-10-1 제4호. 근거의 충분성만 — 업무상 필요 자체는 결재권자(APV-10-2 제1호)\nmust_not_auto_decide:    # 금지된 자동 확정\n  - 사내 지급 동의\n  - 법정 판정 값의 변경(판정 불가를 의무 면제로 바꾸는 것)\n  - 이 동의를 출장과 지출의 업무상 필요에 대한 판단으로 보는 것(APV-10-2 제1호)\nrefs: [PRC-13-4, APV-9-5, APV-10-1, APV-10-2]",
+    "edition": 1
+  },
+  "PRC-14-1": {
+    "title": "제14조(결재 처리 기한)",
+    "prose": "결재자와 재무합의자는 문서가 자기 차례에 도달한 날부터 아래 블록의 영업일 수 이내에 승인(동의) · 반려 · 보류 중 하나를 한다.",
+    "path": "docs/company/travel-procedure.md",
+    "line": 269,
+    "block": "clause: PRC-14-1\nkind: deadline\nname: 결재 처리 기한\nanchor: 자기 차례 도달일\ndirection: after\nunit: 영업일\nvalue: 3\nper: 결재자 1인\nrefs: [PRC-3-3, PRC-3-5]",
+    "edition": 1
+  },
+  "PRC-16-1": {
+    "title": "제16조(지급)",
+    "prose": "정산이 완료되면 회사는 그 완료일부터 아래 블록의 영업일 수 이내에 지급한다.",
+    "path": "docs/company/travel-procedure.md",
+    "line": 295,
+    "block": "clause: PRC-16-1\nkind: deadline\nname: 지급 기한\nanchor: 정산 완료일\ndirection: after\nunit: 영업일\nvalue: 5",
+    "edition": 1
+  },
+  "PRC-3-3": {
+    "title": "제3조(기한의 계산)",
+    "prose": "**\"기준일의 N영업일 전\"**은 기준일의 전날부터 거꾸로 세어 N번째 영업일을 말한다. **\"기준일부터 N영업일 이내\"**는 기준일의 다음 날부터 세어 N번째 영업일까지를 말한다.",
+    "path": "docs/company/travel-procedure.md",
+    "line": 64,
+    "block": "",
+    "edition": 1
+  },
+  "PRC-3-5": {
+    "title": "제3조(기한의 계산)",
+    "prose": "하나의 문서에 둘 이상의 기한이 걸리면 **가장 이른 기한**을 그 문서의 기한으로 한다.",
+    "path": "docs/company/travel-procedure.md",
+    "line": 68,
+    "block": "",
+    "edition": 1
+  },
+  "PRC-3-6": {
+    "title": "제3조(기한의 계산)",
+    "prose": "이 규정의 **모든 기한**은 기한일의 아래 블록에 적힌 시각에 끝난다. 기안 · 결재 처리 · 지급의 기한에 같은 시각을 쓴다. 제출과 처리가 기한 안인지는 **대한민국 표준시**로 판정하며, 출장지에 체류하는 중의 제출도 같다.",
+    "path": "docs/company/travel-procedure.md",
+    "line": 70,
+    "block": "clause: PRC-3-6\nkind: rule\nname: 기한의 마감 시각\ncutoff: \"18:00\"\ntimezone: 대한민국 표준시   # Asia/Seoul\napplies_to: 이 규정의 모든 기한\ndeadlines: [PRC-5-1, PRC-6-1, PRC-10-1, PRC-14-1, PRC-16-1]\nrefs: [PRC-3-4, PRC-5-1, PRC-6-1, PRC-10-1, PRC-14-1, PRC-16-1]",
+    "edition": 1
+  },
+  "PRC-5-1": {
+    "title": "제5조(사전승인 기안 기한)",
+    "prose": "사전승인은 출발일의 아래 블록에 적힌 영업일 수 전까지 기안한다.",
+    "path": "docs/company/travel-procedure.md",
+    "line": 95,
+    "block": "clause: PRC-5-1\nkind: deadline\nname: 사전승인 기안 기한\nanchor: 출발일\ndirection: before\nunit: 영업일\nvalues:\n  해외 사업장 방문: 10\n  해외 전시회 참가: 10\n  국내 출장: 2\nrefs: [PRC-3-3]",
+    "edition": 1
+  },
+  "PRC-6-1": {
+    "title": "제6조(사전승인 완료 기한)",
+    "prose": "사전승인의 결재는 출발일의 아래 블록에 적힌 영업일 수 전까지 완료되어야 한다. 이 기한은 **예약에 필요한 기간을 남기기 위한 것**이다.",
+    "path": "docs/company/travel-procedure.md",
+    "line": 113,
+    "block": "clause: PRC-6-1\nkind: deadline\nname: 사전승인 완료 기한\nanchor: 출발일\ndirection: before\nunit: 영업일\nvalues:\n  해외 사업장 방문: 5\n  해외 전시회 참가: 5\n  국내 출장: 1\nrefs: [PRC-3-3, PRC-3-5]",
+    "edition": 1
+  },
+  "TRV-1-1": {
+    "title": "제1조(목적)",
+    "prose": "이 규정은 임직원의 출장에 대하여 회사가 지급하는 **여비의 항목과 한도, 그 계산 방법**을 정한다.",
+    "path": "docs/company/travel-policy.md",
+    "line": 26,
+    "block": "",
+    "edition": 1
+  },
+  "TRV-1-2": {
+    "title": "제1조(목적)",
+    "prose": "이 규정의 한도는 회사가 **업무수행에 통상 필요하다고 인정하는 금액을 미리 계산해 둔 기준**이다. 개별 지출이 이 기준을 넘는 경우의 처리는 제12조와 제13조가 정한다.",
+    "path": "docs/company/travel-policy.md",
+    "line": 28,
+    "block": "",
+    "edition": 1
+  },
+  "TRV-2-1": {
+    "title": "제2조(적용 범위)",
+    "prose": "이 규정은 국내 근무 임직원의 출장에 적용한다. 해외 사업장 근무자가 본사로 오는 이동에는 적용하지 않는다.",
+    "path": "docs/company/travel-policy.md",
+    "line": 32,
+    "block": "",
+    "edition": 1
+  },
+  "TRV-2-2": {
+    "title": "제2조(적용 범위)",
+    "prose": "이 규정은 여비만 정한다. **결재선과 전결권자는 전결표(`APV`)가, 절차와 기한은 출장관리규정(`PRC`)이 정한다.** 한 사실을 두 규정이 함께 정하지 않는다.",
+    "path": "docs/company/travel-policy.md",
+    "line": 34,
+    "block": "",
+    "edition": 1
+  },
+  "TRV-2-3": {
+    "title": "제2조(적용 범위)",
+    "prose": "이 규정이 쓰는 출장·결재 용어는 저장소 용어집(`CONTEXT.md`)의 정의를 따른다. 이 규정이 새로 쓰는 말은 제3조에서 정의한다.",
+    "path": "docs/company/travel-policy.md",
+    "line": 36,
+    "block": "",
+    "edition": 1
+  },
+  "TRV-3-1": {
+    "title": "제3조(정의)",
+    "prose": "**출장 유형**은 아래 블록의 세 가지다. 하나의 출장은 하나의 유형만 갖는다. 두 유형의 일정을 이어서 수행하는 경우에는 각각 별도의 출장으로 기안하며, 두 출장을 잇는 구간의 교통비는 뒤 출장의 여비로 한다.",
+    "path": "docs/company/travel-policy.md",
+    "line": 40,
+    "block": "clause: TRV-3-1\nkind: enum\nname: 출장 유형\nvalues: [해외 사업장 방문, 해외 전시회 참가, 국내 출장]\nnote: 해외 거래처 방문은 이 회사의 출장 유형이 아니다",
+    "edition": 1
+  },
+  "TRV-3-2": {
+    "title": "제3조(정의)",
+    "prose": "**출장 일수**는 출발일부터 복귀일까지의 달력 일수로 하고, 출발일과 복귀일은 한국 시간 기준 날짜로 한다.",
+    "path": "docs/company/travel-policy.md",
+    "line": 50,
+    "block": "",
+    "edition": 1
+  },
+  "TRV-3-3": {
+    "title": "제3조(정의)",
+    "prose": "**업무일**은 다음 각 호의 날이고, **비업무일**은 출장 일수 중 업무일이 아닌 날이다.\n1. 출장 문서에 그날의 업무 수행 내용이 적힌 날\n2. 출발일과 복귀일\n3. 업무일과 업무일 사이에 낀 회사의 휴일",
+    "path": "docs/company/travel-policy.md",
+    "line": 52,
+    "block": "",
+    "edition": 1
+  },
+  "TRV-3-4": {
+    "title": "제3조(정의)",
+    "prose": "**지역 등급**은 아래 블록과 같다. 항공 일정상 경유지에서 숙박하는 경우 그 숙박에는 `가` 등급을 적용한다.",
+    "path": "docs/company/travel-policy.md",
+    "line": 57,
+    "block": "clause: TRV-3-4\nkind: table\nname: 지역 등급\nvalues:\n  가: [독일, 일본]\n  나: [멕시코]\n  다: [베트남]\n  국내: [대한민국]\ntransit_stay_grade: 가",
+    "edition": 1
+  },
+  "TRV-3-5": {
+    "title": "제3조(정의)",
+    "prose": "**지출일**은 증빙에 적힌 거래 일자로 한다. 카드로 결제한 지출은 카드 매출전표의 거래 일자로 한다.",
+    "path": "docs/company/travel-policy.md",
+    "line": 71,
+    "block": "",
+    "edition": 1
+  },
+  "TRV-3-6": {
+    "title": "제3조(정의)",
+    "prose": "**동행**은 같은 출장 목적으로 같은 일정의 출장을 수행하는 둘 이상의 출장자 사이의 관계다. 동행자는 각자 기안하고 각자 정산한다.",
+    "path": "docs/company/travel-policy.md",
+    "line": 73,
+    "block": "",
+    "edition": 1
+  },
+  "TRV-3-7": {
+    "title": "제3조(정의)",
+    "prose": "**한도 적용 금액**은 여비 청구액 중 이 규정의 한도를 넘지 않는 부분의 합계다. 제12조의 한도 초과 청구분은 한도 적용 금액에 넣지 않는다.",
+    "path": "docs/company/travel-policy.md",
+    "line": 75,
+    "block": "",
+    "edition": 1
+  },
+  "TRV-4-1": {
+    "title": "제4조(여비의 항목)",
+    "prose": "여비는 **일비 · 숙박비 · 교통비 · 등록비** 네 항목으로 한다. 이 네 항목에 들지 않는 지출은 여비가 아니며 제10조가 정한다.",
+    "path": "docs/company/travel-policy.md",
+    "line": 83,
+    "block": "",
+    "edition": 1
+  },
+  "TRV-4-2": {
+    "title": "제4조(여비의 항목)",
+    "prose": "일비는 증빙 없이 정액으로 지급하고, 숙박비 · 교통비 · 등록비는 증빙에 대조하여 실비로 지급한다.",
+    "path": "docs/company/travel-policy.md",
+    "line": 85,
+    "block": "",
+    "edition": 1
+  },
+  "TRV-5-1": {
+    "title": "제5조(일비)",
+    "prose": "일비는 **업무일 하루마다** 지급하며 비업무일에는 지급하지 않는다. 일비에는 출장자 본인의 식대와 통신비가 들어 있다.",
+    "path": "docs/company/travel-policy.md",
+    "line": 89,
+    "block": "",
+    "edition": 1
+  },
+  "TRV-5-2": {
+    "title": "제5조(일비)",
+    "prose": "일비의 단가는 출장자의 **직급**과 **지역 등급**에 따라 아래 블록과 같다.",
+    "path": "docs/company/travel-policy.md",
+    "line": 91,
+    "block": "clause: TRV-5-2\nkind: table\nname: 일비 단가\ninput: [지역 등급, 직급]\ncurrency: KRW\nper: 업무일 1일\ngrades: [사원, 주임, 대리, 과장, 차장, 부장, 임원]\nvalues:\n  가: [80000, 80000, 80000, 90000, 90000, 100000, 120000]\n  나: [70000, 70000, 70000, 80000, 80000, 90000, 110000]\n  다: [60000, 60000, 60000, 70000, 70000, 80000, 100000]\n  국내: [40000, 40000, 40000, 40000, 40000, 50000, 60000]",
+    "edition": 1
+  },
+  "TRV-5-3": {
+    "title": "제5조(일비)",
+    "prose": "출장자 본인의 식대를 법인카드로 결제한 경우 그 금액을 그 출장의 일비 합계에서 뺀다. 뺀 결과가 음수이면 일비를 지급하지 않으며, 남은 금액을 따로 반환받지 않는다.",
+    "path": "docs/company/travel-policy.md",
+    "line": 108,
+    "block": "",
+    "edition": 1
+  },
+  "TRV-5-4": {
+    "title": "제5조(일비)",
+    "prose": "출장자와 동행자가 아닌 사람이 함께한 식사의 비용은 일비에서 빼지 않는다. 그 지출은 여비가 아니며 제10조에 따라 분리한다.",
+    "path": "docs/company/travel-policy.md",
+    "line": 110,
+    "block": "",
+    "edition": 1
+  },
+  "TRV-6-1": {
+    "title": "제6조(숙박비)",
+    "prose": "숙박비는 실제로 숙박한 밤에 대하여 실비로 지급한다. 숙박한 밤은 **체크인한 날**에 귀속시키며, 비업무일에 체크인한 밤의 숙박비는 지급하지 않는다.",
+    "path": "docs/company/travel-policy.md",
+    "line": 114,
+    "block": "",
+    "edition": 1
+  },
+  "TRV-6-3": {
+    "title": "제6조(숙박비)",
+    "prose": "숙박 요금에 붙는 세금과 봉사료는 숙박비에 포함한다. 조식이 포함된 요금은 조식을 분리하지 않는다.",
+    "path": "docs/company/travel-policy.md",
+    "line": 134,
+    "block": "",
+    "edition": 1
+  },
+  "TRV-6-4": {
+    "title": "제6조(숙박비)",
+    "prose": "숙박 증빙이 없는 밤에는 숙박비를 지급하지 않는다.",
+    "path": "docs/company/travel-policy.md",
+    "line": 136,
+    "block": "",
+    "edition": 1
+  },
+  "TRV-7-1": {
+    "title": "제7조(동행자의 숙박비 상한)",
+    "prose": "직급이 다른 출장자가 동행하면서 **업무상 같은 숙소에 투숙할 필요가 있는 경우**에는, 하위 직급자의 숙박비 상한에 동행하는 상위 직급자의 상한을 적용할 수 있다.",
+    "path": "docs/company/travel-policy.md",
+    "line": 140,
+    "block": "clause: TRV-7-1\nkind: rule\ndiscretion: true\ndiscretion_basis: 업무상 같은 숙소에 투숙할 필요가 있는 경우\npreconditions:\n  - 동행 관계가 문서에 적혀 있을 것\n  - 숙박 증빙의 숙소가 동일할 것\nevidence: [동행자 목록, 숙소명, 두 직급의 상한 차이]\neffect: 하위 직급자의 상한을 동행하는 상위 직급자의 상한으로 대체\nfacts_to_ask:            # 물어볼 사실\n  - 같은 숙소에서 함께 수행한 업무 일정\n  - 하위 직급자의 상한 안에서 묵을 숙소를 쓰지 않은 이유\ndecided_by: 결재권자       # 판단 책임자. APV-10-2 제3호\nmust_not_auto_decide:    # 금지된 자동 확정\n  - 업무상 같은 숙소에 투숙할 필요가 있었다는 판단\n  - 상위 직급자의 상한 적용\nrefs: [TRV-3-6, TRV-6-2, APV-10-2]",
+    "edition": 1
+  },
+  "TRV-7-2": {
+    "title": "제7조(동행자의 숙박비 상한)",
+    "prose": "제1항을 적용하려면 사전승인 또는 정산 문서에 동행자와 같은 숙소임이 적혀 있어야 한다.",
+    "path": "docs/company/travel-policy.md",
+    "line": 142,
+    "block": "",
+    "edition": 1
+  },
+  "TRV-8-3": {
+    "title": "제8조(교통비)",
+    "prose": "철도의 좌석 등급은 아래 블록과 같고, 그 등급의 실비로 한다.",
+    "path": "docs/company/travel-policy.md",
+    "line": 188,
+    "block": "clause: TRV-8-3\nkind: table\nname: 철도 좌석 등급\ninput: [직급, 노선 구분]\nrows:\n  - grades: [임원]\n    국내: 특실\n    해외: 1등석\n  - grades: [사원, 주임, 대리, 과장, 차장, 부장]\n    국내: 일반실\n    해외: 2등석",
+    "edition": 1
+  },
+  "TRV-8-4": {
+    "title": "제8조(교통비)",
+    "prose": "출장지에서의 이동은 대중교통과 택시의 실비로 한다. 렌터카는 사전승인 문서에 이용 사실을 적은 경우에만 실비로 하며, 유류비와 주차비를 포함한다.",
+    "path": "docs/company/travel-policy.md",
+    "line": 204,
+    "block": "",
+    "edition": 1
+  },
+  "TRV-8-5": {
+    "title": "제8조(교통비)",
+    "prose": "국내 출장의 이동 수단은 대중교통과 회사 업무용 차량으로 한정한다. 출장자 본인 소유 차량은 이 규정의 교통비 대상이 아니다.",
+    "path": "docs/company/travel-policy.md",
+    "line": 206,
+    "block": "",
+    "edition": 1
+  },
+  "TRV-8-6": {
+    "title": "제8조(교통비)",
+    "prose": "주거지와 공항·역 사이의 왕복 교통비는 실비로 한다.",
+    "path": "docs/company/travel-policy.md",
+    "line": 208,
+    "block": "",
+    "edition": 1
+  },
+  "TRV-9-1": {
+    "title": "제9조(등록비)",
+    "prose": "등록비는 사전승인 문서에 적은 전시회의 **참가 등록 요금** 실비로 한다.",
+    "path": "docs/company/travel-policy.md",
+    "line": 212,
+    "block": "",
+    "edition": 1
+  },
+  "TRV-9-2": {
+    "title": "제9조(등록비)",
+    "prose": "전시회 부스 임차료 · 장치비 · 전시품 운송비는 여비가 아니다.",
+    "path": "docs/company/travel-policy.md",
+    "line": 214,
+    "block": "",
+    "edition": 1
+  },
+  "TRV-10-1": {
+    "title": "제10조(여비가 아닌 지출)",
+    "prose": "다음 각 호는 여비가 아니다. 정산에 섞여 있으면 여비 정산에서 **분리**하고, 분리한 지출의 처리는 이 규정이 정하지 않는다.\n1. 기업업무추진비에 해당하는 지출\n2. 전시회 부스 임차료 · 장치비 · 전시품 운송비\n3. 출장자와 동행자가 아닌 사람을 위한 식대\n4. 개인 용도의 지출\n5. 여권 발급 수수료, 사증(비자) 수수료, 출장자 보험료",
+    "path": "docs/company/travel-policy.md",
+    "line": 218,
+    "block": "",
+    "edition": 1
+  },
+  "TRV-10-2": {
+    "title": "제10조(여비가 아닌 지출)",
+    "prose": "제1항 제5호의 비용은 총무팀이 직접 집행하며, 출장자가 지출하지 않는다.",
+    "path": "docs/company/travel-policy.md",
+    "line": 225,
+    "block": "",
+    "edition": 1
+  },
+  "TRV-11-1": {
+    "title": "제11조(한도의 원칙과 본인 부담)",
+    "prose": "여비는 이 규정의 한도 안에서 지급하고, 한도를 넘은 부분은 출장자 본인이 부담한다.",
+    "path": "docs/company/travel-policy.md",
+    "line": 233,
+    "block": "",
+    "edition": 1
+  },
+  "TRV-11-2": {
+    "title": "제11조(한도의 원칙과 본인 부담)",
+    "prose": "본인 부담액을 회사가 먼저 결제한 경우 출장자는 회사에 반환한다. 같은 정산에서 지급할 금액과 반환할 금액은 서로 뺀 차액으로 정산한다. **반환의 방법과 시기는 이 규정이 정하지 않는다.**",
+    "path": "docs/company/travel-policy.md",
+    "line": 235,
+    "block": "",
+    "edition": 1
+  },
+  "TRV-11-3": {
+    "title": "제11조(한도의 원칙과 본인 부담)",
+    "prose": "본인 부담액은 여비로 지급하지 않으므로 출장자에게 지급한 금액에 넣지 않는다.",
+    "path": "docs/company/travel-policy.md",
+    "line": 237,
+    "block": "",
+    "edition": 1
+  },
+  "TRV-12-2": {
+    "title": "제12조(한도 초과 청구)",
+    "prose": "한도 초과 청구가 있는 문서는 전결표 `APV-5`와 `APV-7`에 따라 **결재권자가 올라간다.** 초과분의 지급 여부는 올라간 결재권자가 정한다.",
+    "path": "docs/company/travel-policy.md",
+    "line": 247,
+    "block": "",
+    "edition": 1
+  },
+  "TRV-12-4": {
+    "title": "제12조(한도 초과 청구)",
+    "prose": "한도 초과 청구가 인정되지 않으면 그 초과분은 제11조의 본인 부담이 된다.",
+    "path": "docs/company/travel-policy.md",
+    "line": 251,
+    "block": "",
+    "edition": 1
+  },
+  "TRV-13-1": {
+    "title": "제13조(사적 일정의 병행)",
+    "prose": "출장 기간에 사적 일정을 겸한 경우 출장 일수를 업무일과 비업무일로 나눈다(`TRV-3-3`). **비업무일의 일비와 숙박비는 지급하지 않는다.**",
+    "path": "docs/company/travel-policy.md",
+    "line": 277,
+    "block": "",
+    "edition": 1
+  },
+  "TRV-13-2": {
+    "title": "제13조(사적 일정의 병행)",
+    "prose": "날짜에 귀속시킬 수 있는 지출은 그 날짜의 구분에 따라 처리하고, 날짜에 귀속시킬 수 없는 지출은 **업무일과 비업무일의 비율로 안분**하여 비업무일 몫을 본인 부담으로 한다.",
+    "path": "docs/company/travel-policy.md",
+    "line": 279,
+    "block": "",
+    "edition": 1
+  },
+  "TRV-13-3": {
+    "title": "제13조(사적 일정의 병행)",
+    "prose": "출발지와 업무 수행 장소 사이의 **왕복교통비**는, 출장의 직접 동기가 업무수행인 경우 사적 일정을 겸하더라도 제2항의 안분에서 뺀다. 다만 사적 일정 때문에 늘어난 경로의 비용은 본인이 부담하며, 그 금액은 사전승인 문서에 첨부한 업무 수행 장소 왕복 견적과의 차액으로 한다.",
+    "path": "docs/company/travel-policy.md",
+    "line": 281,
+    "block": "",
+    "edition": 1
+  },
+  "TRV-13-4": {
+    "title": "제13조(사적 일정의 병행)",
+    "prose": "사적 일정이 출장 기간의 대부분을 차지하는 등 **출장의 직접 동기를 업무수행으로 보기 어려운 경우**에는 왕복교통비도 제2항에 따라 안분한다.",
+    "path": "docs/company/travel-policy.md",
+    "line": 283,
+    "block": "clause: TRV-13-4\nkind: rule\ndiscretion: true\ndiscretion_basis: 출장의 직접 동기를 업무수행으로 보기 어려운 경우\nevidence: [업무일 수, 비업무일 수, 비업무일 비율, 날짜별 업무 수행 내용, 출장 목적]\neffect: 왕복교통비를 업무일·비업무일 비율로 안분\nnon_deterministic_by_design: true\nfacts_to_ask:            # 물어볼 사실\n  - 출장 일정과 사적 일정 중 어느 쪽이 먼저 정해졌는지\n  - 사적 일정이 없었어도 그 출장이 필요했는지\ndecided_by: 결재권자       # 판단 책임자. APV-10-2 제3호\nmust_not_auto_decide:    # 금지된 자동 확정\n  - 출장의 직접 동기를 업무수행으로 보기 어렵다는 판단\n  - 왕복교통비의 안분\nrefs: [TRV-13-2, TRV-13-3, APV-10-2]",
+    "edition": 1
+  },
+  "TRV-13-5": {
+    "title": "제13조(사적 일정의 병행)",
+    "prose": "사적 일정은 사전승인 문서에 적는다. 적지 않은 사적 일정이 정산에서 드러난 경우에도 이 조를 적용한다.",
+    "path": "docs/company/travel-policy.md",
+    "line": 285,
+    "block": "",
+    "edition": 1
+  },
+  "TRV-13-6": {
+    "title": "제13조(사적 일정의 병행)",
+    "prose": "이 조는 국내 출장에도 적용한다.",
+    "path": "docs/company/travel-policy.md",
+    "line": 287,
+    "block": "",
+    "edition": 1
+  },
+  "TRV-14-2": {
+    "title": "제14조(외화의 원화 환산)",
+    "prose": "지출일에 매매기준율이 고시되지 않은 경우에는 그 직전 고시일의 매매기준율로 환산한다.",
+    "path": "docs/company/travel-policy.md",
+    "line": 324,
+    "block": "",
+    "edition": 1
+  },
+  "TRV-14-3": {
+    "title": "제14조(외화의 원화 환산)",
+    "prose": "이 조의 환산액은 **이 규정의 한도 대조와 출장자에게 지급할 금액의 산정**에 쓴다. 회계 장부에 적을 원화 금액은 이 규정이 정하지 않는다.",
+    "path": "docs/company/travel-policy.md",
+    "line": 326,
+    "block": "",
+    "edition": 1
+  },
+  "TRV-15-1": {
+    "title": "제15조(매매기준율)",
+    "prose": "매매기준율은 「외국환거래규정」에 따른 매매기준율 또는 재정된 매매기준율로 한다.",
+    "path": "docs/company/travel-policy.md",
+    "line": 330,
+    "block": "",
+    "edition": 1
+  },
+  "TRV-15-2": {
+    "title": "제15조(매매기준율)",
+    "prose": "매매기준율의 정의는 **지출일에 시행 중인 정의**를 따른다. 정의가 바뀐 날을 앞뒤로 걸친 출장은 지출마다 그 지출일의 정의를 적용한다.",
+    "path": "docs/company/travel-policy.md",
+    "line": 332,
+    "block": "clause: TRV-15-2\nkind: reference\nexternal: 외국환거래규정 제1-2조 제7호\neditions:\n  - effective_until: 2026-12-31\n    source_id: admRulSeq=2100000276526\n    note: 종전 정의. #15가 원문을 확인했다\n  - effective_from: 2027-01-01\n    source_id: admRulSeq=2100000281984\n    note: 개정 정의. 부칙으로 시행이 유예되었다\nclause_level_edition: true",
+    "edition": 1
+  },
+  "APV-1-1": {
+    "title": "제1조(목적)",
+    "prose": "이 표는 출장 문서의 **결재선과 전결권자**를 정한다. 결재선은 사람이 그때그때 고르지 않고 이 표로 계산한다.",
+    "path": "docs/company/approval-matrix.md",
+    "line": 25,
+    "block": "",
+    "edition": 1
+  },
+  "APV-1-2": {
+    "title": "제1조(목적)",
+    "prose": "전결권자의 승인이 그 문서의 마지막 승인이며, 전결권자 뒤에는 결재자가 없다.",
+    "path": "docs/company/approval-matrix.md",
+    "line": 27,
+    "block": "",
+    "edition": 1
+  },
+  "APV-2-1": {
+    "title": "제2조(적용 범위와 축)",
+    "prose": "이 표는 출장 사전승인 문서와 출장 정산 문서에만 적용한다. 구매·인사 등 다른 문서의 전결은 이 표가 정하지 않는다.",
+    "path": "docs/company/approval-matrix.md",
+    "line": 31,
+    "block": "",
+    "edition": 1
+  },
+  "APV-2-2": {
+    "title": "제2조(적용 범위와 축)",
+    "prose": "이 표의 입력은 **문서유형 · 출장 유형 · 총액과 한도 적용 금액 · 상향 사유 · 기안자의 소속과 직책**이고, 정산 문서이면 **그 출장 사전승인 문서의 전결권자**가 더해진다.",
+    "path": "docs/company/approval-matrix.md",
+    "line": 33,
+    "block": "clause: APV-2-2\nkind: enum\nname: 전결 판정의 입력\ninputs: [문서유형, 출장 유형, 총액, 한도 적용 금액, 상향 사유, 기안자 소속, 기안자 직책, 사전승인 전결권자]\nexcluded_inputs: [직급, 출장 일수]\nexcluded_reason: 여비 한도는 직급 축, 전결권은 직책 축. 출장 일수 대신 출장 유형의 행이 시작 단계를 정한다\nrefs: [APV-5-1, APV-7-1, APV-7.2-1, TRV-3-7]",
+    "edition": 1
+  },
+  "APV-2-3": {
+    "title": "제2조(적용 범위와 축)",
+    "prose": "**이 표는 기안자의 직급을 입력으로 쓰지 않는다.** 전결권은 직책에만 따른다. 직급이 결재선에 닿는 경로는 여비규정의 한도를 통한 제7조의 상향 하나뿐이다.",
+    "path": "docs/company/approval-matrix.md",
+    "line": 35,
+    "block": "",
+    "edition": 1
+  },
+  "APV-3-1": {
+    "title": "제3조(직책과 조직 계통)",
+    "prose": "전결 단계는 **팀장 · 본부장 · 대표이사** 세 단계다.",
+    "path": "docs/company/approval-matrix.md",
+    "line": 49,
+    "block": "clause: APV-3-1\nkind: enum\nname: 전결 단계\nlevels:\n  팀장: 1\n  본부장: 2\n  대표이사: 3",
+    "edition": 1
+  },
+  "APV-3-2": {
+    "title": "제3조(직책과 조직 계통)",
+    "prose": "기술연구소의 장은 이 표에서 본부장으로 본다. 해외 사업장의 장은 팀장으로 본다.",
+    "path": "docs/company/approval-matrix.md",
+    "line": 61,
+    "block": "",
+    "edition": 1
+  },
+  "APV-3-3": {
+    "title": "제3조(직책과 조직 계통)",
+    "prose": "내부감사는 결재선에 서지 않는다. 내부감사의 권한은 따로 정한다.",
+    "path": "docs/company/approval-matrix.md",
+    "line": 63,
+    "block": "",
+    "edition": 1
+  },
+  "APV-3-4": {
+    "title": "제3조(직책과 조직 계통)",
+    "prose": "결재선은 기안자가 속한 조직의 계통(팀 → 본부 → 대표이사)을 따른다. 다른 계통의 직책자는 결재선에 서지 않는다.",
+    "path": "docs/company/approval-matrix.md",
+    "line": 65,
+    "block": "",
+    "edition": 1
+  },
+  "APV-4-1": {
+    "title": "제4조(문서유형)",
+    "prose": "이 표의 문서유형은 **사전승인**과 **정산** 둘이다.",
+    "path": "docs/company/approval-matrix.md",
+    "line": 69,
+    "block": "",
+    "edition": 1
+  },
+  "APV-4-2": {
+    "title": "제4조(문서유형)",
+    "prose": "정산 문서에는 제9조의 재무합의가 붙고, 사전승인 문서에는 붙지 않는다.",
+    "path": "docs/company/approval-matrix.md",
+    "line": 71,
+    "block": "",
+    "edition": 1
+  },
+  "APV-5-1": {
+    "title": "제5조(금액 기준)",
+    "prose": "금액 기준은 다음 두 금액으로 **각각** 전결 단계를 구한다. 사전승인 문서에서는 예상액으로, 정산 문서에서는 청구액으로 계산한다.\n1. **총액**: 여비로 청구하는 금액 전부의 합계. 한도를 넘어 청구하는 부분도 넣는다. 사전승인 문서에서는 예상 총액, 정산 문서에서는 청구 총액이라 한다. 이 금액으로 구한 단계를 **총액 단계**라 한다.\n2. **한도 적용 금액**: 여비규정 `TRV-3-7`의 한도 적용 금액. 이 금액으로 구한 단계를 **한도 적용 금액 단계**라 하며, 제7조의 상향은 이 단계에만 붙는다.",
+    "path": "docs/company/approval-matrix.md",
+    "line": 79,
+    "block": "",
+    "edition": 1
+  },
+  "APV-7-2": {
+    "title": "제7조(상향 사유)",
+    "prose": "올린 단계가 대표이사를 넘으면 대표이사로 한다.",
+    "path": "docs/company/approval-matrix.md",
+    "line": 119,
+    "block": "",
+    "edition": 1
+  },
+  "APV-7-3": {
+    "title": "제7조(상향 사유)",
+    "prose": "여비규정 `TRV-12-3`에 따라 정산에서 한도 초과 청구로 보지 않는 금액은 제1항 제1호의 사유가 아니다.",
+    "path": "docs/company/approval-matrix.md",
+    "line": 121,
+    "block": "",
+    "edition": 1
+  },
+  "APV-8-3": {
+    "title": "제8조(결재선의 계산)",
+    "prose": "직책자는 **기안 시점의 조직 정보**로 정한다.",
+    "path": "docs/company/approval-matrix.md",
+    "line": 178,
+    "block": "",
+    "edition": 1
+  },
+  "APV-8-4": {
+    "title": "제8조(결재선의 계산)",
+    "prose": "대표이사 본인의 출장은 이 표의 대상이 아니다.",
+    "path": "docs/company/approval-matrix.md",
+    "line": 180,
+    "block": "",
+    "edition": 1
+  },
+  "APV-9-1": {
+    "title": "제9조(재무합의)",
+    "prose": "재무합의는 **정산 문서에만** 붙으며, **기안자와 첫 결재자 사이**에 선다. 재무합의가 끝나기 전에는 결재선이 진행되지 않는다.",
+    "path": "docs/company/approval-matrix.md",
+    "line": 205,
+    "block": "",
+    "edition": 1
+  },
+  "APV-9-4": {
+    "title": "제9조(재무합의)",
+    "prose": "재무합의자가 그 문서의 기안자이면 그 단계는 다음 순서의 재무합의자가 맡고, 다음 순서가 없으면 그 단계를 두지 않는다.",
+    "path": "docs/company/approval-matrix.md",
+    "line": 233,
+    "block": "",
+    "edition": 1
+  },
+  "APV-9-5": {
+    "title": "제9조(재무합의)",
+    "prose": "재무합의자는 동의 · 반려 · 보류 중 하나를 한다.",
+    "path": "docs/company/approval-matrix.md",
+    "line": 235,
+    "block": "",
+    "edition": 1
+  },
+  "APV-10-1": {
+    "title": "제10조(검토 범위의 분담)",
+    "prose": "재무합의자는 다음을 본다.\n1. 증빙 제출 의무의 충족 여부(`PRC-12`)\n2. 법인카드 내역과 증빙의 대사 결과\n3. 외화 환산과 안분 계산(`TRV-14`, `TRV-13`)\n4. 법정 판정이 `판정 불가`인 지출의 처리(`PRC-13`)",
+    "path": "docs/company/approval-matrix.md",
+    "line": 239,
+    "block": "",
+    "edition": 1
+  },
+  "APV-10-3": {
+    "title": "제10조(검토 범위의 분담)",
+    "prose": "같은 사항을 두 역할이 다시 판단하지 않는다. 재무합의자가 제1항 제4호에 따라 `PRC-13-5`에서 보는 것은 제출된 자료가 실제 지출과 그 지출의 업무 관련성을 충분히 뒷받침하는가(근거의 충분성)이고, 제2항 제1호의 업무상 필요와 같은 사항이 아니다. 재무합의자의 동의가 있어도 결재권자는 업무상 필요를 판단한다.",
+    "path": "docs/company/approval-matrix.md",
+    "line": 250,
+    "block": "",
+    "edition": 1
+  },
+  "APV-11-1": {
+    "title": "제11조(결재선의 확정)",
+    "prose": "결재선은 기안 시점에 계산되어 확정되며 진행 중에 바뀌지 않는다.",
+    "path": "docs/company/approval-matrix.md",
+    "line": 254,
+    "block": "",
+    "edition": 1
+  },
+  "APV-11-2": {
+    "title": "제11조(결재선의 확정)",
+    "prose": "제5조 · 제7조 · 제7조의2의 입력이 달라져 결재선이 달라지는 수정은 **재기안으로만** 한다.",
+    "path": "docs/company/approval-matrix.md",
+    "line": 256,
+    "block": "",
+    "edition": 1
+  },
+  "PRC-1-1": {
+    "title": "제1조(목적)",
+    "prose": "이 규정은 출장의 **절차와 기한**, 그리고 **사내 증빙 제출 의무**를 정한다.",
+    "path": "docs/company/travel-procedure.md",
+    "line": 25,
+    "block": "",
+    "edition": 1
+  },
+  "PRC-1-2": {
+    "title": "제1조(목적)",
+    "prose": "이 규정은 **법정 증빙 수취 의무를 다시 쓰지 않는다.** 법령이 정하는 요건과 그 판정은 법령이 갖고, 이 규정은 그 위에 회사가 따로 얹는 의무만 정한다.",
+    "path": "docs/company/travel-procedure.md",
+    "line": 27,
+    "block": "",
+    "edition": 1
+  },
+  "PRC-2-1": {
+    "title": "제2조(적용 범위와 적용 판)",
+    "prose": "이 규정은 여비규정 `TRV-2-1`과 같은 범위에 적용한다.",
+    "path": "docs/company/travel-procedure.md",
+    "line": 31,
+    "block": "",
+    "edition": 1
+  },
+  "PRC-2-2": {
+    "title": "제2조(적용 범위와 적용 판)",
+    "prose": "하나의 출장에는 **그 출장의 사전승인을 기안한 날에 시행 중인** 여비규정 · 전결표 · 출장관리규정의 판을 적용하며, 정산에도 같은 판을 적용한다.",
+    "path": "docs/company/travel-procedure.md",
+    "line": 33,
+    "block": "clause: PRC-2-2\nkind: rule\nname: 적용 판\nanchor: 사전승인 기안일\napplies_to: [TRV, APV, PRC]\nexception: {clause: TRV-15-2, anchor: 지출일}",
+    "edition": 1
+  },
+  "PRC-2-3": {
+    "title": "제2조(적용 범위와 적용 판)",
+    "prose": "제2항에도 불구하고 여비규정 `TRV-15-2`의 매매기준율 정의는 지출일에 시행 중인 정의를 따른다.",
+    "path": "docs/company/travel-procedure.md",
+    "line": 35,
+    "block": "",
+    "edition": 1
+  },
+  "PRC-3-1": {
+    "title": "제3조(기한의 계산)",
+    "prose": "이 규정의 기한은 **날짜로 저장하지 않고 이 조의 방법으로 계산한다.**",
+    "path": "docs/company/travel-procedure.md",
+    "line": 48,
+    "block": "",
+    "edition": 1
+  },
+  "PRC-3-2": {
+    "title": "제3조(기한의 계산)",
+    "prose": "**영업일**은 회사의 휴일이 아닌 날이다. 회사의 휴일은 아래 블록과 같다.",
+    "path": "docs/company/travel-procedure.md",
+    "line": 50,
+    "block": "clause: PRC-3-2\nkind: enum\nname: 회사의 휴일\nvalues:\n  - 토요일\n  - 일요일\n  - 공휴일에 관한 법률에 따른 공휴일 및 대체공휴일\n  - 노동절 제정에 관한 법률에 따른 노동절\ncalendar_source: external   # 연도별 공휴일 달력은 이 규정이 갖지 않는다",
+    "edition": 1
+  },
+  "PRC-3-4": {
+    "title": "제3조(기한의 계산)",
+    "prose": "기한 계산에 쓰는 날짜는 **한국 시간 기준 날짜**로 한다. 출장지의 휴일은 기한 계산에 쓰지 않는다.",
+    "path": "docs/company/travel-procedure.md",
+    "line": 66,
+    "block": "",
+    "edition": 1
+  },
+  "PRC-4-1": {
+    "title": "제4조(사전승인 의무)",
+    "prose": "모든 출장은 **출발 전에 사전승인이 완료되어야 한다.** 사전승인이 완료되기 전에 출발한 출장은 그 정산에 전결표 `APV-7-1` 제2호의 상향 사유가 붙는다.",
+    "path": "docs/company/travel-procedure.md",
+    "line": 89,
+    "block": "",
+    "edition": 1
+  },
+  "PRC-4-2": {
+    "title": "제4조(사전승인 의무)",
+    "prose": "예약은 사전승인이 완료된 뒤에 착수한다.",
+    "path": "docs/company/travel-procedure.md",
+    "line": 91,
+    "block": "",
+    "edition": 1
+  },
+  "PRC-6-2": {
+    "title": "제6조(사전승인 완료 기한)",
+    "prose": "기한이 지난 뒤에 기안된 사전승인도 결재를 받을 수 있다. 이 경우 제15조에 따라 기한 경과가 문서에 표시되고, 그 문서의 기한은 `PRC-3-5`에 따라 출발일이 된다.",
+    "path": "docs/company/travel-procedure.md",
+    "line": 129,
+    "block": "",
+    "edition": 1
+  },
+  "PRC-7-1": {
+    "title": "제7조(사전승인 문서의 내용)",
+    "prose": "사전승인 문서에는 다음을 적는다.\n1. 출장의 목적과 출장 유형\n2. 출발일 · 복귀일 · 행선지\n3. 날짜별 일정과 **업무일 · 비업무일의 구분**(`TRV-3-3`)\n4. 사적 일정을 겸하는 경우 그 일정(`TRV-13-5`)\n5. 여비 항목별 예상액과 한도 적용 금액(`TRV-3-7`)\n6. 한도 초과 청구가 있으면 그 금액과 사유(`TRV-12-1`)\n7. 동행자\n8. 이용할 항공 좌석 등급과 숙소\n9. 렌터카를 이용하는 경우 그 사실(`TRV-8-4`)",
+    "path": "docs/company/travel-procedure.md",
+    "line": 133,
+    "block": "",
+    "edition": 1
+  },
+  "PRC-7-2": {
+    "title": "제7조(사전승인 문서의 내용)",
+    "prose": "사적 일정을 겸하는 출장의 사전승인 문서에는 **업무 수행 장소까지의 왕복 견적**을 첨부한다(`TRV-13-3`).",
+    "path": "docs/company/travel-procedure.md",
+    "line": 144,
+    "block": "",
+    "edition": 1
+  },
+  "PRC-8-1": {
+    "title": "제8조(예약과 근태 반영)",
+    "prose": "총무팀은 사전승인된 좌석 등급 · 숙소 · 일정의 범위 안에서 예약한다. 예약 확정 내용은 그 사전승인 문서에 연결한다.",
+    "path": "docs/company/travel-procedure.md",
+    "line": 148,
+    "block": "",
+    "edition": 1
+  },
+  "PRC-8-2": {
+    "title": "제8조(예약과 근태 반영)",
+    "prose": "인사팀은 예약이 확정된 일정으로 근태를 반영한다.",
+    "path": "docs/company/travel-procedure.md",
+    "line": 150,
+    "block": "",
+    "edition": 1
+  },
+  "PRC-8-3": {
+    "title": "제8조(예약과 근태 반영)",
+    "prose": "제1항과 제2항은 **상태 전이이며 결재가 아니다.** 이 단계에서 결재선이 생기지 않는다.",
+    "path": "docs/company/travel-procedure.md",
+    "line": 152,
+    "block": "",
+    "edition": 1
+  },
+  "PRC-9-1": {
+    "title": "제9조(출장 중의 변경)",
+    "prose": "출장 중에 일정 · 숙소 · 교통편이 바뀌어도 **새로 기안하지 않는다.** 변경된 사실과 사유는 정산 문서에 적는다.",
+    "path": "docs/company/travel-procedure.md",
+    "line": 156,
+    "block": "",
+    "edition": 1
+  },
+  "PRC-9-2": {
+    "title": "제9조(출장 중의 변경)",
+    "prose": "**출장 중에는 결재 단계를 두지 않는다.** 이 규정의 판단 지점은 사전승인과 정산 둘뿐이다.",
+    "path": "docs/company/travel-procedure.md",
+    "line": 158,
+    "block": "",
+    "edition": 1
+  },
+  "PRC-10-2": {
+    "title": "제10조(정산 기안 기한)",
+    "prose": "출장이 취소되었더라도 위약금 등 지출이 발생했으면 이 조의 기한 안에 정산을 기안한다. 이 경우 기준일은 예정되었던 출발일로 한다.",
+    "path": "docs/company/travel-procedure.md",
+    "line": 179,
+    "block": "",
+    "edition": 1
+  },
+  "PRC-11-1": {
+    "title": "제11조(정산 문서의 내용)",
+    "prose": "정산 문서에는 다음을 적는다.\n1. 실제 일정과 **날짜별 업무 수행 내용**(`TRV-3-3` 제1호의 판정 근거가 된다)\n2. 여비 항목별 청구액과 한도 적용 금액\n3. 사전승인과 달라진 내용과 그 사유\n4. 한도 초과 청구가 있으면 그 금액과 사유\n5. 본인 부담액(`TRV-11`)\n6. 여비가 아닌 지출을 분리한 내역(`TRV-10-1`)\n7. 식사 비용을 법인카드로 결제한 경우 그 참석자(`TRV-5-3`, `TRV-5-4`)",
+    "path": "docs/company/travel-procedure.md",
+    "line": 183,
+    "block": "",
+    "edition": 1
+  },
+  "PRC-11-2": {
+    "title": "제11조(정산 문서의 내용)",
+    "prose": "정산은 **확정된 값 위에서만** 기안한다. 증빙에서 읽어내지 못한 값은 사람이 확정한 뒤에 정산에 들어온다.",
+    "path": "docs/company/travel-procedure.md",
+    "line": 192,
+    "block": "",
+    "edition": 1
+  },
+  "PRC-12-2": {
+    "title": "제12조(사내 증빙 제출 의무)",
+    "prose": "이 의무는 **법정 증빙 수취 의무와 별개**이며, 법정 판정이 `의무 면제`인 지출에도 적용된다. 사내 의무는 법정 의무보다 넓을 수 있다.",
+    "path": "docs/company/travel-procedure.md",
+    "line": 198,
+    "block": "",
+    "edition": 1
+  },
+  "PRC-12-3": {
+    "title": "제12조(사내 증빙 제출 의무)",
+    "prose": "증빙을 받을 수 없었던 지출은 출장자가 **지출확인서**를 작성하여 갈음할 수 있다. 지출확인서로 갈음한 금액의 합계는 아래 블록의 금액을 넘을 수 없다.",
+    "path": "docs/company/travel-procedure.md",
+    "line": 200,
+    "block": "clause: PRC-12-3\nkind: rule\nname: 지출확인서 한도\ncurrency: KRW\nper: 출장 1건\nlimit: 100000",
+    "edition": 1
+  },
+  "PRC-12-4": {
+    "title": "제12조(사내 증빙 제출 의무)",
+    "prose": "제3항의 한도를 넘는 부분은 지급하지 않는다.",
+    "path": "docs/company/travel-procedure.md",
+    "line": 211,
+    "block": "",
+    "edition": 1
+  },
+  "PRC-13-4": {
+    "title": "제13조(법정 판정이 `판정 불가`인 지출)",
+    "prose": "대사 결과가 `대사 완료`가 아닌 모든 지출(현금 · 개인카드로 결제한 지출을 포함한다)은 재무합의자가 **보류하고 판정에 부족한 사실을 질문한다.** 추가된 사실로 법정 판정이 나오면 재무합의자는 그 새 근거를 보존한다.",
+    "path": "docs/company/travel-procedure.md",
+    "line": 239,
+    "block": "",
+    "edition": 1
+  },
+  "PRC-14-2": {
+    "title": "제14조(결재 처리 기한)",
+    "prose": "보류된 문서가 다시 그 결재자의 차례가 되면 그날을 새 도달일로 본다.",
+    "path": "docs/company/travel-procedure.md",
+    "line": 283,
+    "block": "",
+    "edition": 1
+  },
+  "PRC-14-3": {
+    "title": "제14조(결재 처리 기한)",
+    "prose": "**기한이 지난 뒤의 상태 전이는 이 규정이 정하지 않는다.** 결재 상태의 어휘는 이 규정의 소관이 아니다.",
+    "path": "docs/company/travel-procedure.md",
+    "line": 285,
+    "block": "",
+    "edition": 1
+  },
+  "PRC-15-1": {
+    "title": "제15조(기한 경과의 표시)",
+    "prose": "이 규정의 기한을 지키지 못한 사실은 해당 문서에 표시된다.",
+    "path": "docs/company/travel-procedure.md",
+    "line": 289,
+    "block": "",
+    "edition": 1
+  },
+  "PRC-15-2": {
+    "title": "제15조(기한 경과의 표시)",
+    "prose": "**이 규정은 기한 경과에 대한 불이익을 정하지 않는다.** 사내 기한은 회사가 스스로 정한 절차 기한이며, 법령이 정한 기한이 아니다.",
+    "path": "docs/company/travel-procedure.md",
+    "line": 291,
+    "block": "",
+    "edition": 1
+  },
+  "PRC-16-2": {
+    "title": "제16조(지급)",
+    "prose": "지급할 금액과 반환할 금액은 여비규정 `TRV-11-2`에 따라 서로 뺀 차액으로 한다.",
+    "path": "docs/company/travel-procedure.md",
+    "line": 307,
+    "block": "",
+    "edition": 1
+  }
+};
+const RULES = {
+  "TRV": {
+    "clause": "TRV",
+    "kind": "header",
+    "document": "여비규정",
+    "code": "TRV",
+    "edition": 1,
+    "effective_from": "2026-10-01",
+    "scope": "국내 근무 임직원의 출장 여비",
+    "depends_on": []
+  },
+  "TRV-3-1": {
+    "clause": "TRV-3-1",
+    "kind": "enum",
+    "name": "출장 유형",
+    "values": [
+      "해외 사업장 방문",
+      "해외 전시회 참가",
+      "국내 출장"
+    ],
+    "note": "해외 거래처 방문은 이 회사의 출장 유형이 아니다"
+  },
+  "TRV-3-4": {
+    "clause": "TRV-3-4",
+    "kind": "table",
+    "name": "지역 등급",
+    "values": {
+      "가": [
+        "독일",
+        "일본"
+      ],
+      "나": [
+        "멕시코"
+      ],
+      "다": [
+        "베트남"
+      ],
+      "국내": [
+        "대한민국"
+      ]
+    },
+    "transit_stay_grade": "가"
+  },
+  "TRV-5-2": {
+    "clause": "TRV-5-2",
+    "kind": "table",
+    "name": "일비 단가",
+    "input": [
+      "지역 등급",
+      "직급"
+    ],
+    "currency": "KRW",
+    "per": "업무일 1일",
+    "grades": [
+      "사원",
+      "주임",
+      "대리",
+      "과장",
+      "차장",
+      "부장",
+      "임원"
+    ],
+    "values": {
+      "가": [
+        80000,
+        80000,
+        80000,
+        90000,
+        90000,
+        100000,
+        120000
+      ],
+      "나": [
+        70000,
+        70000,
+        70000,
+        80000,
+        80000,
+        90000,
+        110000
+      ],
+      "다": [
+        60000,
+        60000,
+        60000,
+        70000,
+        70000,
+        80000,
+        100000
+      ],
+      "국내": [
+        40000,
+        40000,
+        40000,
+        40000,
+        40000,
+        50000,
+        60000
+      ]
+    }
+  },
+  "TRV-6-2": {
+    "clause": "TRV-6-2",
+    "kind": "table",
+    "name": "숙박비 상한",
+    "input": [
+      "지역 등급",
+      "직급"
+    ],
+    "currency": "KRW",
+    "per": "1박",
+    "compare": "합계",
+    "grades": [
+      "사원",
+      "주임",
+      "대리",
+      "과장",
+      "차장",
+      "부장",
+      "임원"
+    ],
+    "values": {
+      "가": [
+        200000,
+        200000,
+        200000,
+        230000,
+        230000,
+        260000,
+        330000
+      ],
+      "나": [
+        150000,
+        150000,
+        150000,
+        170000,
+        170000,
+        200000,
+        250000
+      ],
+      "다": [
+        120000,
+        120000,
+        120000,
+        140000,
+        140000,
+        160000,
+        200000
+      ],
+      "국내": [
+        80000,
+        80000,
+        80000,
+        90000,
+        90000,
+        100000,
+        130000
+      ]
+    }
+  },
+  "TRV-7-1": {
+    "clause": "TRV-7-1",
+    "kind": "rule",
+    "discretion": true,
+    "discretion_basis": "업무상 같은 숙소에 투숙할 필요가 있는 경우",
+    "preconditions": [
+      "동행 관계가 문서에 적혀 있을 것",
+      "숙박 증빙의 숙소가 동일할 것"
+    ],
+    "evidence": [
+      "동행자 목록",
+      "숙소명",
+      "두 직급의 상한 차이"
+    ],
+    "effect": "하위 직급자의 상한을 동행하는 상위 직급자의 상한으로 대체",
+    "facts_to_ask": [
+      "같은 숙소에서 함께 수행한 업무 일정",
+      "하위 직급자의 상한 안에서 묵을 숙소를 쓰지 않은 이유"
+    ],
+    "decided_by": "결재권자",
+    "must_not_auto_decide": [
+      "업무상 같은 숙소에 투숙할 필요가 있었다는 판단",
+      "상위 직급자의 상한 적용"
+    ],
+    "refs": [
+      "TRV-3-6",
+      "TRV-6-2",
+      "APV-10-2"
+    ]
+  },
+  "TRV-8-1": {
+    "clause": "TRV-8-1",
+    "kind": "table",
+    "name": "항공 좌석 등급",
+    "input": [
+      "직급",
+      "구간 운항 예정 시간"
+    ],
+    "rows": [
+      {
+        "grades": [
+          "임원"
+        ],
+        "seat": "비즈니스"
+      },
+      {
+        "grades": [
+          "부장"
+        ],
+        "seat": "비즈니스",
+        "when": {
+          "flight_hours_gte": 8
+        }
+      },
+      {
+        "grades": [
+          "부장"
+        ],
+        "seat": "이코노미",
+        "when": {
+          "flight_hours_lt": 8
+        }
+      },
+      {
+        "grades": [
+          "사원",
+          "주임",
+          "대리",
+          "과장",
+          "차장"
+        ],
+        "seat": "이코노미"
+      }
+    ]
+  },
+  "TRV-8-3": {
+    "clause": "TRV-8-3",
+    "kind": "table",
+    "name": "철도 좌석 등급",
+    "input": [
+      "직급",
+      "노선 구분"
+    ],
+    "rows": [
+      {
+        "grades": [
+          "임원"
+        ],
+        "국내": "특실",
+        "해외": "1등석"
+      },
+      {
+        "grades": [
+          "사원",
+          "주임",
+          "대리",
+          "과장",
+          "차장",
+          "부장"
+        ],
+        "국내": "일반실",
+        "해외": "2등석"
+      }
+    ]
+  },
+  "TRV-12-1": {
+    "clause": "TRV-12-1",
+    "kind": "rule",
+    "discretion": true,
+    "discretion_basis": "부득이한 사유 / 그 밖에 앞의 세 호에 준하는 사유",
+    "checkable_facts": [
+      {
+        "1호": "전시회 기간과 숙박일의 겹침"
+      },
+      {
+        "2호": "공공기관·현지 사업장의 지정 사실"
+      },
+      {
+        "3호": "운송사업자의 결항·지연 통지"
+      }
+    ],
+    "evidence": [
+      "초과 금액",
+      "사유",
+      "대체안의 견적",
+      "같은 지역 동행자의 숙박 요금"
+    ],
+    "effect": {
+      "approval_step_up": 1,
+      "ref": "APV-7"
+    },
+    "facts_to_ask": [
+      "한도 안의 대체 숙소나 이동 수단이 있었는지",
+      "대체안을 쓰지 않은 이유",
+      "사유가 제1항의 어느 호에 해당하는지"
+    ],
+    "decided_by": "결재권자",
+    "must_not_auto_decide": [
+      "부득이한 사유의 인정",
+      "초과분의 지급"
+    ],
+    "refs": [
+      "TRV-11-1",
+      "TRV-12-2",
+      "APV-7-1",
+      "APV-10-2"
+    ]
+  },
+  "TRV-13-4": {
+    "clause": "TRV-13-4",
+    "kind": "rule",
+    "discretion": true,
+    "discretion_basis": "출장의 직접 동기를 업무수행으로 보기 어려운 경우",
+    "evidence": [
+      "업무일 수",
+      "비업무일 수",
+      "비업무일 비율",
+      "날짜별 업무 수행 내용",
+      "출장 목적"
+    ],
+    "effect": "왕복교통비를 업무일·비업무일 비율로 안분",
+    "non_deterministic_by_design": true,
+    "facts_to_ask": [
+      "출장 일정과 사적 일정 중 어느 쪽이 먼저 정해졌는지",
+      "사적 일정이 없었어도 그 출장이 필요했는지"
+    ],
+    "decided_by": "결재권자",
+    "must_not_auto_decide": [
+      "출장의 직접 동기를 업무수행으로 보기 어렵다는 판단",
+      "왕복교통비의 안분"
+    ],
+    "refs": [
+      "TRV-13-2",
+      "TRV-13-3",
+      "APV-10-2"
+    ]
+  },
+  "TRV-14-1": {
+    "clause": "TRV-14-1",
+    "kind": "rule",
+    "name": "환율 기준일",
+    "value": "지출일",
+    "rejected": [
+      "정산일",
+      "카드 청구일"
+    ],
+    "refs": [
+      "TRV-3-5",
+      "TRV-15-1"
+    ]
+  },
+  "TRV-15-2": {
+    "clause": "TRV-15-2",
+    "kind": "reference",
+    "external": "외국환거래규정 제1-2조 제7호",
+    "editions": [
+      {
+        "effective_until": "2026-12-31",
+        "source_id": "admRulSeq=2100000276526",
+        "note": "종전 정의."
+      },
+      {
+        "effective_from": "2027-01-01",
+        "source_id": "admRulSeq=2100000281984",
+        "note": "개정 정의. 부칙으로 시행이 유예되었다"
+      }
+    ],
+    "clause_level_edition": true
+  },
+  "APV": {
+    "clause": "APV",
+    "kind": "header",
+    "document": "전결표",
+    "code": "APV",
+    "edition": 1,
+    "effective_from": "2026-10-01",
+    "scope": "출장 사전승인 문서와 출장 정산 문서의 결재선",
+    "depends_on": [
+      "TRV",
+      "PRC"
+    ]
+  },
+  "APV-2-2": {
+    "clause": "APV-2-2",
+    "kind": "enum",
+    "name": "전결 판정의 입력",
+    "inputs": [
+      "문서유형",
+      "출장 유형",
+      "총액",
+      "한도 적용 금액",
+      "상향 사유",
+      "기안자 소속",
+      "기안자 직책",
+      "사전승인 전결권자"
+    ],
+    "excluded_inputs": [
+      "직급",
+      "출장 일수"
+    ],
+    "excluded_reason": "여비 한도는 직급 축, 전결권은 직책 축. 출장 일수 대신 출장 유형의 행이 시작 단계를 정한다",
+    "refs": [
+      "APV-5-1",
+      "APV-7-1",
+      "APV-7.2-1",
+      "TRV-3-7"
+    ]
+  },
+  "APV-3-1": {
+    "clause": "APV-3-1",
+    "kind": "enum",
+    "name": "전결 단계",
+    "levels": {
+      "팀장": 1,
+      "본부장": 2,
+      "대표이사": 3
+    }
+  },
+  "APV-5-2": {
+    "clause": "APV-5-2",
+    "kind": "table",
+    "name": "금액 기준",
+    "input": [
+      "총액",
+      "한도 적용 금액"
+    ],
+    "currency": "KRW",
+    "applies_to": [
+      "사전승인",
+      "정산"
+    ],
+    "rows": [
+      {
+        "출장유형": [
+          "해외 사업장 방문"
+        ],
+        "steps": [
+          {
+            "결재권자": "본부장",
+            "lte": 15000000
+          },
+          {
+            "결재권자": "대표이사",
+            "gt": 15000000
+          }
+        ]
+      },
+      {
+        "출장유형": [
+          "해외 전시회 참가"
+        ],
+        "steps": [
+          {
+            "결재권자": "팀장",
+            "lte": 5000000
+          },
+          {
+            "결재권자": "본부장",
+            "gt": 5000000,
+            "lte": 15000000
+          },
+          {
+            "결재권자": "대표이사",
+            "gt": 15000000
+          }
+        ]
+      },
+      {
+        "출장유형": [
+          "국내 출장"
+        ],
+        "steps": [
+          {
+            "결재권자": "팀장",
+            "lte": 1000000
+          },
+          {
+            "결재권자": "본부장",
+            "gt": 1000000
+          }
+        ]
+      }
+    ],
+    "refs": [
+      "APV-5-1",
+      "TRV-3-7"
+    ]
+  },
+  "APV-7-1": {
+    "clause": "APV-7-1",
+    "kind": "rule",
+    "name": "전결 단계 상향",
+    "applies_to": "한도 적용 금액 단계",
+    "step_up": 1,
+    "idempotent": true,
+    "cap": "대표이사",
+    "reasons": [
+      {
+        "id": "한도 초과 청구",
+        "ref": "TRV-12-1"
+      },
+      {
+        "id": "사전승인 미완료 출발",
+        "ref": "PRC-4-1"
+      }
+    ],
+    "refs": [
+      "APV-5-1",
+      "TRV-12-1",
+      "TRV-12-3",
+      "PRC-4-1"
+    ]
+  },
+  "APV-7-4": {
+    "clause": "APV-7-4",
+    "kind": "rule",
+    "name": "기준 단계",
+    "value": "max(총액 단계, 상향을 거친 한도 적용 금액 단계)",
+    "additive": false,
+    "refs": [
+      "APV-5-1",
+      "APV-7-1"
+    ]
+  },
+  "APV-7.2-1": {
+    "clause": "APV-7.2-1",
+    "kind": "rule",
+    "name": "정산의 하한",
+    "applies_to": [
+      "정산"
+    ],
+    "when": "그 출장에 사전승인 문서가 있을 것",
+    "floor": "사전승인 문서의 전결권자의 단계",
+    "when_absent": "하한 없음",
+    "operation": "max(기준 단계, floor)",
+    "source": "ADR-0006",
+    "refs": [
+      "APV-3-1",
+      "APV-3-2",
+      "APV-7-4",
+      "APV-11-1"
+    ]
+  },
+  "APV-8-1": {
+    "clause": "APV-8-1",
+    "kind": "algorithm",
+    "name": "결재선 계산",
+    "steps": [
+      {
+        "step": 1,
+        "name": "chain",
+        "value": "기안자 소속 계통에서 기안자보다 상위인 직책자 목록(아래에서 위로)"
+      },
+      {
+        "step": 2,
+        "name": "total_step",
+        "from": "APV-5-2",
+        "input": "총액"
+      },
+      {
+        "step": 3,
+        "name": "limit_step",
+        "from": "APV-5-2",
+        "input": "한도 적용 금액"
+      },
+      {
+        "step": 4,
+        "name": "raised_limit_step",
+        "value": "min(limit_step + 1, 대표이사) if APV-7-1 else limit_step",
+        "from": "APV-7-1"
+      },
+      {
+        "step": 5,
+        "name": "base_step",
+        "value": "max(total_step, raised_limit_step)",
+        "from": "APV-7-4"
+      },
+      {
+        "step": 6,
+        "name": "final_step",
+        "value": "max(base_step, 사전승인 전결권자의 단계) if 정산 and 사전승인 문서 있음 else base_step",
+        "from": "APV-7.2-1"
+      },
+      {
+        "step": 7,
+        "name": "approver",
+        "value": "chain 중 level >= final_step 인 첫 사람"
+      },
+      {
+        "step": 8,
+        "name": "line",
+        "value": "chain 의 처음부터 approver 까지"
+      }
+    ],
+    "self_approval": "forbidden",
+    "refs": [
+      "APV-5-2",
+      "APV-7-1",
+      "APV-7-4",
+      "APV-7.2-1",
+      "APV-3-4"
+    ]
+  },
+  "APV-9-2": {
+    "clause": "APV-9-2",
+    "kind": "table",
+    "name": "재무합의자",
+    "input": "청구 총액",
+    "currency": "KRW",
+    "sequence": [
+      {
+        "단계": 1,
+        "재무합의자": "재무팀 담당자",
+        "조건": "항상"
+      },
+      {
+        "단계": 2,
+        "재무합의자": "재무팀장",
+        "조건": {
+          "gt": 5000000
+        }
+      }
+    ]
+  },
+  "APV-9-3": {
+    "clause": "APV-9-3",
+    "kind": "rule",
+    "name": "재무합의의 성질",
+    "sequential": true,
+    "blocking": true,
+    "reject_always_allowed": true,
+    "exposed_setting": true,
+    "source": "ADR-0001"
+  },
+  "APV-예시": {
+    "clause": "APV-예시",
+    "kind": "example",
+    "normative": false,
+    "cases": [
+      {
+        "id": "E1-노태식",
+        "설명": "직급은 부장, 직책 없음. 부장 한도를 받지만 전결권이 없어 결재선이 소속 팀장부터 선다. 금액은 작아도 해외 사업장 방문 행이 본부장부터 시작해 생산본부장이 전결한다",
+        "input": {
+          "문서유형": "사전승인",
+          "출장유형": "해외 사업장 방문",
+          "총액": 1890000,
+          "한도적용금액": 1890000,
+          "상향사유": []
+        },
+        "기안자": {
+          "소속": "생산관리팀",
+          "직책": "없음",
+          "직급": "부장"
+        },
+        "expected": {
+          "총액단계": "본부장",
+          "한도적용금액단계": "본부장",
+          "상향후단계": "본부장",
+          "기준단계": "본부장",
+          "최종단계": "본부장",
+          "결재선": [
+            "생산관리팀장",
+            "생산본부장"
+          ],
+          "전결권자": "생산본부장"
+        }
+      },
+      {
+        "id": "E2-배동환-자기결재회피",
+        "설명": "기안자가 팀장이라 계통이 본부장부터 시작한다. 해외 사업장 방문 행도 본부장부터라 두 규칙이 같은 사람을 낸다",
+        "input": {
+          "문서유형": "사전승인",
+          "출장유형": "해외 사업장 방문",
+          "총액": 1950000,
+          "한도적용금액": 1950000,
+          "상향사유": []
+        },
+        "기안자": {
+          "소속": "생산관리팀",
+          "직책": "팀장",
+          "직급": "부장"
+        },
+        "expected": {
+          "총액단계": "본부장",
+          "한도적용금액단계": "본부장",
+          "상향후단계": "본부장",
+          "기준단계": "본부장",
+          "최종단계": "본부장",
+          "결재선": [
+            "생산본부장"
+          ],
+          "전결권자": "생산본부장"
+        }
+      },
+      {
+        "id": "E3-노태식-국내",
+        "설명": "E1과 같은 기안자라도 출장 유형의 행이 시작 단계를 정한다. 국내 출장은 팀장부터라 직책 없는 부장의 출장을 소속 팀장이 전결한다",
+        "input": {
+          "문서유형": "사전승인",
+          "출장유형": "국내 출장",
+          "총액": 900000,
+          "한도적용금액": 900000,
+          "상향사유": []
+        },
+        "기안자": {
+          "소속": "생산관리팀",
+          "직책": "없음",
+          "직급": "부장"
+        },
+        "expected": {
+          "총액단계": "팀장",
+          "한도적용금액단계": "팀장",
+          "상향후단계": "팀장",
+          "기준단계": "팀장",
+          "최종단계": "팀장",
+          "결재선": [
+            "생산관리팀장"
+          ],
+          "전결권자": "생산관리팀장"
+        }
+      },
+      {
+        "id": "E4-강우진-한도초과연쇄",
+        "설명": "하노버 전시회. 한도 초과 청구가 한도 적용 금액 단계를 하나 올리고, 초과를 넣은 예상 총액도 본부장 단계다. 둘을 더하지 않으므로 본부장에서 멈춘다",
+        "input": {
+          "문서유형": "사전승인",
+          "출장유형": "해외 전시회 참가",
+          "총액": 5205000,
+          "한도적용금액": 4105000,
+          "상향사유": [
+            "한도 초과 청구"
+          ]
+        },
+        "기안자": {
+          "소속": "해외영업팀",
+          "직책": "없음",
+          "직급": "과장"
+        },
+        "expected": {
+          "총액단계": "본부장",
+          "한도적용금액단계": "팀장",
+          "상향후단계": "본부장",
+          "기준단계": "본부장",
+          "최종단계": "본부장",
+          "결재선": [
+            "해외영업팀장",
+            "영업본부장"
+          ],
+          "전결권자": "영업본부장"
+        }
+      },
+      {
+        "id": "E5-문세라-다른계통동행",
+        "설명": "같은 출장에 동행하지만 소속 계통이 달라 결재선이 갈린다",
+        "input": {
+          "문서유형": "사전승인",
+          "출장유형": "해외 전시회 참가",
+          "총액": 5135000,
+          "한도적용금액": 3885000,
+          "상향사유": [
+            "한도 초과 청구"
+          ]
+        },
+        "기안자": {
+          "소속": "선행개발팀",
+          "직책": "없음",
+          "직급": "대리"
+        },
+        "expected": {
+          "총액단계": "본부장",
+          "한도적용금액단계": "팀장",
+          "상향후단계": "본부장",
+          "기준단계": "본부장",
+          "최종단계": "본부장",
+          "결재선": [
+            "선행개발팀장",
+            "기술연구소장"
+          ],
+          "전결권자": "기술연구소장"
+        }
+      },
+      {
+        "id": "E6-강우진-정산",
+        "설명": "사전승인에서 인정된 초과는 정산에서 다시 상향 사유가 되지 않는다(TRV-12-3). 그래도 청구 총액이 본부장 단계이고 사전승인 전결권자도 본부장이라 영업본부장이 전결한다. 청구 총액이 5,000,000원을 넘어 재무합의는 2단",
+        "input": {
+          "문서유형": "정산",
+          "출장유형": "해외 전시회 참가",
+          "총액": 5150000,
+          "한도적용금액": 4080000,
+          "상향사유": [],
+          "사전승인전결권자": "영업본부장"
+        },
+        "기안자": {
+          "소속": "해외영업팀",
+          "직책": "없음",
+          "직급": "과장"
+        },
+        "expected": {
+          "총액단계": "본부장",
+          "한도적용금액단계": "팀장",
+          "상향후단계": "팀장",
+          "기준단계": "본부장",
+          "최종단계": "본부장",
+          "재무합의": [
+            "재무팀 담당자",
+            "재무팀장"
+          ],
+          "결재선": [
+            "해외영업팀장",
+            "영업본부장"
+          ],
+          "전결권자": "영업본부장"
+        }
+      },
+      {
+        "id": "E7-사전승인미완료출발",
+        "설명": "설비 트러블로 사전승인 완료 전에 출발한 출장의 정산. 해외 사업장 방문이라 한도 적용 금액 단계가 본부장이고, 상향이 대표이사에 닿는다",
+        "input": {
+          "문서유형": "정산",
+          "출장유형": "해외 사업장 방문",
+          "총액": 4500000,
+          "한도적용금액": 4500000,
+          "상향사유": [
+            "사전승인 미완료 출발"
+          ],
+          "사전승인전결권자": "생산본부장"
+        },
+        "기안자": {
+          "소속": "품질보증팀",
+          "직책": "없음",
+          "직급": "과장"
+        },
+        "expected": {
+          "총액단계": "본부장",
+          "한도적용금액단계": "본부장",
+          "상향후단계": "대표이사",
+          "기준단계": "대표이사",
+          "최종단계": "대표이사",
+          "재무합의": [
+            "재무팀 담당자"
+          ],
+          "결재선": [
+            "품질보증팀장",
+            "생산본부장",
+            "대표이사"
+          ],
+          "전결권자": "대표이사"
+        }
+      },
+      {
+        "id": "E8-조태민-본부장기안",
+        "설명": "본부장이 기안하면 계통이 대표이사부터 시작한다",
+        "input": {
+          "문서유형": "사전승인",
+          "출장유형": "국내 출장",
+          "총액": 600000,
+          "한도적용금액": 600000,
+          "상향사유": []
+        },
+        "기안자": {
+          "소속": "경영지원본부",
+          "직책": "본부장",
+          "직급": "임원"
+        },
+        "expected": {
+          "총액단계": "팀장",
+          "한도적용금액단계": "팀장",
+          "상향후단계": "팀장",
+          "기준단계": "팀장",
+          "최종단계": "팀장",
+          "결재선": [
+            "대표이사"
+          ],
+          "전결권자": "대표이사"
+        }
+      },
+      {
+        "id": "E9-큰초과",
+        "설명": "한도 적용 금액은 팀장 단계이고 상향으로 본부장이 되지만, 초과를 넣은 총액이 대표이사 단계라 대표이사가 전결한다",
+        "input": {
+          "문서유형": "사전승인",
+          "출장유형": "해외 전시회 참가",
+          "총액": 24000000,
+          "한도적용금액": 4000000,
+          "상향사유": [
+            "한도 초과 청구"
+          ]
+        },
+        "기안자": {
+          "소속": "해외영업팀",
+          "직책": "없음",
+          "직급": "과장"
+        },
+        "expected": {
+          "총액단계": "대표이사",
+          "한도적용금액단계": "팀장",
+          "상향후단계": "본부장",
+          "기준단계": "대표이사",
+          "최종단계": "대표이사",
+          "결재선": [
+            "해외영업팀장",
+            "영업본부장",
+            "대표이사"
+          ],
+          "전결권자": "대표이사"
+        }
+      },
+      {
+        "id": "E10-정산하한",
+        "설명": "사전승인은 영업본부장이 전결했는데 실제 청구 총액이 팀장 단계로 줄었다. 정산의 하한이 영업본부장을 남긴다",
+        "input": {
+          "문서유형": "정산",
+          "출장유형": "해외 전시회 참가",
+          "총액": 4300000,
+          "한도적용금액": 4300000,
+          "상향사유": [],
+          "사전승인전결권자": "영업본부장"
+        },
+        "기안자": {
+          "소속": "해외영업팀",
+          "직책": "없음",
+          "직급": "과장"
+        },
+        "expected": {
+          "총액단계": "팀장",
+          "한도적용금액단계": "팀장",
+          "상향후단계": "팀장",
+          "기준단계": "팀장",
+          "최종단계": "본부장",
+          "재무합의": [
+            "재무팀 담당자"
+          ],
+          "결재선": [
+            "해외영업팀장",
+            "영업본부장"
+          ],
+          "전결권자": "영업본부장"
+        }
+      }
+    ]
+  },
+  "PRC": {
+    "clause": "PRC",
+    "kind": "header",
+    "document": "출장관리규정",
+    "code": "PRC",
+    "edition": 1,
+    "effective_from": "2026-10-01",
+    "scope": "출장의 사전승인·예약·정산 절차와 기한, 사내 증빙 제출 의무",
+    "depends_on": [
+      "TRV",
+      "APV"
+    ]
+  },
+  "PRC-2-2": {
+    "clause": "PRC-2-2",
+    "kind": "rule",
+    "name": "적용 판",
+    "anchor": "사전승인 기안일",
+    "applies_to": [
+      "TRV",
+      "APV",
+      "PRC"
+    ],
+    "exception": {
+      "clause": "TRV-15-2",
+      "anchor": "지출일"
+    }
+  },
+  "PRC-3-2": {
+    "clause": "PRC-3-2",
+    "kind": "enum",
+    "name": "회사의 휴일",
+    "values": [
+      "토요일",
+      "일요일",
+      "공휴일에 관한 법률에 따른 공휴일 및 대체공휴일",
+      "노동절 제정에 관한 법률에 따른 노동절"
+    ],
+    "calendar_source": "external"
+  },
+  "PRC-3-6": {
+    "clause": "PRC-3-6",
+    "kind": "rule",
+    "name": "기한의 마감 시각",
+    "cutoff": "18:00",
+    "timezone": "대한민국 표준시",
+    "applies_to": "이 규정의 모든 기한",
+    "deadlines": [
+      "PRC-5-1",
+      "PRC-6-1",
+      "PRC-10-1",
+      "PRC-14-1",
+      "PRC-16-1"
+    ],
+    "refs": [
+      "PRC-3-4",
+      "PRC-5-1",
+      "PRC-6-1",
+      "PRC-10-1",
+      "PRC-14-1",
+      "PRC-16-1"
+    ]
+  },
+  "PRC-5-1": {
+    "clause": "PRC-5-1",
+    "kind": "deadline",
+    "name": "사전승인 기안 기한",
+    "anchor": "출발일",
+    "direction": "before",
+    "unit": "영업일",
+    "values": {
+      "해외 사업장 방문": 10,
+      "해외 전시회 참가": 10,
+      "국내 출장": 2
+    },
+    "refs": [
+      "PRC-3-3"
+    ]
+  },
+  "PRC-6-1": {
+    "clause": "PRC-6-1",
+    "kind": "deadline",
+    "name": "사전승인 완료 기한",
+    "anchor": "출발일",
+    "direction": "before",
+    "unit": "영업일",
+    "values": {
+      "해외 사업장 방문": 5,
+      "해외 전시회 참가": 5,
+      "국내 출장": 1
+    },
+    "refs": [
+      "PRC-3-3",
+      "PRC-3-5"
+    ]
+  },
+  "PRC-10-1": {
+    "clause": "PRC-10-1",
+    "kind": "deadline",
+    "name": "정산 기안 기한",
+    "anchor": "복귀일",
+    "direction": "after",
+    "unit": "영업일",
+    "value": 10,
+    "refs": [
+      "PRC-3-3"
+    ]
+  },
+  "PRC-12-3": {
+    "clause": "PRC-12-3",
+    "kind": "rule",
+    "name": "지출확인서 한도",
+    "currency": "KRW",
+    "per": "출장 1건",
+    "limit": 100000
+  },
+  "PRC-13-1": {
+    "clause": "PRC-13-1",
+    "kind": "rule",
+    "name": "판정 불가의 사내 처리",
+    "input": [
+      "법정 판정",
+      "대사 결과"
+    ],
+    "values": [
+      "의무 있음",
+      "의무 면제",
+      "판정 불가"
+    ],
+    "internal_treatment": {
+      "의무 있음": "적격증빙 확인",
+      "의무 면제": "사내 증빙 의무만 적용",
+      "판정 불가": {
+        "branch_on": "대사 결과",
+        "not_branch_on": [
+          "증빙에서 읽어낸 결제수단"
+        ],
+        "대사 완료": {
+          "treat_as": "의무 있음",
+          "then": [
+            "PRC-13-2",
+            "PRC-13-3"
+          ],
+          "blocks_settlement": false
+        },
+        "그 밖": {
+          "then": [
+            "PRC-13-4",
+            "PRC-13-5"
+          ]
+        }
+      }
+    },
+    "changes_legal_value": false,
+    "refs": [
+      "PRC-12-2",
+      "PRC-13-2",
+      "PRC-13-3",
+      "PRC-13-4",
+      "PRC-13-5",
+      "APV-10-1"
+    ]
+  },
+  "PRC-13-5": {
+    "clause": "PRC-13-5",
+    "kind": "rule",
+    "discretion": true,
+    "discretion_basis": "제출된 자료가 실제 지출과 그 지출의 업무 관련성을 충분히 뒷받침하는 경우",
+    "preconditions": [
+      "대사 결과가 대사 완료가 아닐 것",
+      "제4항의 질문 뒤에도 판정 불가가 남았을 것"
+    ],
+    "evidence": [
+      "미확인 쟁점",
+      "검토 자료"
+    ],
+    "record_on_consent": [
+      "미확인 쟁점",
+      "검토 자료",
+      "사내 지급 인정 이유",
+      "책임자"
+    ],
+    "effect": {
+      "뒷받침됨": "동의",
+      "뒷받침되지 않음": "반려"
+    },
+    "changes_legal_value": false,
+    "facts_to_ask": [
+      "판정 불가를 남긴 부족한 사실",
+      "실제 지출을 보이는 다른 자료",
+      "그 지출의 업무 관련성을 보이는 자료"
+    ],
+    "decided_by": "재무합의자",
+    "must_not_auto_decide": [
+      "사내 지급 동의",
+      "법정 판정 값의 변경(판정 불가를 의무 면제로 바꾸는 것)",
+      "이 동의를 출장과 지출의 업무상 필요에 대한 판단으로 보는 것(APV-10-2 제1호)"
+    ],
+    "refs": [
+      "PRC-13-4",
+      "APV-9-5",
+      "APV-10-1",
+      "APV-10-2"
+    ]
+  },
+  "PRC-14-1": {
+    "clause": "PRC-14-1",
+    "kind": "deadline",
+    "name": "결재 처리 기한",
+    "anchor": "자기 차례 도달일",
+    "direction": "after",
+    "unit": "영업일",
+    "value": 3,
+    "per": "결재자 1인",
+    "refs": [
+      "PRC-3-3",
+      "PRC-3-5"
+    ]
+  },
+  "PRC-16-1": {
+    "clause": "PRC-16-1",
+    "kind": "deadline",
+    "name": "지급 기한",
+    "anchor": "정산 완료일",
+    "direction": "after",
+    "unit": "영업일",
+    "value": 5
+  }
+};
+const holiday=['2026-10-03','2026-10-05','2026-10-09','2026-12-25'];
+const fmt=n=>n==null?'미확정':Number(n).toLocaleString('ko-KR')+'원';
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const plan=(total,hotel,nights,days,flight,registration=0)=>({total,hotel,nights,days,flight,registration,seat:'이코노미',business:days,privateDays:0,companion:'없음',destination:'일본 도쿄',recognition:0});
+const cases=[
+{id:'P-101',trip:'T-101',who:'강우진',team:'해외영업팀',grade:'과장',position:'없음',place:'도쿄',type:'해외 전시회 참가',stage:'사전승인',state:'결재대기',arrived:'2026-11-13',draft:'2026-11-10',depart:'2026-11-25',returned:'2026-11-29',owner:'영업본부장',line:['해외영업팀장','영업본부장'],at:1,total:5205000,limit:4105000,excess:1100000,raise:true,judgment:'숙박 한도 초과 청구',policy:['TRV-6-2','TRV-12-1'],discretion:'TRV-12-1',facts:'한도 안의 대체 숙소가 있었는지, 대체안을 쓰지 않은 이유, 해당하는 사유의 호',materials:'전시회 등록 확인서 · 주변 숙소 견적 3건 · 같은 지역 동행자 숙박 요금',reason:'전시회 기간 숙박 요금 상승. 행사장 이동이 가능한 대체 숙소 견적을 첨부함.',plan:plan(5205000,2020000,4,5,2335000,400000),dueFixture:'겹친 기한',extra:true},
+{id:'S-102',trip:'T-102',who:'강우진',team:'해외영업팀',grade:'과장',position:'없음',place:'하노버',type:'해외 전시회 참가',stage:'정산',state:'결재대기',arrived:'2026-11-13',draft:'2026-11-12',depart:'2026-11-05',returned:'2026-11-09',owner:'영업본부장',line:['남윤호','임가온','해외영업팀장','영업본부장'],at:3,total:5150000,limit:4080000,excess:1070000,raise:false,floor:2,judgment:'사전 인정 범위 안',policy:['TRV-12-3','APV-7.2-1'],preId:'P-102',preApprover:'영업본부장',preDraft:'2026-10-20',plan:{...plan(5205000,2020000,4,5,2335000,400000),destination:'독일 하노버',recognition:1100000},actual:{...plan(5150000,1990000,4,5,2310000,400000),destination:'독일 하노버',recognition:1070000},reason:'숙박·교통 실비가 예상보다 감소함. 사전 인정 초과 1,100,000원 안에서 정산함.',reconciliation:'대사 완료',legal:'의무 면제',verification:'교차 확인',receipt:1243.75,currency:'EUR',fx:1600,convertedReceipt:1990000},
+{id:'P-103',trip:'T-103',who:'노태식',team:'생산관리팀',grade:'부장',position:'없음',place:'하노이',type:'해외 사업장 방문',stage:'사전승인',state:'결재대기',arrived:'2026-11-17',draft:'2026-11-13',depart:'2026-11-30',returned:'2026-12-04',owner:'배동환',line:['배동환','생산본부장'],at:0,total:1890000,limit:1890000,excess:0,judgment:'한도 안 · 사업장 방문',policy:['APV-5-2','APV-8-1'],plan:{...plan(1890000,600000,4,5,890000),destination:'베트남 하노이'},reason:'하노이 신규 라인 이관 점검. 직급은 부장이나 직책은 없음.'},
+{id:'P-104',trip:'T-104',who:'배동환',team:'생산관리팀',grade:'부장',position:'팀장',place:'하노이',type:'해외 사업장 방문',stage:'사전승인',state:'결재대기',arrived:'2026-11-13',draft:'2026-11-11',depart:'2026-11-26',returned:'2026-11-30',owner:'생산본부장',line:['생산본부장'],at:0,total:1950000,limit:1950000,excess:0,judgment:'자기 결재 제외',policy:['APV-8-2','APV-5-2'],plan:{...plan(1950000,620000,4,5,930000),destination:'베트남 하노이'},reason:'분기 품질 점검. 팀장 본인의 문서이므로 생산본부장이 전결함.'},
+{id:'S-105',trip:'T-105',who:'노태식',team:'생산관리팀',grade:'부장',position:'없음',place:'울산',type:'국내 출장',stage:'정산',state:'재무합의대기',arrived:'2026-11-11',draft:'2026-11-11',depart:'2026-11-09',returned:'2026-11-10',owner:'남윤호',line:['남윤호','배동환'],at:0,total:440000,limit:440000,excess:0,floor:1,judgment:'기재사항 결손',policy:['PRC-12-1'],preId:'P-105',preApprover:'배동환',preDraft:'2026-11-03',plan:{...plan(440000,99000,1,2,241000),destination:'대한민국 울산'},actual:{...plan(440000,99000,1,2,241000),destination:'대한민국 울산'},reason:'출장 내용의 차이 없음. 국내 숙박 세금계산서에서 공급받는 자 등록번호가 지면에 없음.',reconciliation:'짝 없음',legal:'의무 있음',defect:1,verification:'검산 확인',receipt:99000,absent:true,extra:true},
+{id:'S-106',trip:'T-106',who:'문세라',team:'선행개발팀',grade:'대리',position:'없음',place:'도쿄',type:'해외 전시회 참가',stage:'정산',state:'재무합의대기',arrived:'2026-11-13',draft:'2026-11-13',depart:'2026-11-03',returned:'2026-11-06',owner:'남윤호',line:['남윤호','선행개발팀장'],at:0,total:2800000,limit:2800000,excess:0,floor:1,judgment:'판정 불가 · 기록만',policy:['PRC-13-1','PRC-13-2','PRC-13-3'],preId:'P-106',preApprover:'선행개발팀장',preDraft:'2026-10-16',plan:plan(2800000,600000,3,4,1580000,300000),actual:plan(2800000,600000,3,4,1580000,300000),reason:'등록비 공급 장소는 확정 불가로 닫힘. 법인카드 명세 한 줄과의 대사는 완료됨.',reconciliation:'대사 완료',legal:'판정 불가',undetermined:1,verification:'교차 확인',receipt:300000,legalWhy:'등록비의 공급 장소 확정 불가. 출장지는 공급 장소의 대체값이 아님.'},
+{id:'S-107',trip:'T-107',who:'진서후',team:'총무팀',grade:'과장',position:'없음',place:'부산',type:'국내 출장',stage:'정산',state:'재무합의대기',arrived:'2026-11-17',draft:'2026-11-13',depart:'2026-11-09',returned:'2026-11-10',owner:'남윤호',line:['남윤호','서정목'],at:0,total:315000,limit:315000,excess:0,floor:1,judgment:'판정 불가 · 재량 판단',policy:['PRC-13-1','PRC-13-5'],discretion:'PRC-13-5',facts:'판정 불가를 남긴 부족한 사실, 실제 지출을 보이는 다른 자료, 업무 관련성을 보이는 자료',materials:'개인카드 내역 · 시설 점검 일정 · 거래처 답변(공급 분류 미확정)',reason:'11/16 보류 질문에 11/17 답변 도착. 공급 분류는 확정 불가로 닫혔으나 지급 근거 자료가 보강됨.',preId:'P-107',preApprover:'서정목',preDraft:'2026-11-03',plan:{...plan(315000,55000,1,2,180000),destination:'대한민국 부산'},actual:{...plan(315000,55000,1,2,180000),destination:'대한민국 부산'},reconciliation:'짝 없음',legal:'판정 불가',undetermined:1,verification:'단독 판독',receipt:55000,extra:true,legalWhy:'공급 분류가 확정 불가로 닫힘. 추가 사실을 받은 뒤에도 법정 값은 그대로임.'},
+{id:'S-108',trip:'T-108',who:'강우진',team:'해외영업팀',grade:'과장',position:'없음',place:'도쿄',type:'해외 전시회 참가',stage:'정산',state:'결재대기',arrived:'2026-11-16',draft:'2026-11-16',depart:'2026-11-10',returned:'2026-11-13',owner:'해외영업팀장',line:['남윤호','해외영업팀장'],at:1,total:3300000,limit:3300000,excess:0,floor:1,judgment:'총액 같음 · 좌석 다름',policy:['TRV-8-1','TRV-8-2','APV-10-2'],preId:'P-108',preApprover:'해외영업팀장',preDraft:'2026-10-22',plan:plan(3300000,690000,3,4,1850000,400000),actual:{...plan(3300000,690000,3,4,1850000,400000),seat:'비즈니스'},reason:'본인 마일리지로 좌석 등급 변경. 추가 지출 없음; 발권 내역과 마일리지 내역 첨부.',reconciliation:'대사 완료',legal:'의무 면제',verification:'교차 확인',receipt:1850000,extra:true},
+{id:'E-109',trip:'T-109',who:'노태식',team:'생산관리팀',grade:'부장',position:'없음',place:'께레따로',type:'해외 사업장 방문',stage:'정산 기안 전',state:'수기 확정 대기',depart:'2026-11-02',returned:'2026-11-06',owner:'노태식',pending:'manual',judgment:'거래일 · 날짜 로캘 모호',reason:'현금 증빙의 거래일 11/05/26. 합계는 읽었고 날짜만 확정되지 않음. 시스템 연동에 같은 사실 없음.',receipt:100,currency:'MXN',raw:'11/05/26',reconciliation:'짝 없음'},
+{id:'E-110',trip:'T-110',who:'문세라',team:'선행개발팀',grade:'대리',position:'없음',place:'도쿄',type:'해외 전시회 참가',stage:'정산 기안 전',state:'짝 보류',depart:'2026-11-05',returned:'2026-11-09',owner:'남윤호',pending:'pair',judgment:'짝 보류 · 값 모순',reason:'경쟁 후보·추출 문제 없음. 끝4·날짜는 일치하나 통화가 다름. 같은 지출인지 재무합의자가 판단함.',receipt:23000,currency:'JPY',cardAmount:150,cardCurrency:'USD',reconciliation:'짝 보류'},
+{id:'P-111',trip:'T-111',who:'강우진',team:'해외영업팀',grade:'과장',position:'없음',place:'도쿄',type:'해외 전시회 참가',stage:'사전승인',state:'결재대기',arrived:'2026-11-16',draft:'2026-11-16',depart:'2026-12-07',returned:'2026-12-10',owner:'해외영업팀장',line:['해외영업팀장'],at:0,total:3000000,limit:3000000,excess:0,judgment:'한도 안',policy:['TRV-6-2','APV-5-2'],plan:plan(3000000,690000,3,4,1550000,400000),reason:'전시회 참가 계획. 숙박비는 직급·지역 상한 안.'},
+{id:'S-112',trip:'T-112',who:'오하린',team:'인사팀',grade:'대리',position:'없음',place:'대전',type:'국내 출장',stage:'정산',state:'완료',draft:'2026-11-09',completed:'2026-11-11',depart:'2026-11-05',returned:'2026-11-06',owner:'재무팀 지급 담당',line:['남윤호','홍채연'],at:2,total:210000,limit:210000,excess:0,floor:1,judgment:'지급 대기',policy:['PRC-16-1'],preId:'P-112',preApprover:'홍채연',preDraft:'2026-11-02',plan:{...plan(210000,70000,1,2,60000),destination:'대한민국 대전'},actual:{...plan(210000,70000,1,2,60000),destination:'대한민국 대전'},reason:'정산 완료. 지급은 결재가 아닌 후속 상태 전이.',reconciliation:'대사 완료',legal:'의무 있음 · 충족',verification:'교차 확인',receipt:70000}
+];
+function businessShift(anchor,count){const date=new Date(anchor+'T00:00:00Z');let remaining=Math.abs(count);while(remaining){date.setUTCDate(date.getUTCDate()+(count<0?-1:1));const s=date.toISOString().slice(0,10);if(![0,6].includes(date.getUTCDay())&&!holiday.includes(s))remaining--;}return date.toISOString().slice(0,10);}
+function urgency(d){const x=activeDeadline(d);if(!x)return{label:d.state==='보류'?'보류 · 답변 대기':'현재 기한 없음',css:'muted'};const end=new Date(x.date+'T18:00:00+09:00'),current=new Date(now);return{label:end<current?'기한 경과':x.date===now.slice(0,10)?'오늘 18:00':x.date.slice(5)+' 18:00',css:end<current?'red':x.date===now.slice(0,10)?'amber':'',...x};}
+function quote(id,open=false){const q=POLICY[id];return `<div class="policy"><div class="policyhead">${esc(q.title)} <small>· ${id} · 판 1</small></div><blockquote>${esc(q.prose).replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>').replace(/`([^`]+)`/g,'<code>$1</code>').replace(/\n/g,'<br>')}</blockquote>${q.block?`<details ${open?'open':''}><summary>기계 판독 블록 원문</summary><pre>${esc(q.block)}</pre></details>`:''}<small>원본 ${esc(q.path)}:${q.line} · 적용 판 기준: 사전승인 기안일</small></div>`;}
+function evidenceView(d){if(d.stage==='사전승인')return `<section class="section"><h3>에이전트가 마친 일</h3><p>한성워크의 계획·조직 정보 수신 → 한도 대조 → 전결표 계산 → 기한 계산.</p><p class="muted">증빙 추출·대사·법정 판정은 아직 대상이 없습니다. 사전승인에 정상 증빙이라는 결과를 만들지 않습니다.</p></section>`;
+return `<section class="section"><h3>증빙 파이프라인의 주의 신호</h3>${d.defect?'<div class="notice">법적 하자의 처리자: 재무합의자라는 가정 — 규정상 처리자 없음</div>':''}<div class="signalgrid"><div class="signalcell ${d.defect?'on':''}">법적 하자 <b>${d.defect||0}건</b><small style="display:block">${d.defect?'기재사항 결손 · 읽기 실패가 아님':'법정 요건 하자 없음'}</small></div><div class="signalcell ${d.undetermined?'on':''}">수취 의무 판정의 판정 불가 <b>${d.undetermined||0}건</b><small style="display:block">${d.id==='S-106'?'대사 완료 → 사내 기록만 · 추가 판단 0건':d.undetermined?'대사 완료 아님 → 보류 질문 후 재량 판단':'판정 불가 없음'}</small></div></div>
+<p><strong>법정 판정: ${d.legal}</strong> · 대사: ${d.reconciliation}</p><p class="muted">${d.defect?'합성 판정 입력: 국내 숙박 세금계산서의 공급받는 자 등록번호 결손. 법정 근거: 부가가치세법 제32조 제1항 제2호(저장소 파이프라인 판정 스냅샷).':d.undetermined?d.legalWhy:'합성 판정 입력: '+(d.id==='S-112'?'국내 숙박 법인카드 명세와 대사 완료. 법정 근거: 법인세법 시행령 제158조 제4항.':'국외 공급 확정. 법정 근거: 법인세법 시행규칙 제79조 제4호.')} ${d.undetermined?'법정 값은 사내 지급 판단 이후에도 판정 불가로 남습니다.':''}</p>
+<h3 style="margin-top:18px">필드 표 · 값의 출처와 검증 수준</h3><div class="tablewrap"><table><thead><tr><th>필드</th><th>값</th><th>값의 출처</th><th>검증 수준</th><th>근거</th></tr></thead><tbody>
+<tr><td>대상 증빙 합계</td><td>${d.currency?d.receipt.toLocaleString('ko-KR')+' '+d.currency:fmt(d.receipt)}</td><td>${d.reconciliation==='대사 완료'?'시스템 연동':'에이전트 추출'}</td><td>${d.verification}</td><td><button class="quiet" onclick="toggleEvidence('${d.id}')">${d.showEvidence?'근거 접기':'크롭 + 원본'}</button></td></tr>
+${d.fx?`<tr><td>한도 대조용 원화 환산</td><td>${fmt(d.convertedReceipt)}<br>${d.receipt} EUR × ${d.fx}원/EUR</td><td>시스템 연동<br><small>모의 환율 자료</small></td><td>교차 확인<br><small>환산 전 금액의 수준</small></td><td>TRV-14-1 · 판 1<br>기준일 ${d.returned} (지출일)<br>매매기준율 정의: 2026년 시행판</td></tr>`:''}<tr><td>거래일</td><td>${d.returned}</td><td>${d.reconciliation==='대사 완료'?'시스템 연동':'에이전트 추출'}</td><td>${d.reconciliation==='대사 완료'?'교차 확인':'단독 판독'}</td><td>증빙의 거래 일자 / ${d.reconciliation==='대사 완료'?'카드 이용일':'지면'}</td></tr>
+<tr><td>공급 장소</td><td>${d.id==='S-106'?'확정 불가':d.type==='국내 출장'?'국내':'국외'}</td><td>${d.id==='S-106'?'사람 수기 확정':'시스템 연동'}</td><td>${d.id==='S-106'?'단독 판독':'교차 확인'}</td><td>${d.id==='S-106'?'원본을 열람했으나 확정 불가로 닫음':'모의 커넥터의 공급 장소 기록'}</td></tr>
+<tr><td>공급 분류</td><td>${d.id==='S-107'?'확정 불가':d.id==='S-106'?'등록비':d.id==='S-108'?'항공 항행용역':'숙박'}</td><td>${d.id==='S-107'?'사람 수기 확정':'에이전트 추출'}</td><td>단독 판독</td><td>${d.id==='S-107'?'추가 사실로도 확정 불가로 닫음':'증빙 내용에서 유도'}</td></tr>
+${d.defect?'<tr><td>공급받는 자 등록번호</td><td>지면에 없음</td><td>에이전트 추출</td><td>단독 판독</td><td>크롭 좌표 없음 → 원본 전체</td></tr>':''}</tbody></table></div>
+${d.showEvidence?evidence(d):''}<p class="muted">단독 판독은 검산·대사가 붙지 않은 값이라는 뜻입니다. 따로 판단을 요구하지 않습니다. 합계의 검증 수준은 구성 요소의 최저 수준을 따릅니다.</p>
+<details><summary>에이전트 처리 경로와 값의 경계</summary><p>추출 → 검산 ${d.verification==='검산 확인'?'성공':'불가(해당 증빙 공식 없음)'} → ${d.reconciliation} → 추출 불확실 닫힘 → 법정 판정 → 정책 대조.</p><p>한도 대조의 원화 금액은 TRV-14-1의 지출일 환율을 적용한 합성 확정값입니다. 회계 장부 금액을 뜻하지 않습니다. 외화 환산 경로와 실제 OCR은 이 화면 실험에서 실행하지 않았습니다.</p></details></section>`;}
+function toggleEvidence(id){const d=cases.find(x=>x.id===id);d.showEvidence=!d.showEvidence;render();}
+function evidence(d){const full=d.fullOriginal||d.absent;const currency=d.currency||'KRW',amount=currency==='KRW'?fmt(d.receipt):d.receipt.toLocaleString('ko-KR')+' '+currency;return `<div class="evidence"><div class="rowline"><strong>${full?'원본 전체':'합계 필드 크롭'}</strong><button onclick="viewOriginal('${d.id}')">${full&&!d.absent?'크롭으로':'원본 전체 열기'}</button></div><small>합성 증빙 도식 · 실제 영수증·OCR 결과 아님 · ${d.id} · 좌표는 이 도식 기준</small>
+<svg role="img" aria-label="${d.id} 합성 증빙 ${full?'원본':'크롭'}" viewBox="${full?'0 0 440 460':'30 272 380 76'}" xmlns="http://www.w3.org/2000/svg"><rect x="1" y="1" width="438" height="458" fill="white" stroke="#aeb7af"/><text x="32" y="44" font-family="sans-serif" font-size="16" fill="#18312d">SYNTHETIC EVIDENCE / ${d.id}</text><text x="32" y="82" font-family="sans-serif" font-size="14">${d.who} · ${d.place}</text><text x="32" y="115" font-family="sans-serif" font-size="14">거래일 ${d.raw||d.returned}</text><text x="32" y="154" font-family="sans-serif" font-size="14">${d.pending==='pair'?'카드 끝4 2048 / 통화 JPY':d.absent?'공급받는 자 등록번호: 지면에 없음':'지출 내용 · '+(d.id==='S-106'?'등록비':d.id==='S-108'?'교통비':'숙박비')}</text><line x1="32" x2="408" y1="194" y2="194" stroke="#b4bfb8"/><text x="32" y="230" font-size="13" font-family="sans-serif">이 문서는 화면 실험을 위한 합성 자료입니다.</text><rect x="30" y="272" width="380" height="76" fill="#e9f4ed" stroke="#0b6459"/><text x="44" y="300" font-family="sans-serif" font-size="13">TOTAL</text><text x="44" y="330" font-family="monospace" font-size="23">${amount}</text><text x="32" y="393" font-family="sans-serif" font-size="12">외부 결제·실제 공급자의 증빙이 아닙니다.</text><text x="32" y="425" font-family="sans-serif" font-size="12">한성정밀공업(주) · PROTOTYPE #8</text></svg>
+<small>${d.absent?'지면에 없는 필드는 좌표가 없으므로 처음부터 원본을 제시합니다.':'크롭은 (30,272)~(410,348) · 원본 열람 여부 '+(d.originalViewed?'예':'아니오')}</small></div>`;}
+function viewOriginal(id){const d=cases.find(x=>x.id===id);d.fullOriginal=!d.fullOriginal||d.absent;if(d.fullOriginal)d.originalViewed=true;render();}
+function auditView(d){return `<section class="section"><h3>감사 로그 · 행위자 / 책임자</h3><ul class="timeline"><li><strong>${d.pending?'증빙 추출·대사에서 대기':'규정 대조·결재선·기한 계산'}</strong><small>행위자: 출장 에이전트 · 책임자: ${d.calculationResponsible} · 판정 입력의 값의 출처는 필드 표에 보존</small></li>${d.id==='S-106'||d.id==='S-107'?`<li><strong>수기 확정 · 확정 불가로 닫힘</strong><small>행위자: ${d.who} · 책임자: ${d.who} · 에이전트 판독값: 지면에 없음 → 확정값: 확정 불가 · 원본 열람: 예</small></li>`:''}${d.log.map(l=>`<li><strong>${esc(l.action)}</strong><small>${esc(l.at)} KST · 행위자 ${esc(l.actor)} · 책임자 ${esc(l.responsible)}<br>${esc(l.detail)}</small></li>`).join('')}</ul><small>초기 기록은 합성 예시입니다. 이후 버튼으로 만든 기록은 이 탭의 메모리에만 남습니다.</small></section>`;}
+function record(d,action,detail,actor=d.owner){d.log.push({action,detail,actor,responsible:actor,at:now.slice(0,16).replace('T',' ')});}
+function openHold(id){document.getElementById('holdForm').innerHTML=`<hr><label>질문 상대 <select id="questionTo"><option>기안자</option><option>에이전트</option></select></label><label style="display:block;margin-top:8px">무엇을 물을까요?<textarea id="question" placeholder="판정에 부족한 사실을 적으세요"></textarea></label><button onclick="hold('${id}')">질문 기록하고 보류</button>`;document.getElementById('question').focus();}
+function hold(id){const d=cases.find(x=>x.id===id),q=document.getElementById('question').value.trim();if(!q){document.getElementById('question').focus();return;}d.question=q;d.questionTo=document.getElementById('questionTo').value;d.beforeHold=d.state;d.state='보류';record(d,'보류',d.questionTo+'에게 질문: '+q);toast='보류했습니다. 문서는 같은 승인자의 큐에 남습니다.';render();}
+function receiveAnswer(id){const d=cases.find(x=>x.id===id),answer=document.getElementById('answer').value.trim();if(!answer)return;record(d,'답변 도착',answer,d.questionTo==='에이전트'?'출장 에이전트':d.who);d.log[d.log.length-1].responsible=d.owner;d.state=d.beforeHold;d.arrived=now.slice(0,10);toast='같은 승인자의 대기로 돌아왔습니다. 새 도달일로 결재 처리 기한을 재계산했습니다.';render();}
+function pendingView(d){return `<section class="section"><h3>${d.pending==='manual'?'추출 불확실 → 수기 확정':'짝 보류 → 같은 지출인지 확인'}</h3><div class="notice">정산은 아직 기안되지 않았습니다. 이 화면은 승인 카드가 아니며, 정책 대조와 승인 액션은 열리지 않습니다.</div><p>${d.reason}</p><p><strong>현재 책임자 ${d.owner}</strong> · 증빙 1건 · 사람에게 입력 요청 1건</p>${evidence(d)}
+${d.pending==='manual'?`<div class="tablewrap"><table><tr><th>필드</th><th>지면 문자열</th><th>추출값</th><th>상태</th></tr>${d.fx?`<tr><td>한도 대조용 원화 환산</td><td>${fmt(d.convertedReceipt)}<br>${d.receipt} EUR × ${d.fx}원/EUR</td><td>시스템 연동<br><small>모의 환율 자료</small></td><td>교차 확인<br><small>환산 전 금액의 수준</small></td><td>TRV-14-1 · 판 1<br>기준일 ${d.returned} (지출일)<br>매매기준율 정의: 2026년 시행판</td></tr>`:''}<tr><td>거래일</td><td>11/05/26</td><td>${d.confirmedValue||'미확정'}</td><td>${d.resolved?'수기 확정 · 재검산 대기':'날짜 로캘 모호'}</td></tr></table></div><p class="muted">거래일만 판정 입력으로 묻습니다. 합계는 읽었으며 짝이 없으므로 시스템 값으로 대신하지 않습니다. 에이전트 값이 채워지지 않은 입력입니다.</p>`:`<table><tr><th>증빙</th><th>카드 명세 후보</th></tr><tr><td>23,000 JPY · 2026-11-09 · 끝4 2048<br>값의 출처: 에이전트 추출</td><td>150 USD · 2026-11-09 · 끝4 2048<br>값의 출처: 시스템 연동</td></tr></table><p><strong>통화 다름 → 차액 산출하지 않음.</strong> 후보 하나여도 자동 대사 완료가 아닙니다. 값 모순이므로 재무합의자에게 묻습니다.</p>`}
+${d.resolved?'<div class="notice">재검산·대사 및 정산 기안 대기. 버튼을 눌렀다고 승인 카드로 우회하지 않습니다.</div>':role===d.owner?`<div class="actionbox">${d.pending==='manual'?'<label>원본에서 확인한 거래일 <input id="manualValue" type="date" aria-label="수기 확정 거래일"></label><p><button class="primary" onclick="resolveInput(\''+d.id+'\')">수기 확정 · 재검산·대사로</button></p>':'<label>같은 지출이라고 판단한 근거<textarea id="pairReason" placeholder="통화가 달라진 이유와 확인한 자료를 적으세요"></textarea></label><button class="primary" onclick="resolveInput(\''+d.id+'\')">같은 지출로 확인 · 대사 불일치</button>'}<p class="muted">입력 화면만 시연합니다. 재검산·대사 엔진과 정산 기안은 실행하지 않습니다.</p></div>`:'<p class="muted">해당 책임자 역할에서만 입력할 수 있습니다.</p>'}</section>${timeView(d)}${auditView(d)}`;}
+function resolveInput(id){const d=cases.find(x=>x.id===id);if(role!==d.owner||d.resolved)return;const input=document.getElementById(d.pending==='manual'?'manualValue':'pairReason');if(!input.value.trim()){input.focus();return;}d.resolved=true;if(d.pending==='manual'){d.confirmedValue=input.value;d.state='재검산·대사 대기';d.judgment='거래일 확정 · 재검산·대사 대기';record(d,'수기 확정','에이전트 판독값: 11/05/26 / 미확정 → 사람 확정값: '+input.value+' · 값의 출처: 사람 수기 확정 · 원본 열람: '+(d.originalViewed?'예':'아니오'));}else{d.state='대사 불일치';d.reconciliation='대사 불일치';d.judgment='대사 불일치 · 환산 대기';record(d,'같은 지출로 확인','증빙 23,000 JPY / 카드 원거래 150 USD · 차액 미산출 · 판단 근거: '+input.value+' · 원본 열람: '+(d.originalViewed?'예':'아니오'));}toast='사람의 입력을 기록했습니다. 정책 대조 이전의 대기 상태를 유지합니다.';render();}
+
+// 통합안의 추가 사례: 기한→결재선, 늦은 기안. 기존 12개 ID는 유지한다.
+cases.push(
+ {id:'S-113',trip:'T-113',who:'노태식',team:'생산관리팀',grade:'부장',position:'없음',place:'하노이',type:'해외 사업장 방문',stage:'정산',state:'재무합의대기',arrived:'2026-11-17',draft:'2026-11-10',depart:'2026-11-02',returned:'2026-11-06',owner:'남윤호',line:['남윤호','배동환','생산본부장','대표이사'],at:0,total:1890000,limit:1890000,excess:0,floor:2,judgment:'사전승인 미완료 출발 → 상향',policy:['PRC-4-1','APV-7-1','APV-7.2-1'],preId:'P-113',preApprover:'생산본부장',preDraft:'2026-10-16',preCompleted:'2026-11-03',plan:{...plan(1890000,600000,4,5,890000),destination:'베트남 하노이'},actual:{...plan(1890000,600000,4,5,890000),destination:'베트남 하노이'},reason:'11/02 출발 당시 사전승인 미완료. 11/03 완료되어 정산에는 미완료 출발 상향 사유가 붙음.',reconciliation:'대사 완료',legal:'의무 면제',verification:'교차 확인',receipt:600000},
+ {id:'P-114',trip:'T-114',who:'강우진',team:'해외영업팀',grade:'과장',position:'없음',place:'부산',type:'국내 출장',stage:'사전승인',state:'결재대기',arrived:'2026-11-18',draft:'2026-11-18',depart:'2026-11-19',returned:'2026-11-20',owner:'해외영업팀장',line:['해외영업팀장'],at:0,total:315000,limit:315000,excess:0,judgment:'늦은 기안 · 출발일이 문서의 기한',policy:['PRC-5-1','PRC-6-2'],plan:{...plan(315000,55000,1,2,180000),destination:'대한민국 부산'},reason:'기안 기한 11/17을 지나 11/18에 국내 출장 사전승인을 기안함. 문서의 기한은 출발일 11/19.'}
+);
+const getCase=id=>cases.find(d=>d.id===id);
+// TRV-7-1과 TRV-13-4도 기존 사례에서 관문을 실제로 비교할 수 있도록 자료를 보완한다.
+Object.assign(getCase('S-106'),{discretion:'TRV-7-1',facts:'동행한 강우진(과장)과 같은 숙소에서 전시회 준비 업무를 했는가? 대리 상한 안의 숙소를 쓰지 않은 이유는 무엇인가?',materials:'동행자 목록 · 같은 합성 숙소 A의 숙박 자료 · 저녁 공동 준비 일정 · 주변 견적',reason:'사전승인 뒤 과장 동행과 같은 숙소 사용이 추가됨. 대리 200,000원/박과 과장 230,000원/박을 대조하되 청구 600,000원은 대리 상한 안이므로 금액·결재선은 같음. 등록비 공급 장소는 확정 불가, 대사 완료로 기록만 함.'});
+Object.assign(getCase('S-106').actual,{companion:'강우진 · 과장',hotelName:'합성 숙소 A'});
+getCase('S-106').policy.push('TRV-7-1');
+Object.assign(getCase('P-111'),{returned:'2026-12-15',discretion:'TRV-13-4',facts:'전시회 일정과 사적 일정 중 어느 것이 먼저 정해졌는가? 사적 일정이 없어도 출장했을 것인가?',materials:'전시회 등록일 · 12/07~09 업무와 12/15 복귀 일정 · 12/10~14 사적 일정 · 업무 수행 장소 왕복 견적 1,550,000원',reason:'업무 4일, 비업무 5일인 9일 일정. 지급 대상 숙박은 업무일에 체크인한 3박이고 사적 일정의 5박은 청구하지 않음. 왕복교통비의 업무 동기는 결재권자가 판단함.'});
+Object.assign(getCase('P-111').plan,{days:9,business:4,privateDays:5});getCase('P-111').policy.push('TRV-13-4','TRV-13-2','TRV-13-3');
+// 계획에 없는 숙소명은 null로 둔다. 두 null도 같음이 아니다.
+const proofSnapshot={
+ 'S-102':[['hotel',1990000],['flight',2310000],['registration',400000]],
+ 'S-105':[['hotel',99000],['flight',241000]],
+ 'S-106':[['hotel',600000],['flight',1580000],['registration',300000]],
+ 'S-107':[['hotel',55000],['flight',180000]],
+ 'S-108':[['hotel',690000],['flight',1850000],['registration',400000]],
+ 'S-112':[['hotel',70000],['flight',60000]],
+ 'S-113':[['hotel',600000],['flight',890000]]
+};
+const qp=new URLSearchParams(location.search);
+let gate=qp.get('gate')==='off'?'off':'on',diff=qp.get('diff')==='changed'?'changed':'all';
+let selected='P-101',role='전체',now='2026-11-18T18:00:00+09:00',toast='';
+const financePeople=['남윤호','임가온'];
+const levels=RULES['APV-3-1'].levels,lname=n=>Object.keys(levels).find(k=>levels[k]===n)||'—';
+const org={생산관리팀:['생산관리팀장','생산본부장'],품질보증팀:['품질보증팀장','생산본부장'],해외영업팀:['해외영업팀장','영업본부장'],선행개발팀:['선행개발팀장','기술연구소장'],총무팀:['총무팀장','경영지원본부장'],인사팀:['인사팀장','경영지원본부장'],경영지원본부:['','경영지원본부장']};
+const person=title=>({'생산관리팀장':'배동환','총무팀장':'서정목','인사팀장':'홍채연','경영지원본부장':'조태민','재무팀 담당자':'남윤호','재무팀장':'임가온'}[title]||title);
+function level(d,n){const rule=RULES['APV-5-2'].rows.find(r=>r.출장유형.includes(d.type));return levels[rule.steps.find(s=>(s.gt==null||n>s.gt)&&(s.lte==null||n<=s.lte)).결재권자];}
+function authority(input){
+ const totalStep=level(input,input.total),withinStep=level(input,input.limit),raisedStep=Math.min(3,withinStep+(input.reasons.length?1:0)),baseStep=Math.max(totalStep,raisedStep),finalStep=Math.max(baseStep,input.floor||0);
+ const own={없음:0,팀장:1,본부장:2,대표이사:3}[input.position],chain=[...org[input.team],'대표이사'];
+ const apv=chain.filter((x,i)=>x&&i+1>own&&i+1<=Math.max(finalStep,own+1));
+ const fin=input.stage==='정산'?RULES['APV-9-2'].sequence.filter(s=>s.조건==='항상'||input.total>s.조건.gt).map(s=>s.재무합의자):[];
+ return {total:input.total,limit:input.limit,totalStep,withinStep,raisedStep,baseStep,finalStep,apv,fin,title:apv.at(-1),line:[...fin,...apv].map(person),reasons:input.reasons};
+}
+function region(d){return d.type==='국내 출장'?'국내':d.place==='하노이'?'다':'가';}
+function rate(d,cl,grade=d.grade){const r=RULES[cl];return r.values[region(d)][r.grades.indexOf(grade)];}
+function amounts(d,o){const daily=rate(d,'TRV-5-2')*o.business,cap=rate(d,'TRV-6-2',d.lodgingGrade||d.grade)*o.nights,total=daily+o.hotel+o.flight+o.registration,limit=daily+Math.min(o.hotel,cap)+o.flight+o.registration;return{daily,cap,total,limit,excess:total-limit};}
+function calculation(d){const a=amounts(d,d.actual||d.plan),reasons=[];if(a.excess>0&&!(d.actual&&d.plan.recognition>=a.excess))reasons.push('한도 초과 청구');if(d.stage==='정산'&&d.preCompleted>d.depart)reasons.push('사전승인 미완료 출발');return{...a,...authority({...d,...a,reasons})};}
+for(const d of cases){
+ d.originalViewed=false;d.log=[];d.judgments={};d.processedBy=[];
+ if(!d.pending){
+  d.plan.schedule=d.depart+' ~ '+d.returned;
+  if(d.actual)d.actual.schedule=d.depart+' ~ '+d.returned;
+  if(d.preId&&!d.preCompleted)d.preCompleted=businessShift(d.depart,d.type==='국내 출장'?-1:-5);
+  d.calculationResponsible=d.line.at(-1);d.discs=d.discretion?[d.discretion]:[];
+  d.initialArrival=d.arrived;
+  d.proofs=(proofSnapshot[d.id]||[]).map(([kind,amount],i)=>({id:d.id+'-증빙-'+(i+1),kind,amount}));
+  d.decidedBy=d.discretion==='PRC-13-5'?'남윤호':d.line.at(-1);
+ }else{d.calculationResponsible=d.owner;d.discs=[];}
+}
+function deadlines(d){
+ const result=[],add=(kind,anchor,n,ref,status='진행',extra={})=>{if(anchor)result.push({kind,anchor,n,ref,date:businessShift(anchor,n),status,...extra});};
+ if(d.stage==='사전승인'){
+  add('사전승인 기안',d.depart,-RULES['PRC-5-1'].values[d.type],'PRC-5-1','기안 완료');
+  const late=d.draft>result[0].date;result[0].late=late;
+  add('사전승인 완료',d.depart,-RULES['PRC-6-1'].values[d.type],'PRC-6-1',late?'통상 기한 이력':d.state==='완료'?'완료':'진행');
+  if(late)result.push({kind:'늦은 기안의 출발일',anchor:d.depart,n:0,ref:'PRC-6-2',date:d.depart,status:d.state==='완료'?'완료':'진행',undefinedDeadline:true});
+ }else add('정산 기안',d.returned,RULES['PRC-10-1'].value,'PRC-10-1',d.pending?'진행':'기안 완료',{late:!!d.draft&&d.draft>businessShift(d.returned,10)});
+ if(d.arrived)add('결재 처리',d.arrived,RULES['PRC-14-1'].value,'PRC-14-1',d.state==='보류'?'보류로 처리':d.state==='완료'?'처리 완료':'진행');
+ if(d.completed)add('지급',d.completed,RULES['PRC-16-1'].value,'PRC-16-1');
+ return result;
+}
+function activeDeadline(d){return deadlines(d).filter(x=>x.status==='진행').sort((a,b)=>a.date.localeCompare(b.date))[0];}
+function shortage(d){
+ if(d.pending||d.stage!=='사전승인'||d.state==='완료'||d.state==='보류')return null;
+ const lim=deadlines(d).find(x=>['PRC-6-1','PRC-6-2'].includes(x.ref)&&x.status==='진행');if(!lim)return null;
+ let finish=d.arrived;const path=d.line.slice(d.at).map(who=>{finish=businessShift(finish,RULES['PRC-14-1'].value);return{who,date:finish};});
+ return finish>lim.date?{limit:lim,finish,path,remaining:path.length}:null;
+}
+function sorted(ds){return ds.slice().sort((a,b)=>(activeDeadline(a)?.date||'9999').localeCompare(activeDeadline(b)?.date||'9999')||a.id.localeCompare(b.id));}
+function queues(){const visible=cases.filter(d=>role==='전체'||d.owner===role);return{
+ current:sorted(visible.filter(d=>!d.pending&&d.state!=='완료'&&!d.processedBy.includes(role))),
+ upcoming:role==='전체'?[]:sorted(cases.filter(d=>!d.pending&&d.state!=='완료'&&d.line.indexOf(role)>d.at)),
+ pending:sorted(visible.filter(d=>d.pending)),
+ done:sorted(cases.filter(d=>role==='전체'?d.state==='완료':d.processedBy.includes(role)||d.state==='완료'&&d.owner===role))
+};}
+function choose(id){selected=id;toast='';render();}
+function setRole(value){role=value;const q=queues();selected=[...q.current,...q.upcoming,...q.pending,...q.done][0]?.id||'';toast='';render();}
+function setConfig(key,value){if(key==='gate')gate=value;else diff=value;try{const u=new URL(location.href);u.searchParams.delete('variant');u.searchParams.set('gate',gate);u.searchParams.set('diff',diff);history.replaceState(null,'',u);}catch{}render();}
+function setClock(value){now='2026-11-18T'+value+':00+09:00';render();}
+function row(d,upcoming=false){const u=urgency(d),s=shortage(d);return `<button class="row ${selected===d.id?'selected':''} ${upcoming?'upcoming':''}" data-doc="${d.id}" onclick="choose('${d.id}')" aria-pressed="${selected===d.id}"><div class="rowline"><span class="rowtitle">${d.who} · ${d.place}</span><strong class="mono ${u.css}">${u.label}</strong></div><div class="rowmeta"><span class="chip stage">${d.stage}</span> ${d.id} · ${d.state}</div><div class="rowline"><span>${d.judgment}</span><span>${fmt(d.total)}</span></div>${s?`<span class="shortage">시계 부족 · 남은 ${s.remaining}인 × 3영업일 → ${s.finish.slice(5)} · 완료 기한 ${s.limit.date.slice(5)}</span>`:''}<div class="rowmeta">${upcoming?'아직 내 차례가 아님 · 읽기 전용 / 현재 ':''}${d.owner} ${d.defect?'<span class="chip signal">법적 하자 1</span>':''} ${d.undetermined?'<span class="chip signal">판정 불가 1</span>':''} ${d.discretion?'<span class="chip policychip">재량 조항</span>':''}</div></button>`;}
+function render(){
+ const d=getCase(selected),q=queues(),owners=[...new Set(cases.flatMap(d=>[d.owner,...(d.line||[])]))];
+ const bands=[['지금 내 차례',q.current,false],['다가오는 건',q.upcoming,true],['승인 카드 도달 전',q.pending,false],['처리함 · 완료 / 지급',q.done,false]];
+ document.getElementById('app').innerHTML=`<div class="topline"><div><div class="kicker">통합안 · 기한순 대조표</div><h1>지금 판단할 문서, 기한과 근거를 함께.</h1><p class="intro">문서의 기한순으로 읽고, 선택한 한 건을 옆에서 대조합니다. 다가오는 건은 앞선 결재자의 단계에서 읽을 수 있습니다.</p></div><div class="tools"><label>시연 역할 <select id="role" aria-label="시연 역할" onchange="setRole(this.value)"><option value="전체" ${role==='전체'?'selected':''}>전체 사례 · 읽기 전용</option>${owners.map(x=>`<option ${role===x?'selected':''}>${x}</option>`).join('')}</select></label></div></div>
+ <div id="selfcheck" class="selfcheck ${CHECK.failures.length?'bad':''}" role="status">${esc(CHECK.text)}<details><summary>계산 예와 사례 검산 결과</summary><ul>${CHECK.rows.map(r=>`<li>${esc(r)}</li>`).join('')}</ul></details></div>
+ <div class="config" aria-label="통합안 비교 설정"><label><input id="gate-toggle" type="checkbox" ${gate==='on'?'checked':''} onchange="setConfig('gate',this.checked?'on':'off')">재량 관문 · gate=${gate}</label><label>두 문서 대조 <select id="diff-toggle" onchange="setConfig('diff',this.value)"><option value="all" ${diff==='all'?'selected':''}>전체 · diff=all</option><option value="changed" ${diff==='changed'?'selected':''}>차이와 모름 · diff=changed</option></select></label><span>기준 시각 2026-11-18</span><button data-clock="18:00" aria-pressed="${now.includes('18:00')}" onclick="setClock('18:00')">18:00 KST</button><button data-clock="18:01" aria-pressed="${now.includes('18:01')}" onclick="setClock('18:01')">18:01 KST</button></div>
+ <div class="bar"><span><b>${q.current.length}</b>승인·동의 / 보류 문서</span><span><b>${q.upcoming.length}</b>다가오는 건</span><span><b>${q.pending.length}</b>승인 전 입력 대기</span><span class="muted">R1~R4 미측정 · 합성 사례는 지출 모집단이 아닙니다</span></div>
+ ${role==='전체'?'<div class="notice">전체 사례는 읽기 전용입니다. 카드에서 현재 책임자의 역할로 전환하거나, 생산본부장·대표이사 역할에서 다가오는 건을 볼 수 있습니다.</div>':''}
+ <div class="state"><span><strong>${role==='전체'?'전체 전시':role+'의 큐'}</strong></span><span>진행 중인 기한의 최솟값 → 문서 번호</span><span>선택: ${d?d.id+' / '+d.state:'없음'}</span><span>승인 후 선택 유지</span></div>
+ ${toast?`<div class="toast" role="status">${esc(toast)}</div>`:''}
+ <div class="split"><aside class="queue" aria-label="문서 목록"><div class="qhead"><b>${role==='전체'?'역할별 사례 전체':role+'의 승인자 큐'}</b><p>기한 경과는 표시만 합니다. 완료한 기한은 이력으로 남습니다.</p></div>${bands.map(([title,ds,up])=>`<div class="qband"><strong>${title} · ${ds.length}</strong>${up?'<br>아직 내 차례가 아님 · 읽기 전용':''}</div>${ds.map(d=>row(d,up)).join('')||'<div class="rowmeta" style="padding:0 14px">현재 없음</div>'}`).join('')}</aside>${d?detail(d):'<div class="panel empty">이 역할의 문서가 없습니다.</div>'}</div>
+ <p class="bottomnote">규정 3종 판 1 · 모의 달력 2026-10~12 · 기준 시각 ${now.slice(0,16).replace('T',' ')} KST · 상태는 메모리에만 남습니다. 외부 전송·지급은 없습니다.</p>`;
+ document.getElementById('statusbar').innerHTML=`<strong>통합안 · gate=${gate} · diff=${diff}</strong><span>기준 시각 ${now.slice(0,16).replace('T',' ')} KST</span><span>선택 ${d?.id||'없음'} · ${d?.state||'—'}</span>`;
+}
+function detail(d){const u=urgency(d),s=shortage(d);return `<article class="panel" data-selected="${d.id}"><div class="phead"><div class="kicker">${d.pending?'승인 카드 도달 전':'승인 카드'} / ${d.trip} / ${d.id}</div><div class="rowline"><h2>${d.who} · ${d.place} ${d.stage}</h2><span class="chip stage">${d.state}</span></div><div class="docmeta">${d.team} · 직급 ${d.grade} / 직책 ${d.position} · ${d.type}<br>현재 책임자 <strong>${d.owner}</strong> · <strong class="${u.css}">${u.label}</strong> ${u.kind?'('+u.kind+')':''}</div>${role==='전체'?`<div class="titletools"><button onclick="role='${d.owner}';render()">이 역할로 보기 · ${d.owner}</button></div>`:''}${s?`<div class="notice"><strong>시계 부족 — 남은 결재자 ${s.remaining}명</strong><p>${s.path.map(x=>x.who+' '+x.date.slice(5)).join(' → ')}<br>각자 3영업일(PRC-14-1)을 써도 완료 ${s.finish}는 문서 완료 기한 ${s.limit.date}(${s.limit.ref}) 뒤입니다.</p><small>마지막 날 처리·같은 날 다음 사람 도달을 가정한 계산입니다. 강제 기한 단축이나 자동 상향은 하지 않습니다.</small></div>`:''}${d.pending?'':actionView(d)}</div><div class="body">${d.pending?pendingView(d):comparison(d)+policyView(d)+evidenceView(d)+proofView(d)+timeView(d)+auditView(d)}</div></article>`;}
+function diffRows(d){const fields=[['총액','total',fmt],['일비','daily',fmt],['숙박비','hotel',fmt],['교통비','flight',fmt],['등록비','registration',fmt],['항공 좌석','seat',String],['지급 대상 숙박','nights',v=>v+'박'],['출장 일수','days',v=>v+'일'],['업무일 / 비업무일','workdays',String],['일정','schedule',String],['행선지','destination',String],['숙소명','hotelName',String],['동행','companion',String],['사적 일정','privateDays',v=>v?v+'일':'없음'],['초과 인정 범위','recognition',fmt]];
+ const value=(o,k)=>!o?null:k==='daily'?(o.business==null?null:o.business*rate(d,'TRV-5-2')):k==='workdays'?(o.business==null||o.privateDays==null?null:o.business+'일 / '+o.privateDays+'일'):o[k];
+ return fields.map(([label,k,format])=>{const a=value(d.plan,k),b=value(d.actual,k),status=a==null||b==null?'unknown':a===b?'same':'changed';return{label,a,b,format,status};});}
+function comparison(d){const c=calculation(d),rows=diffRows(d),same=rows.filter(r=>r.status==='same'),draw=rs=>rs.map(r=>`<tr class="${r.status}" data-diff="${r.status}"><td>${r.label}</td><td>${r.a==null?'자료 없음':esc(r.format(r.a))}</td><td class="marker">${d.actual?{changed:'≠ 바뀜',unknown:'? 알 수 없음',same:'= 같음'}[r.status]:'계획 판단'}</td><td>${d.actual?(r.b==null?'자료 없음':esc(r.format(r.b))):'아직 없음'}</td></tr>`).join(''),table=rs=>`<div class="tablewrap"><table class="comparison-table"><thead><tr><th>판정 입력</th><th>사전승인</th><th class="marker">대조</th><th>정산</th></tr></thead><tbody>${draw(rs)}</tbody></table></div>`;
+ return `<section class="section"><h3>${d.actual?'사전승인 ↔ 정산 · 두 열 대조':'사전승인 · 예상액과 한도'}</h3><p class="muted">${d.actual?`${d.preId} · 기안 ${d.preDraft} · 완료 ${d.preCompleted} · ${d.preApprover} 전결 → ${d.id}`:'정산 확정값은 아직 없습니다.'}</p><div class="metrics"><div class="metric"><small>${d.actual?'청구 총액':'예상 총액'}</small><b>${fmt(c.total)}</b></div><div class="metric"><small>한도 적용 금액</small><b>${fmt(c.limit)}</b></div><div class="metric"><small>한도 초과분</small><b>${fmt(c.excess)}</b></div></div><p class="muted">≠ 바뀜 · ? 알 수 없음 · = 같음 — 자료가 없는 값은 같음으로 세지 않습니다.</p>${table(diff==='changed'&&d.actual?rows.filter(r=>r.status!=='same'):rows)}${diff==='changed'&&d.actual&&same.length?`<details id="same-rows"><summary>= 같음 ${same.length}행 접힘 · 펼치기</summary>${table(same)}</details>`:''}<p><strong>${d.actual?'차이의 사유':'기안 사유'}</strong> ${esc(d.reason)}</p><small>계획·일정·청구 필드의 값의 출처: 시스템 연동(한성워크 모의). 숙소명 등 기록 없는 값은 그대로 비웁니다.</small>${d.id==='S-108'?'<div class="notice">총액 차이 0원 · 좌석 등급 ≠ 바뀜. 마일리지 사용 사유는 APV-10-2 제2호의 판단 입력입니다.</div>':''}</section>`;}
+function policyView(d){const c=calculation(d),a=d.actual||d.plan;return `<section class="section"><h3>정책 대조 · ${d.judgment}</h3><p class="muted">한도·결재선·재량은 정책 대조 구획에 둡니다. 증빙 파이프라인의 주의 신호 수에는 더하지 않습니다.</p><div class="calc"><div><small>일비 · TRV-5-2</small><b>${fmt(rate(d,'TRV-5-2'))} × ${a.business}업무일</b>${fmt(c.daily)}</div><div><small>숙박 한도 · TRV-6-2</small><b>${fmt(rate(d,'TRV-6-2',d.lodgingGrade||d.grade))} × ${a.nights}박</b>청구 ${fmt(a.hotel)} / 상한 ${fmt(c.cap)}</div><div><small>합계 대조 · TRV-3-7</small><b>초과 ${fmt(c.excess)}</b>한도 적용 금액 ${fmt(c.limit)}</div></div>
+ ${d.id==='S-106'?`<p>같은 숙소 요청의 두 상한: 대리 200,000원 × 3박 = 600,000원 / 과장 230,000원 × 3박 = 690,000원. ${d.lodgingGrade?'사람이 상위 상한 적용을 기록함.':'상위 상한 적용은 판단 전이며, 계산은 본인 상한을 사용함.'} 청구 600,000원은 어느 쪽에도 초과하지 않습니다.</p>`:''}
+ ${d.id==='P-111'?'<p>왕복교통비 1,550,000원은 기안자의 청구안입니다. 직접 동기가 업무인지 자동 확정하지 않습니다. 안분으로 금액이 바뀌는 선택은 기안 재작성과 부분 승인 처리(#17)가 정해질 때까지 실행하지 않습니다.</p>':''}
+ <h3>결재선 · 기안 시점에 확정</h3><div class="calc"><div><small>총액 단계 · APV-5-2</small><b>${fmt(c.total)} → ${lname(c.totalStep)}</b></div><div><small>한도 적용 금액 단계 · APV-7-1</small><b>${fmt(c.limit)} → ${lname(c.withinStep)}</b>${c.reasons.length?'+ 1 → '+lname(c.raisedStep):'+ 0 · 상향 없음'}</div><div><small>높은 단계 · APV-7-4 / 정산 하한</small><b>max(${c.totalStep}, ${c.raisedStep}${d.floor?', '+d.floor:''}) = ${c.finalStep}</b>전결권자 ${person(c.title)}</div></div>
+ <p><strong>상향 사유:</strong> ${c.reasons.length?c.reasons.map(r=>r==='사전승인 미완료 출발'?'사전승인 미완료 출발 — PRC-4-1 → APV-7-1 제2호':'한도 초과 청구 — APV-7-1 제1호').join(' / '):'없음'} · 사유가 둘이어도 1단계만 상향합니다.</p>
+ ${d.preCompleted>d.depart?`<div class="notice"><strong>기한 → 결재선 되먹임</strong><p>${d.preId} 완료 기한 ${businessShift(d.depart,-RULES['PRC-6-1'].values[d.type])} → 출발 ${d.depart} → 실제 완료 ${d.preCompleted}. 출발 당시 미완료였으므로 정산에서 본부장 → 대표이사로 올라갑니다. 한도 초과 청구는 0원입니다.</p></div>`:''}
+ ${d.id==='S-102'?'<p>사전 인정 1,100,000원 안의 초과 1,070,000원: TRV-12-3에 따라 재상향하지 않습니다. APV-7.2-1의 사전승인 전결권자 하한은 본부장입니다.</p>':''}
+ <div class="route"><small>${d.who} 기안 →</small>${d.line.map((p,i)=>`<span class="${i===d.at&&d.state!=='완료'?'current':i<d.at?'done':''}">${p}${i<d.at?' · 처리함':i===d.at&&d.state!=='완료'?' · 현재':''}</span>`).join(' → ')}</div><small>직급은 한도를, 직책은 조직 계통과 자기 결재 제외를 정합니다. 결재선 변경은 재작성 때 계산합니다(APV-11-1·APV-11-2).</small>
+ <details><summary>적용 정책 원문 · 조항과 구조화 블록</summary>${[...new Set(['TRV-5-2','TRV-6-2',...d.policy,'APV-5-2','APV-7-1','APV-7-4','APV-8-1','APV-11-1',...(d.floor?['APV-7.2-1']:[]),...(d.actual?['APV-9-2','APV-10-1','APV-10-2','APV-10-3']:['APV-10-2'])])].map(id=>quote(id)).join('')}</details></section>`;}
+function proofView(d){const a=amounts(d,d.actual||d.plan),labels={hotel:'숙박비',flight:'교통비',registration:'등록비'};return `<section class="section"><h3>${d.actual?'증빙 합계와 청구액 검산':'예상 항목 합계 검산'}</h3>${d.actual?`<table class="proof"><tr><th>합성 증빙</th><th>항목</th><th>확정 원화 금액</th></tr>${d.proofs.map(p=>`<tr><td>${p.id}</td><td>${labels[p.kind]}</td><td>${fmt(p.amount)}</td></tr>`).join('')}</table><p>실비 증빙 합계 ${fmt(d.proofs.reduce((s,p)=>s+p.amount,0))} + 증빙 없이 정액인 일비 ${fmt(a.daily)} = 청구 ${fmt(a.total)}</p>`:`<p>일비 ${fmt(a.daily)} + 숙박비 ${fmt(d.plan.hotel)} + 교통비 ${fmt(d.plan.flight)} + 등록비 ${fmt(d.plan.registration)} = ${fmt(a.total)}</p>`}<small>TRV-4-2 · 증빙 도식은 대표 한 장, 이 표는 전체 실비 내역입니다. 모두 합성 입력이며 실제 OCR·외화 환산은 실행하지 않습니다.</small></section>`;}
+function timeView(d){const ds=deadlines(d);return `<section class="section"><h3>기한 · 기준일에서 계산</h3><div class="tablewrap"><table><thead><tr><th>사내 기한</th><th>기준일 → 계산</th><th>결과 · KST</th><th>현재 적용 / 이력</th></tr></thead><tbody>${ds.map(x=>`<tr><td>${x.kind}<br><small>${x.ref} · 판 1</small></td><td>${x.anchor}<br>${x.undefinedDeadline?'규정상 정의 없음 — #8 NOTES 참조':(x.n<0?'전날부터 역산':'다음 날부터')+' '+Math.abs(x.n)+'영업일'}</td><td class="mono">${x.date}<br>${x.undefinedDeadline?'18:00 표시 가정':'18:00'}</td><td>${x.status}${x.late?' · 기안 기한 경과 이력':''}${x.status==='진행'&&x.date===activeDeadline(d)?.date?' · 문서의 기한':''}</td></tr>`).join('')}</tbody></table></div><p class="muted">토·일과 입력 휴일 ${holiday.join(', ')}을 제외한 2026-10~12 모의 달력입니다. 기준일은 세지 않습니다(PRC-3-3). 기한 경과는 표시만 합니다(PRC-15-2).</p>${d.preId?`<p>연결된 사전승인: ${d.preDraft} 기안 → ${d.preCompleted} 완료 / 출발 ${d.depart}. ${d.preCompleted>d.depart?'출발 전 완료 의무 위반 이력(PRC-4-1).':''}</p>`:''}<p>진행 중인 의무의 가장 이른 기한을 정렬에 사용합니다. 이미 기안·처리한 기한은 이력으로 남기고, 보류 답변이 오면 새 도달일부터 다시 계산합니다. “걸린 기한”의 범위와 출발일의 시각 정의는 #8 NOTES의 열린 질문입니다.</p><details><summary>기한 원문</summary>${[...new Set(['PRC-3-3','PRC-3-5','PRC-3-6',...ds.map(x=>x.ref)])].map(id=>quote(id)).join('')}</details></section>`;}
+const discretionText={
+ 'TRV-7-1':{question:'업무상 같은 숙소에 투숙할 필요가 있었는가?',accept:'같은 숙소 필요 인정 · 상위 상한 적용',other:'필요 인정하지 않음'},
+ 'TRV-12-1':{question:'부득이한 사유와 초과분 지급을 인정하는가?',accept:'부득이한 사유 인정 · 초과분 지급',other:'초과분 지급 인정하지 않음'},
+ 'TRV-13-4':{question:'출장의 직접 동기를 업무수행으로 볼 수 있는가?',accept:'직접 동기 업무수행 · 왕복교통비 안분 제외',other:'업무 동기로 보기 어려움 · 안분'},
+ 'PRC-13-5':{question:'자료가 실제 지출과 그 업무 관련성을 충분히 뒷받침하는가?',accept:'근거 충분 · 사내 지급 인정',other:'근거 부족 · 반려'}
+};
+function questions(d,viewer){const finance=financePeople.includes(viewer),result=[];
+ if(finance){result.push(['사내 증빙 요건을 충족하는가?','APV-10-1 제1호'],['법인카드 내역과 증빙의 대사 결과에 남은 쟁점이 있는가?','APV-10-1 제2호'],['환산과 안분 계산의 근거가 맞는가?','APV-10-1 제3호']);if(d.defect)result.push(['법적 하자의 치유에 어떤 자료가 필요한가?','가정 — 규정상 처리자 없음']);}
+ else{result.push(['출장과 지출의 업무상 필요가 있는가?','APV-10-2 제1호']);if(d.actual)result.push(['사전승인과 정산의 차이 및 알 수 없는 항목의 사유를 받아들이는가?','APV-10-2 제2호']);}
+ d.discs.filter(cl=>d.decidedBy===viewer).forEach(cl=>result.push([discretionText[cl].question,(cl==='PRC-13-5'?'APV-10-1 제4호':'APV-10-2 제3호')+' · '+cl]));
+ return result.map(([q,ref])=>`<li>${q}<small>판단 책임자 ${viewer} · ${ref}</small></li>`).join('');
+}
+function judgmentView(d,cl,canAct){const recorded=d.judgments[cl],mine=role===d.decidedBy&&canAct,t=discretionText[cl],rule=RULES[cl];return `<div class="judgment" data-discretion="${cl}"><strong>${cl} · ${t.question}</strong><p>판단 책임자 ${d.decidedBy} · decided_by: ${rule.decided_by}${cl==='TRV-7-1'||cl==='TRV-13-4'?' · 이 사례는 마지막 결재권자에 배치(가정)':''}</p><small>물어볼 사실: ${esc(d.facts)}<br>모은 근거: ${esc(d.materials)}</small><details><summary>재량 조항 원문 · 자동 결정 금지</summary>${quote(cl)}</details>${recorded?`<div class="readonly"><strong>판단 기록: ${esc(recorded.result)}</strong><p>${esc(recorded.reason)}</p><small>${recorded.by} · ${recorded.at} · 같은 판단을 다시 요구하지 않음(APV-10-3)</small></div>`:mine?`<label style="display:block;margin-top:8px">${cl==='PRC-13-5'?'사내 지급 인정 이유':'판단 이유'}<textarea id="decision-${cl}" placeholder="직접 검토한 사실과 판단 이유를 적으세요"></textarea></label><div class="actions"><button data-record="${cl}" onclick="recordJudgment('${d.id}','${cl}')">${t.accept} · 기록</button><button disabled>${t.other} · #17 대기</button></div><small>${gate==='on'?'판단 기록 뒤에 승인/동의가 열립니다.':'관문 off: 승인/동의 버튼은 먼저 열립니다. 누를 때 위 이유를 함께 기록하는 codex 동작입니다.'}</small>`:`<div class="readonly">읽기 전용 · ${d.decidedBy}의 판단 전. 이 큐에서는 같은 사항을 판단하지 않습니다(APV-10-3).</div>`}</div>`;}
+function actionView(d){const canAct=role===d.owner&&!d.pending&&d.state!=='완료'&&d.state!=='보류',finance=financePeople.includes(d.owner),viewer=role==='전체'?d.owner:role,pending=d.discs.filter(cl=>d.decidedBy===role&&!d.judgments[cl]),upcoming=role!=='전체'&&d.line.indexOf(role)>d.at;
+ let controls;
+ if(d.state==='완료')controls='<p><strong>이 문서의 결재는 완료되었습니다.</strong> 지급·예약 동작은 이 화면에서 실행하지 않습니다.</p>';
+ else if(d.state==='보류'&&role===d.owner)controls=`<p>보류 · ${esc(d.questionTo)} 답변 대기: ${esc(d.question)}</p><label>답변 시연<textarea id="answer"></textarea></label><button onclick="receiveAnswer('${d.id}')">답변 도착 시연</button><button disabled>반려 · #17 대기</button>`;
+ else controls=`${!canAct?`<p class="muted">${upcoming?'다가오는 건 · 아직 내 차례가 아님 · 읽기 전용':d.processedBy.includes(role)?'이 역할의 처리를 기록했습니다. 선택한 문서를 유지합니다.':'현재 '+d.owner+'의 차례 · 읽기 전용'}</p>`:''}<div class="actions"><button id="approve" class="primary" ${!canAct||gate==='on'&&pending.length?'disabled':''} onclick="approve('${d.id}')">${finance?'동의':'승인'} · ${d.at===d.line.length-1?'문서 완료':'다음 사람에게'}</button><button disabled>반려 · #17 대기</button><button ${canAct?'':'disabled'} onclick="openHold('${d.id}')">보류 · 질문하기</button></div>${canAct&&gate==='on'&&pending.length?`<p class="muted" id="gate-reason">내 몫 재량 판단 ${pending.length}건을 기록하기 전에는 ${finance?'동의':'승인'}할 수 없습니다.</p>`:''}<div id="holdForm"></div>`;
+ return `<div class="actionbox" id="todo"><strong>할 일 · 내 몫 질문${role==='전체'?' (현재 책임자 미리보기)':''}</strong><ol class="questions">${questions(d,viewer)}</ol>${d.discs.map(cl=>judgmentView(d,cl,canAct)).join('')}${controls}</div>`;}
+function saveJudgment(d,cl,reason){
+ if(!reason)return false;
+ const t=discretionText[cl];d.judgments[cl]={result:t.accept,reason,by:d.owner,at:now.slice(0,16).replace('T',' ')};
+ if(cl==='TRV-7-1')d.lodgingGrade='과장';
+ record(d,'재량 판단 기록 · '+cl,`${t.accept} / 미확인 쟁점·물어본 사실: ${d.facts} / 검토 자료: ${d.materials} / 판단 이유: ${reason} / 법정 판정 값 유지: ${d.legal||'해당 없음'}`);
+ return true;
+}
+function recordJudgment(id,cl){const d=getCase(id);if(d.owner!==role||d.decidedBy!==role||d.state==='보류'||d.state==='완료'||!d.discs.includes(cl)||d.judgments[cl])return;const el=document.getElementById('decision-'+cl),reason=el.value.trim();if(!reason){el.setAttribute('aria-invalid','true');el.placeholder='판단 이유를 입력해야 기록할 수 있습니다.';el.focus();return;}saveJudgment(d,cl,reason);toast=id+' · 재량 판단을 기록했습니다. 승인/동의는 별도 행위입니다.';render();}
+function approve(id){const d=getCase(id);if(d.owner!==role||d.pending||d.state==='보류'||d.state==='완료')return;
+ const pending=d.discs.filter(cl=>d.decidedBy===role&&!d.judgments[cl]);if(gate==='on'&&pending.length)return;
+ if(gate==='off')for(const cl of pending){const el=document.getElementById('decision-'+cl),reason=el?.value.trim();if(!reason){el?.setAttribute('aria-invalid','true');if(el){el.placeholder='버튼은 열려 있지만 codex 방식도 판단 이유 기록은 필요합니다.';el.focus();}return;}saveJudgment(d,cl,reason);}
+ const actor=d.owner;record(d,financePeople.includes(actor)?'동의':'승인','문서 전체를 판단함 · gate='+gate,actor);d.processedBy.push(actor);d.at++;
+ if(d.at>=d.line.length){d.state='완료';if(d.stage==='정산')d.completed=now.slice(0,10);}else{d.owner=d.line[d.at];d.arrived=now.slice(0,10);d.state=financePeople.includes(d.owner)?'재무합의대기':'결재대기';}
+ toast=id+' · '+actor+'의 '+(financePeople.includes(actor)?'동의':'승인')+'를 기록했습니다. 선택한 문서를 유지합니다. '+(d.state==='완료'?'문서 완료.':'다음 차례: '+d.owner+'.');render();
+}
+function selfCheck(){const rows=[],failures=[];let examplePass=0,moneyPass=0,proofPass=0;
+ const check=(name,ok,detail='')=>{rows.push((ok?'통과 ':'실패 ')+name+(detail?' · '+detail:''));if(!ok)failures.push(name+': '+detail);};
+ // Expected values come from the unmodified non-normative E1–E10 vectors.
+ for(const e of RULES['APV-예시'].cases){const x=e.input,k=e.기안자,expected=e.expected,floor=x.사전승인전결권자?(x.사전승인전결권자==='대표이사'?3:/본부장|연구소장/.test(x.사전승인전결권자)?2:1):0;
+  const c=authority({type:x.출장유형,total:x.총액,limit:x.한도적용금액,stage:x.문서유형,team:k.소속,position:k.직책,reasons:x.상향사유,floor});
+  const ok=c.total===x.총액&&c.limit===x.한도적용금액&&c.title===expected.전결권자&&JSON.stringify(c.apv)===JSON.stringify(expected.결재선)&&JSON.stringify(c.fin)===JSON.stringify(expected.재무합의||[])&&c.totalStep===levels[expected.총액단계]&&c.withinStep===levels[expected.한도적용금액단계]&&c.raisedStep===levels[expected.상향후단계]&&c.baseStep===levels[expected.기준단계]&&c.finalStep===levels[expected.최종단계];
+  if(ok)examplePass++;check(e.id,ok,fmt(c.total)+' / '+fmt(c.limit)+' / '+c.title);
+ }
+ for(const d of cases.filter(d=>!d.pending)){
+  const c=calculation(d),p=amounts(d,d.plan),ok=c.total===d.total&&c.limit===d.limit&&c.excess===d.excess&&p.total===d.plan.total&&JSON.stringify(c.line)===JSON.stringify(d.line);
+  if(ok)moneyPass++;check(d.id+' 항목 합계·결재선',ok,fmt(c.total)+' / '+fmt(c.limit)+' / '+c.line.join(' → '));
+  if(d.actual){const subtotal=d.proofs.reduce((s,e)=>s+e.amount,0),keys=['hotel','flight','registration'],proofOK=keys.every(k=>d.proofs.filter(e=>e.kind===k).reduce((s,e)=>s+e.amount,0)===d.actual[k])&&subtotal+c.daily===d.total;
+   if(proofOK)proofPass++;check(d.id+' 증빙 합계',proofOK,fmt(subtotal)+' + 일비 '+fmt(c.daily)+' = '+fmt(d.total));
+  }
+ }
+ check('E-109·E-110 대기 경계',cases.filter(d=>d.pending).every(d=>d.total==null),'확정 청구액 없음 · 증빙 100 MXN / 23,000 JPY와 카드 150 USD는 서로 합산하지 않음');
+ const short=shortage(getCase('P-103'));check('시계 부족 영업일',short?.finish==='2026-11-25'&&short.limit.date==='2026-11-23','11/17 → 11/20 → 11/25 > 11/23');
+ check('늦은 기안 출발일',activeDeadline(getCase('P-114'))?.date==='2026-11-19','기안 11/18, 기안 기한 11/17, 출발 11/19');
+ check('자료 없음은 같음 아님',diffRows(getCase('S-106')).find(r=>r.label==='숙소명').status==='unknown'&&diffRows(getCase('S-108')).find(r=>r.label==='숙소명').status==='unknown');
+ return{rows,failures,text:failures.length?'자체 점검 실패 — '+failures.join(' / '):`자체 점검 통과 — 전결표 ${examplePass}/10 · 사례 금액·결재선 ${moneyPass}/12 · 정산 증빙 합계 ${proofPass}/7 · 대기 2건 청구 미확정`};
+}
+const CHECK=selfCheck();
+render();
+</script></body></html>
