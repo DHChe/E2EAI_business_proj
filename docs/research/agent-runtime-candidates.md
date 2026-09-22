@@ -934,7 +934,7 @@ Query는 이벤트 히스토리에 남지 않으므로 고빈도 폴링에 적�
 | T-1 | **워크플로 코드 안에서 LLM을 직접 호출하고 싶다** | 워크플로는 결정적이어야 한다. Python SDK 샌드박스가 비결정적 라이브러리 호출을 막는다. LLM 호출은 액티비티로 밀려나며, 이는 에이전트 코드를 두 층으로 쪼갠다 (workflow-definition, python-sdk-sandbox) |
 | T-2 | **에이전트 진행 상황을 토큰 단위로 프론트엔드에 흘려야 한다** | 서버 푸시 메커니즘을 1차 자료에서 확인하지 못했다. 문서 권고는 Query 폴링이고 Visibility API는 30 calls/sec 제한 |
 | T-3 | **한 건이 51,200 이벤트 또는 50 MB를 넘길 수 있는데 Continue-As-New를 설계할 여력이 없다** | 하드 리밋 (cloud/limits) |
-| T-4 | **승인 대기가 90일을 넘을 수 있다** | Temporal Cloud 보존 기간 최대 90일 (cloud/limits) |
+| T-4 | ~~**승인 대기가 90일을 넘을 수 있다**~~ | ~~Temporal Cloud 보존 기간 최대 90일 (cloud/limits)~~ **정정(#9, 2026-09-22)**: Retention Period는 closed Workflow Execution의 보존이며 열린 실행의 대기 상한이 아니다(<https://docs.temporal.io/temporal-service/temporal-server#retention-period>). §3.1 C1의 "대기 자체에 별도 타임아웃은 없고"(`:592`)와 같은 결론이다. 이 행은 탈락 조건으로 성립하지 않는다 |
 | T-5 | **포트폴리오 MVP 수준의 운영 여력만 있고 Temporal Cloud 비용도 쓸 수 없다** | 셀프 호스팅 구성 요소·요구사항은 이 조사에서 1차 자료로 확인하지 못했다(§6) — 즉 **운영 부담을 정량화하지 못한 상태로는 선택할 수 없다** |
 
 ### C2' — Inngest
@@ -981,7 +981,6 @@ Query는 이벤트 히스토리에 남지 않으므로 고빈도 폴링에 적�
 | B3 (Managed Agents) | C4 | **`user.tool_confirmation` 이벤트의 승인자(actor) 필드** | 이벤트 스키마에 사람 주체를 담는 필드가 문서에 없음. "없다"는 것이 결론이지만, 명시적 부정문이 아니라 부재로 확인한 것이므로 빈칸으로 표시 |
 | B3 (Managed Agents) | C4 | **이벤트 히스토리 보존 기간** | `GET /v1/sessions/{id}/events`로 전체를 받을 수 있다고만 서술. 보존 기간 수치 없음 |
 | B2 (Tool Runner) | C2 | **러너 상태를 프로세스 경계 너머로 직렬화·재개하는 방법** | 문서에 없음. 실질적으로 B1으로 내려가야 하는 것으로 읽힌다 |
-
 | Temporal | C3 | **서버 푸시(SSE/WebSocket) 메커니즘의 유무** | 문서가 제시하는 것은 Query 폴링뿐. "푸시가 없다"는 결론을 명시적 부정문으로는 확인하지 못했다 |
 | Temporal | C2 | **셀프 호스팅 구성 요소와 요구사항** (Cassandra/Postgres/MySQL + Elasticsearch 등) | 확인하지 못함. 운영 부담 정량화 불가 |
 | Temporal | C5 | **동시 워크플로 실행 개수의 상한** | cloud/limits는 *실행당* 미완료 작업 2,000과 네임스페이스 APS 500/sec만 규정 |
