@@ -1307,6 +1307,167 @@ last.with_name(unit + '-result.json').write_text(json.dumps(scenario.get(
                 self.assertEqual(ex.changed_paths(), [])
                 self.assertEqual(self.exec_calls(), [])
 
+class IssueSyncTests(HarnessTestCase):
+    def fixture(self, status="blocked"):
+        ex = ScopedCommitTests.fixture(self, {'step0': {'result': {
+            'status': status, 'blocked_reason' if status == 'blocked' else 'error_message':
+            'human decision needed'}}})
+        self.fake_bin('gh', r"""
+mode = os.environ.get('GH_SCENARIO', 'ok')
+if mode == 'timeout':
+    import time
+    time.sleep(2)
+if mode == 'fail' or (mode == 'partial' and sys.argv[-1] == 'fail'):
+    sys.exit(9)
+if sys.argv[1:3] == ['issue', 'view']:
+    print(os.environ.get('GH_LABELS', '{"labels": []}'))
+""")
+        return ex
+
+    def test_blocked_swaps_labels_and_comments(self):
+        ex = self.fixture()
+        original = ex.gh
+        def after_commit(*args):
+            self.assertEqual(ex.load_index()['steps'][0]['status'], 'blocked')
+            self.assertIn('step0 blocked', self.git(ex.root, 'log', '-1', '--format=%s').decode())
+            self.assertEqual(ex.changed_paths(), [])
+            return original(*args)
+        with mock.patch.object(ex, 'gh', side_effect=after_commit):
+            self.assertEqual(ex.run(), 2)
+        calls = self.calls('gh')
+        self.assertEqual(calls, [
+            ['issue', 'edit', '7', '--remove-label', 'ready-for-agent',
+             '--add-label', 'ready-for-human'],
+            ['issue', 'comment', '7', '--body', 'blocked: human decision needed']])
+        self.assertFalse((ex.run_dir / 'gh-pending.json').exists())
+
+    def test_resume_restores_label_if_still_human(self):
+        ex = self.fixture()
+        for labels, edits in ((['ready-for-human', 'bug'], 1),
+                              (['ready-for-agent'], 0), (['needs-info'], 0),
+                              (['ready-for-human', 'ready-for-agent'], 0)):
+            with self.subTest(labels=labels):
+                os.environ['GH_LABELS'] = json.dumps({'labels': [{'name': n} for n in labels]})
+                before = len(self.calls('gh'))
+                ex.issue_resume()
+                calls = self.calls('gh')[before:]
+                self.assertEqual(calls[0], ['issue', 'view', '7', '--json', 'labels'])
+                self.assertEqual(len(calls), 1 + edits)
+                if edits:
+                    self.assertEqual(calls[1], ['issue', 'edit', '7', '--remove-label',
+                        'ready-for-human', '--add-label', 'ready-for-agent'])
+
+    def test_gh_failure_saved_and_retried(self):
+        ex = self.fixture()
+        os.environ['GH_SCENARIO'] = 'fail'
+        edit = ['gh', 'issue', 'edit', '7', '--remove-label', 'ready-for-agent',
+                '--add-label', 'ready-for-human']
+        comment = ['gh', 'issue', 'comment', '7', '--body', 'reason']
+        self.assertFalse(ex.gh(*edit[1:]))
+        self.assertFalse(ex.gh(*comment[1:]))
+        self.assertEqual(self.calls('gh'), [edit[1:]] * 3 + [comment[1:]] * 3)
+        path = ex.run_dir / 'gh-pending.json'
+        self.assertEqual(json.loads(path.read_text()), [edit, comment])
+        invalid = [['gh', 'issue', 'close', '7'],
+                   ['gh', 'issue', 'comment', '8', '--body', 'wrong issue'],
+                   ['gh', 'issue', 'edit', '7', '--remove-label', 'bug',
+                    '--add-label', 'ready-for-human'],
+                   ['gh', 'issue', 'comment', '7', '--body', 123],
+                   'not a list', None, {'argv': comment}, comment + ['extra']]
+        path.write_text(json.dumps([edit, *invalid, comment]))
+        self.seed_state(ex, status='blocked')
+        os.environ['GH_SCENARIO'] = 'ok'
+        self.assertEqual(ex.run(), 2)
+        self.assertEqual(self.calls('gh')[6:], [edit[1:], comment[1:]])
+        self.assertFalse(path.exists())
+
+    def test_gh_partial_success(self):
+        ex = self.fixture()
+        path = ex.run_dir / 'gh-pending.json'
+        path.parent.mkdir(parents=True, exist_ok=True)
+        good = ['gh', 'issue', 'comment', '7', '--body', 'ok']
+        bad = ['gh', 'issue', 'comment', '7', '--body', 'fail']
+        path.write_text(json.dumps([good, bad]))
+        os.environ['GH_SCENARIO'] = 'partial'
+        ex.retry_gh_pending()
+        self.assertEqual(self.calls('gh'), [good[1:]] + [bad[1:]] * 3)
+        self.assertEqual(json.loads(path.read_text()), [bad])
+        ex.retry_gh_pending()
+        self.assertEqual(json.loads(path.read_text()), [bad])
+
+    def test_gh_failure_keeps_phase_result(self):
+        for status, code in [('blocked', 2), ('error', 1)]:
+            with self.subTest(status=status):
+                ex = self.fixture(status)
+                os.environ['GH_SCENARIO'] = 'fail'
+                self.assertEqual(ex.run(), code)
+                self.assertEqual(ex.load_index()['steps'][0]['status'], status)
+                self.assertEqual(ex.load_top_index()['phases'][0]['status'], status)
+                self.assertEqual(ex.changed_paths(), [])
+                pending = json.loads((ex.run_dir / 'gh-pending.json').read_text())
+                self.assertEqual(len(pending), 2 if status == 'blocked' else 1)
+                self.assertIn('human decision needed', pending[-1][-1])
+                if status == 'error':
+                    self.assertIn('step0', pending[-1][-1])
+
+    def test_gh_timeout_env_and_queue_write_failure(self):
+        ex = self.fixture()
+        self.assertEqual(ex.gh_timeout, 60)
+        os.environ['GH_TOKEN'] = 'fixture-secret'
+        self.fake_bin('gh', "assert os.environ['GH_TOKEN'] == 'fixture-secret'\n"
+                      "assert Path.cwd() == Path(os.environ['GH_EXPECT_ROOT']).resolve()\n")
+        os.environ['GH_EXPECT_ROOT'] = str(ex.root)
+        self.assertTrue(ex.gh('issue', 'comment', '7', '--body', 'ok'))
+        with mock.patch.object(execute.subprocess, 'run', side_effect=
+                subprocess.TimeoutExpired(['gh'], 60)) as run:
+            self.assertFalse(ex.gh('issue', 'comment', '7', '--body', 'timeout'))
+            self.assertEqual(run.call_count, 3)
+            self.assertEqual(run.call_args.kwargs['timeout'], 60)
+            self.assertEqual(run.call_args.kwargs['env']['GH_TOKEN'], 'fixture-secret')
+        with mock.patch.object(execute.subprocess, 'run', side_effect=OSError('missing')), \
+                mock.patch.object(execute, 'write_json_atomic', side_effect=OSError('disk full')):
+            self.assertFalse(ex.gh('issue', 'comment', '7', '--body', 'unavailable'))
+
+    def test_invalid_queue_and_resume_view_failure(self):
+        ex = self.fixture()
+        path = ex.run_dir / 'gh-pending.json'
+        path.parent.mkdir(parents=True, exist_ok=True)
+        for raw in ('{}', 'null', 'broken json', '[null, 42, ["gh"]]'):
+            path.write_text(raw)
+            with mock.patch('sys.stderr') as warning:
+                ex.retry_gh_pending()
+                self.assertTrue(warning.write.called)
+            self.assertFalse(path.exists())
+        self.assertEqual(self.calls('gh'), [])
+        for labels in ('broken', '{}', '{"labels": null}'):
+            os.environ['GH_LABELS'] = labels
+            ex.issue_resume()
+        os.environ['GH_SCENARIO'] = 'fail'
+        ex.issue_resume()
+        self.assertTrue(all(args[1] == 'view' for args in self.calls('gh')))
+        self.assertFalse(path.exists())
+
+    def test_resume_run_hook_and_comment_truncation(self):
+        ex = self.fixture()
+        self.seed_state(ex, status='blocked')
+        data = ex.load_index()
+        data['steps'][0]['status'] = 'pending'
+        data['steps'][0].pop('error_message')
+        data['steps'][0].pop('failed_at')
+        ex.save_index(data)
+        os.environ['GH_LABELS'] = '{"labels": [{"name": "ready-for-human"}]}'
+        with mock.patch.object(ex, 'run_steps') as steps:
+            self.assertEqual(ex.run(), 0)
+            steps.assert_called_once()
+        self.assertEqual([args[1] for args in self.calls('gh')], ['view', 'edit'])
+        ex.issue_comment('가' * 60000)
+        self.assertEqual(self.calls('gh')[-1][-1], '가' * 60000)
+        ex.issue_comment('가' * 60001)
+        body = self.calls('gh')[-1][-1]
+        self.assertEqual(len(body), 60000)
+        self.assertTrue(body.endswith('[본문 잘림]'))
+
+
 if __name__ == "__main__":
     program = unittest.main(exit=False)
     sys.exit(0 if program.result.testsRun and program.result.wasSuccessful() else 1)

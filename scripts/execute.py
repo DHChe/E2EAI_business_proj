@@ -23,6 +23,7 @@ EXIT_ERROR = 1
 EXIT_BLOCKED = 2
 EXIT_REVIEW = 3
 MAX_ATTEMPTS = 3
+GH_ATTEMPTS = 3
 
 
 @dataclass
@@ -210,6 +211,7 @@ class Executor:
         self._gh_config = None
         self.session_timeout = 1800
         self.ac_timeout = 600
+        self.gh_timeout = 60
         self.child_pgid = None
         self.marker = None
         self.resume = None
@@ -580,6 +582,105 @@ class Executor:
     def issue(self) -> int:
         return self.load_index()["issue"]
 
+    def _gh_pending(self) -> list[list[str]]:
+        path = self.run_dir / "gh-pending.json"
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except FileNotFoundError:
+            return []
+        except (OSError, ValueError) as exc:
+            print(f"gh 대기열 읽기 실패: {exc}", file=sys.stderr)
+            return []
+        if not isinstance(data, list):
+            print("gh 대기열이 JSON 배열이 아니므로 버림", file=sys.stderr)
+            return []
+        issue = str(self.issue)
+        valid = []
+        for argv in data:
+            if (isinstance(argv, list) and all(isinstance(arg, str) for arg in argv)
+                    and ((len(argv) == 6 and argv[:5] ==
+                          ["gh", "issue", "comment", issue, "--body"])
+                         or (len(argv) == 8 and argv[:5] ==
+                             ["gh", "issue", "edit", issue, "--remove-label"]
+                             and argv[6] == "--add-label"
+                             and {argv[5], argv[7]} ==
+                             {"ready-for-agent", "ready-for-human"}))):
+                valid.append(argv)
+            else:
+                print(f"허용되지 않은 gh 대기열 항목을 버림: {argv!r}", file=sys.stderr)
+        return valid
+
+    def _save_gh_pending(self, pending: list[list[str]]) -> None:
+        try:
+            path = self.run_dir / "gh-pending.json"
+            if pending:
+                self.run_dir.mkdir(parents=True, exist_ok=True)
+                write_json_atomic(path, pending)
+            else:
+                path.unlink(missing_ok=True)
+        except (OSError, ValueError) as exc:
+            print(f"gh 대기열 저장 실패: {exc}", file=sys.stderr)
+
+    def _try_gh(self, argv: list[str]) -> bool:
+        for _ in range(GH_ATTEMPTS):
+            try:
+                result = subprocess.run(argv, cwd=self.root, env=os.environ.copy(),
+                                        timeout=self.gh_timeout, capture_output=True)
+                if result.returncode == 0:
+                    return True
+            except (OSError, ValueError, subprocess.SubprocessError):
+                pass
+        print(f"gh 명령 실패 ({GH_ATTEMPTS}회): {argv!r}", file=sys.stderr)
+        return False
+
+    def gh(self, *args: str) -> bool:
+        argv = ["gh", *args]
+        if self._try_gh(argv):
+            return True
+        try:
+            pending = self._gh_pending()
+            pending.append(argv)
+            self._save_gh_pending(pending)
+        except (OSError, ValueError, KeyError, TypeError) as exc:
+            print(f"gh 대기열 갱신 실패: {exc}", file=sys.stderr)
+        return False
+
+    def retry_gh_pending(self) -> None:
+        try:
+            pending = self._gh_pending()
+            failed = [argv for argv in pending if not self._try_gh(argv)]
+            self._save_gh_pending(failed)
+        except (OSError, ValueError, KeyError, TypeError) as exc:
+            print(f"gh 대기열 재시도 실패: {exc}", file=sys.stderr)
+
+    def issue_comment(self, body: str) -> None:
+        suffix = "\n… [본문 잘림]"
+        if len(body) > 60000:
+            body = body[:60000 - len(suffix)] + suffix
+        self.gh("issue", "comment", str(self.issue), "--body", body)
+
+    def issue_blocked(self, reason: str) -> None:
+        self.gh("issue", "edit", str(self.issue), "--remove-label", "ready-for-agent",
+                "--add-label", "ready-for-human")
+        self.issue_comment(f"blocked: {reason}")
+
+    def issue_resume(self) -> None:
+        try:
+            result = subprocess.run(
+                ["gh", "issue", "view", str(self.issue), "--json", "labels"],
+                cwd=self.root, env=os.environ.copy(), timeout=self.gh_timeout,
+                capture_output=True)
+            if result.returncode:
+                raise ValueError(f"view 종료 코드 {result.returncode}")
+            data = json.loads(result.stdout)
+            labels = {label["name"] for label in data["labels"]}
+        except (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError) as exc:
+            print(f"gh 라벨 확인 실패, 복원 건너뜀: {exc}", file=sys.stderr)
+            return
+        if "ready-for-human" in labels and "ready-for-agent" not in labels:
+            self.gh("issue", "edit", str(self.issue), "--remove-label", "ready-for-human",
+                    "--add-label", "ready-for-agent")
+
     def git(self, *args: str, env: dict[str, str] | None = None,
             check: bool = True, input: bytes | None = None) -> subprocess.CompletedProcess:
         result = subprocess.run(["git", *args], cwd=self.root, env=env,
@@ -769,6 +870,10 @@ class Executor:
                 self.confirm_step(spec.step, "completed", outcome.summary)
             else:
                 self.confirm_step(spec.step, outcome.status, outcome.reason)
+                if outcome.status == "blocked":
+                    self.issue_blocked(outcome.reason)
+                else:
+                    self.issue_comment(f"step{spec.step} error: {outcome.reason}")
                 code = EXIT_BLOCKED if outcome.status == "blocked" else EXIT_ERROR
                 raise HarnessExit(code, outcome.reason or f"{unit} {outcome.status}")
 
@@ -845,7 +950,9 @@ class Executor:
             self.acquire_lock()
             self.install_signal_handlers()
             self.recover()
-            self.prepare()
+            self.retry_gh_pending()
+            if self.prepare() == "blocked":
+                self.issue_resume()
             specs = self.load_step_specs()
             self.run_steps(specs)
             return EXIT_OK
