@@ -34,7 +34,9 @@
     {
       "step": 4,
       "name": "attempt-loop",
-      "status": "pending"
+      "status": "completed",
+      "summary": "scripts/execute.py: MAX_ATTEMPTS=3, AttemptOutcome(status, summary=None, reason=None, attempts=0, pre_sha=\"\"), Executor.env_fingerprint() -> dict[str, str], ignored_paths() -> set[str], read_result(unit) -> dict | None, run_ac(lines) -> str | None, attempt_unit(unit, task_text, allowed, ac, *, start_k=1) -> AttemptOutcome 및 ac_timeout=600 추가. 시도 판정·롤백·marker 보존 구현, run() 미연결. scripts/test_execute.py: AttemptLoopTests 14개 추가; 전체 58개, AC 13줄 모두 종료 0, Bash 가드 54/54 통과.",
+      "completed_at": "2026-09-22T20:37:41+09:00"
     },
     {
       "step": 5,
