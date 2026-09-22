@@ -14,7 +14,7 @@ Claude 루프의 **대안이 아니다** — 어느 것을 골라도 그 안에�
 
 - **에이전트는 결재 행위(승인·동의·반려·보류)의 행위자가 되지 않는다**(`CONTEXT.md:331`, 제외 13 `docs/PRD.md:141`).
 - 증빙 파이프라인에서 모델을 부르는 곳은 두 곳뿐이고, 검산·대사·판정은 코드다(`docs/design/receipt-pipeline.md:74`).
-  그 밖의 호출은 보류 답변(`docs/PRD.md:45`)과 여행사 이메일 판독(`CONTEXT.md:345`)이다.
+  그 밖의 호출은 보류 답변(`docs/PRD.md:45`)과 여행사 이메일 판독(`CONTEXT.md:345`)이다. **보완(#10, 2026-09-22)**: 여기에 기안 초안이 더해져 모델 호출 지점은 다섯 곳이다 — 판독기가 기안자가 준 서술·첨부를 폼 후보로 구조화하고, 초안은 판정 입력이 아닌 산출물이며, 책임자는 작성을 요청한 기안자이고, 상신은 사람이 한다(U6, `docs/research/agent-architecture-comparison.md:180`, [ADR-0018](0018-two-model-contracts-no-side-effect-tools.md)). 에이전트는 둘이고 부작용 도구는 없다.
 - 기한은 저장값이 아니라 계산값이다(`PRC-3-1`, `docs/company/travel-procedure.md:48`). "N일 뒤에 깨워라"가 필요 없다.
 
 그러면 에이전트 작업은 요청 한두 개로 끝나는 **짧은 작업**이고, 사람의 판단은 루프 **밖에서** 문서 상태를 바꾼다(claude §1).
@@ -24,7 +24,7 @@ Claude 루프의 **대안이 아니다** — 어느 것을 골라도 그 안에�
 
 1. **Claude 호출은 Messages API 직접 호출이다(B1).** TypeScript `@anthropic-ai/sdk`와 구조화 출력을 쓴다.
    Agent SDK(A)·Tool Runner(B2)·Managed Agents(B3)는 쓰지 않는다.
-2. **보류 답변만 작은 수동 루프다.** 도구는 계산 기록과 조항 원문을 읽는 읽기 전용 도구뿐이고, 목록은 #10이 정한다.
+2. **보류 답변만 작은 수동 루프다.** 도구는 계산 기록과 조항 원문을 읽는 읽기 전용 도구뿐이고, ~~목록은 #10이 정한다.~~ **정정(#10, 2026-09-22)**: 목록은 [ADR-0020](0020-hold-answer-slots-and-server-templates.md)이 정했다 — 계산 기록(입력 revision 포함)과 조항 원문을 읽는 셋이다.
    여러 요청에 걸치는 `messages` 배열은 작업 행에 저장한다. #4는 "`messages` 배열을 직렬화해 DB에 넣고"(`docs/research/agent-runtime-candidates.md:331`)까지만 적었고, 작업 행을 고른 것은 이 ADR의 결정이다.
 3. **내구 실행 계층을 두지 않는다.** Temporal·Inngest·LangGraph 없이 자체 상태 기계와 DB `job` 테이블을 쓴다.
    `job`은 임대(lease)·시도 횟수·멱등 key·fencing 값을 갖는다.
@@ -32,7 +32,7 @@ Claude 루프의 **대안이 아니다** — 어느 것을 골라도 그 안에�
    `재무합의대기`인 문서의 실행은 끝나 있고 워커 슬롯은 반환돼 있다(codex §3.3-1).
 5. **워커는 compose의 별도 서비스다**([ADR-0017](0017-public-demo-single-vm-replay-default-capped-live.md)의 그림).
    동시 LLM 작업 상한은 설정값이고 초기값은 2다 `[설계 가정]`.
-6. **#17이 정하지 않은 전이는 이름 붙은 거부로 막는다.** 반려·보류 이후, 재심 복귀, 타임아웃이 그 자리다.
+6. **#17이 정하지 않은 전이는 이름 붙은 거부로 막는다.** ~~반려·보류 이후, 재심 복귀, 타임아웃이 그 자리다.~~ **정정(#10, 2026-09-22)**: 반려 이후(`CONTEXT.md:81`), 답 없이 시간이 흐른 보류(`CONTEXT.md:88`), 재심 복귀, 타임아웃이 그 자리다. 보류 → 답변 → 같은 대기 복귀는 정의된 전이라 막지 않는다(`docs/adr/0003-approver-actions-three.md:25-26`, `docs/research/agent-architecture-comparison.md:158`).
    리듀서는 그 전이를 추측하지 않고 `UNDEFINED_BY_17` 같은 거부를 돌려준다(claude §3.4). S11의
    "#17이 정하지 않은 후속 상태를 성공으로 처리하지 않는다"(`docs/PRD.md:161`)를 코드로 옮긴 것이다.
 
@@ -92,7 +92,7 @@ codex는 처음부터 뗐다(codex §4). 저장을 PostgreSQL로 고르면서 �
      그러면 자체 구현이 채택 조건을 통과하지 못한 것이고 Temporal 도입으로 추천을 바꾼다(codex §3.3).
   3. 커밋 전 부작용의 재시도를 멱등 key로 막을 수 없다. 그때는 그 호출만 액티비티로 감싸는 편이 맞고, 전체 이관과는 별개다(grok §3.4).
 - 루프·상태 저장·재개·병렬 도구 결과 취합·감사 스키마를 우리가 쓴다. #4가 B1의 대가로 적은 그대로다(`docs/research/agent-runtime-candidates.md:905`).
-- #10은 "에이전트에게 부작용 도구가 있는가"에 답해야 한다. 그 답이 반증 1을 연다.
+- ~~#10은 "에이전트에게 부작용 도구가 있는가"에 답해야 한다. 그 답이 반증 1을 연다.~~ **정정(#10, 2026-09-22)**: #10의 답은 "아니오"다([ADR-0018](0018-two-model-contracts-no-side-effect-tools.md)). 반증 1은 열리지 않았고, 바깥으로 쓰는 커넥터가 없어 반증 3도 생길 자리가 없다([ADR-0021](0021-three-read-only-mock-connectors-no-erp.md)).
 - #17이 전이를 정하면 리듀서에 표 행을 더한다. 그 전까지 미정 전이는 성공으로 기록되지 않는다.
 - 기존 결정과의 관계.
   - [ADR-0003](0003-approver-actions-three.md)은 provisional이다(`docs/adr/0003-approver-actions-three.md:3`). 역할별 액션 집합을 리듀서의 **데이터**로 두면 #17의 결과를 반영하기 쉽다(claude §3.4).
