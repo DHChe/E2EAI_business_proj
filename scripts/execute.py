@@ -1,15 +1,17 @@
 """Repository harness primitives (Python 3.10 standard library only)."""
 import argparse
 import copy
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 import fcntl
 import json
 import os
 from pathlib import Path
+import posixpath
 import subprocess
 import sys
 import tempfile
-from typing import Iterable
+from typing import Iterable, Sequence
 
 EXIT_OK = 0
 EXIT_ERROR = 1
@@ -22,6 +24,87 @@ class HarnessExit(Exception):
         super().__init__(message)
         self.code = code
         self.message = message
+
+
+class SpecError(ValueError):
+    """Invalid step instruction, with the offending source line."""
+
+
+@dataclass(frozen=True)
+class StepSpec:
+    step: int
+    name: str
+    text: str
+    allowed: tuple[str, ...]
+    ac: tuple[str, ...]
+
+
+def _section(text: str, heading: str) -> list[tuple[int, str]]:
+    lines = text.splitlines()
+    starts = [i for i, line in enumerate(lines) if line == heading]
+    if len(starts) != 1:
+        raise SpecError(f"절이 정확히 하나여야 한다: {heading!r} (줄: "
+                        f"{[i + 1 for i in starts]})")
+    start = starts[0] + 1
+    end = next((i for i in range(start, len(lines)) if lines[i].startswith("## ")),
+               len(lines))
+    return list(enumerate(lines[start:end], start + 1))
+
+
+def parse_allowed_paths(text: str) -> list[str]:
+    heading = "## 변경 허용 경로"
+    paths = []
+    for number, line in _section(text, heading):
+        path = line.strip()
+        if not path:
+            continue
+        base = path[:-1] if path.endswith("/") else path
+        if (any(char in path for char in "*?[") or path.startswith(("/", ":"))
+                or ".." in path.split("/") or base in {"", "."}
+                or base != posixpath.normpath(base)
+                or base == "phases" or path.startswith("phases/")):
+            raise SpecError(f"허용되지 않은 경로 (줄 {number}): {line!r}")
+        paths.append(path)
+    if not paths:
+        raise SpecError(f"경로가 비었다: {heading!r}")
+    return paths
+
+
+def path_allowed(path: str, allowed: Sequence[str]) -> bool:
+    return any(path.startswith(item) if item.endswith("/") else path == item
+               for item in allowed)
+
+
+def parse_ac(text: str) -> list[str]:
+    heading = "## Acceptance Criteria"
+    lines = _section(text, heading)
+    fences = [(i, number, line) for i, (number, line) in enumerate(lines)
+              if line.startswith("```")]
+    if len(fences) != 2:
+        raise SpecError(f"닫힌 펜스 블록이 정확히 하나여야 한다: {heading!r}; "
+                        f"펜스 줄: {[(n, line) for _, n, line in fences]!r}")
+    start, number, opening = fences[0]
+    if opening[3:] != "bash":
+        raise SpecError(f"bash 블록이어야 한다 (줄 {number}): {opening!r}")
+    commands = []
+    # Even syntax-only noninteractive bash can source BASH_ENV before parsing.
+    env = os.environ.copy()
+    env.pop("BASH_ENV", None)
+    for number, line in lines[start + 1:fences[1][0]]:
+        command = line.strip()
+        if not command or command.startswith("#"):
+            continue
+        if command.endswith("\\") or "<<" in command:
+            raise SpecError(f"여러 줄 AC는 허용하지 않는다 (줄 {number}): {line!r}")
+        result = subprocess.run(["bash", "-n", "-c", command], env=env,
+                                capture_output=True)
+        if result.returncode:
+            raise SpecError(f"AC 문법 오류 (줄 {number}): {line!r}: "
+                            f"{result.stderr.decode(errors='replace').strip()}")
+        commands.append(command)
+    if not commands:
+        raise SpecError(f"커맨드가 비었다: {heading!r}; {opening!r}")
+    return commands
 
 
 def now_kst() -> str:
@@ -105,6 +188,36 @@ class Executor:
 
     def load_index(self) -> dict:
         return read_json(self.index_path)
+
+    def load_step_specs(self) -> list[StepSpec]:
+        if hasattr(self, "specs"):
+            return self.specs
+        specs = []
+        errors = []
+        for step in self.load_index()["steps"]:
+            path = f"phases/{self.phase_dir}/step{step['step']}.md"
+            result = self.git("show", f"HEAD:{path}", check=False)
+            if result.returncode:
+                errors.append(f"{path}: HEAD 파일을 읽을 수 없다: "
+                              f"{result.stderr.decode(errors='replace').strip()}")
+                continue
+            try:
+                text = result.stdout.decode("utf-8")
+            except UnicodeError as exc:
+                errors.append(f"{path}: UTF-8 오류: {exc}")
+                continue
+            parsed = []
+            for parser in (parse_allowed_paths, parse_ac):
+                try:
+                    parsed.append(tuple(parser(text)))
+                except SpecError as exc:
+                    errors.append(f"{path}: {exc}")
+            if len(parsed) == 2:
+                specs.append(StepSpec(step["step"], step["name"], text, *parsed))
+        if errors:
+            raise HarnessExit(EXIT_ERROR, "step 지시서 위반:\n" + "\n".join(errors))
+        self.specs = specs
+        return self.specs
 
     def save_index(self, data: dict) -> None:
         write_json_atomic(self.index_path, data)
@@ -261,6 +374,7 @@ class Executor:
         try:
             self.acquire_lock()
             self.prepare()
+            self.load_step_specs()
             return EXIT_OK
         except HarnessExit as exc:
             print(exc.message, file=sys.stderr)

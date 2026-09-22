@@ -344,6 +344,122 @@ class PhaseStateTests(HarnessTestCase):
             self.assertEqual(self.calls(name), [["trap-test"]])
 
 
+class StepSpecTests(HarnessTestCase):
+    def test_paths_reject_glob_abs_dotdot_magic(self):
+        for path in ("src/*.py", "src/?.py", "src/[ab].py", "/etc/passwd",
+                     "../x", "src/../x", ":(glob)src", "./src/a.py",
+                     "a//b", ".", "src//", "src/./a"):
+            with self.subTest(path=path), self.assertRaises(execute.SpecError) as caught:
+                execute.parse_allowed_paths(step_md(0, "alpha", [path], ["true"]))
+            self.assertIn(path, str(caught.exception))
+        self.assertEqual(execute.parse_allowed_paths(
+            step_md(0, "alpha", [" src/a.py ", "", "src/"], ["true"])),
+            ["src/a.py", "src/"])
+
+    def test_paths_reject_phases_overlap(self):
+        for path in ("phases", "phases/", "phases/7-sample/step0.md", "phases/index.json"):
+            with self.subTest(path=path), self.assertRaises(execute.SpecError):
+                execute.parse_allowed_paths(step_md(0, "alpha", [path], ["true"]))
+
+    def test_path_allowed_file_and_directory_boundaries(self):
+        allowed = ("src/a.py", "tests/")
+        for path in ("src/a.py", "tests/a.py", "tests/nested/b.py"):
+            self.assertTrue(execute.path_allowed(path, allowed))
+        for path in ("src/a.pyc", "src/a.py/child", "src/b.py", "tests", "tests-other/a"):
+            self.assertFalse(execute.path_allowed(path, allowed))
+
+    def test_paths_require_one_nonempty_section(self):
+        for text in ("", "## 변경 허용 경로\n\n## 다음\na.py",
+                     "## 변경 허용 경로\na.py\n## 변경 허용 경로\nb.py"):
+            with self.subTest(text=text), self.assertRaises(execute.SpecError):
+                execute.parse_allowed_paths(text)
+        self.assertEqual(execute.parse_allowed_paths(
+            "## 변경 허용 경로\na.py\n## 다음\nphases/"), ["a.py"])
+
+    def test_ac_exactly_one_bash_block(self):
+        heading = "## Acceptance Criteria\n"
+        for text in (heading, heading + "```bash\ntrue\n```\n```bash\ntrue\n```",
+                     heading + "```sh\ntrue\n```", "```bash\ntrue\n```",
+                     heading + "```bash\ntrue", heading + "```bash\n# comment\n```",
+                     heading + "```bash\ntrue\n```\n" + heading,
+                     heading + "```bash extra\ntrue\n```"):
+            with self.subTest(text=text), self.assertRaises(execute.SpecError):
+                execute.parse_ac(text)
+        self.assertEqual(execute.parse_ac(
+            heading + "```bash\n\n  # comment\n  true  \n! false\n```\n"
+            "## 다음\n```sh\nignored\n```"), ["true", "! false"])
+
+    def test_ac_rejects_multiline_constructs(self):
+        for command in ("echo hi \\", "cat <<EOF", "if true; then", "for x in a; do",
+                        "f() {", "cat <<< hi"):
+            with self.subTest(command=command), self.assertRaises(execute.SpecError) as caught:
+                execute.parse_ac(step_md(0, "alpha", ["src/"], [command]))
+            self.assertIn(repr(command), str(caught.exception))
+        commands = ["! false", "false && true", "false | true"]
+        self.assertEqual(execute.parse_ac(step_md(0, "alpha", ["src/"], commands)), commands)
+
+    def test_specs_read_from_head(self):
+        root = self.make_repo()
+        executor = self.make_executor(root)
+        path = root / f"phases/{PHASE}/step0.md"
+        committed = path.read_text()
+        path.write_text(step_md(0, "alpha", ["other/"], ["touch ran.txt"]))
+        specs = executor.load_step_specs()
+        self.assertIs(specs, executor.specs)
+        self.assertEqual([spec.step for spec in specs], [0, 1])
+        self.assertEqual(specs[0], execute.StepSpec(
+            0, "alpha", committed, ("src/",), ("test -f src/alpha.txt",)))
+        with mock.patch.object(executor, "git", side_effect=AssertionError("reread")):
+            self.assertIs(executor.load_step_specs(), specs)
+        self.assertFalse((root / "ran.txt").exists())
+
+    def test_invalid_spec_runs_nothing(self):
+        root = self.make_repo(steps=[
+            {"name": "alpha", "ac": ["touch ran.txt"]},
+            {"name": "beta", "allowed": ["src/*.py"]}])
+        executor = self.make_executor(root)
+        self.assertEqual(executor.run(), 1)
+        self.assertFalse(hasattr(executor, "specs"))
+        for name in ("codex", "claude", "grok", "gh"):
+            self.assertEqual(self.calls(name), [])
+        self.assertFalse((root / "ran.txt").exists())
+
+    def test_specs_collect_errors_and_missing_head_files(self):
+        root = self.make_repo(steps=[
+            {"name": "alpha", "allowed": ["../x"], "ac": ["if true; then"]},
+            {"name": "beta", "ac": ["cat <<EOF"]}])
+        executor = self.make_executor(root)
+        data = executor.load_index()
+        data["steps"].append({"step": 2, "name": "missing", "status": "pending"})
+        executor.save_index(data)
+        with self.assertRaises(execute.HarnessExit) as caught:
+            executor.load_step_specs()
+        self.assertEqual(caught.exception.code, 1)
+        for fragment in ("step0.md", "../x", "if true; then", "step1.md", "cat <<EOF",
+                         "step2.md"):
+            self.assertIn(fragment, str(caught.exception))
+        self.assertFalse(hasattr(executor, "specs"))
+
+    def test_run_reads_specs_after_prepare_commit(self):
+        root = self.make_repo()
+        executor = self.make_executor(root)
+        (root / f"phases/{PHASE}/step0.md").write_text(
+            step_md(0, "alpha", ["src/"], ["touch ran.txt"]))
+        self.assertEqual(executor.run(), 0)
+        self.assertEqual(executor.specs[0].ac, ("touch ran.txt",))
+        self.assertFalse((root / "ran.txt").exists())
+
+    def test_ac_syntax_check_has_no_side_effects(self):
+        marker = self.temp_dir / "ran.txt"
+        startup = self.temp_dir / "startup.sh"
+        startup.write_text(f"touch '{marker}'\n")
+        commands = [f"touch '{marker}'", f"echo $(touch '{marker}')"]
+        with mock.patch.dict(os.environ, {"BASH_ENV": str(startup)}):
+            self.assertEqual(execute.parse_ac(step_md(0, "alpha", ["src/"], commands)),
+                             commands)
+        self.assertFalse(marker.exists())
+
+
 if __name__ == "__main__":
     program = unittest.main(exit=False)
     sys.exit(0 if program.result.testsRun and program.result.wasSuccessful() else 1)
