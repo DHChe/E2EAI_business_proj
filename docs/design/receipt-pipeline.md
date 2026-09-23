@@ -2225,7 +2225,9 @@ export function commonPrefixLength(left: string, right: string): number {
   확인은 그 단계의 이유만 닫고, 남은 이유가 있으면 다음 사람에게 간다.
   `후보 복수`에서 줄을 고르면 그 줄 하나로 대사를 다시 돌린다(`afterCandidateChoice`) — 경쟁·값 모순이 남으면 보통 순서대로 다음 사람에게 가고, 고른 줄이라서 건너뛰지 않는다(#26).
   모든 이유가 닫혀 같은 지출이라고 확인되면 짝이 선다(아래 `closeAffirmedPair`) — 금액이 맞으면 `대사 완료`, 같은 통화에서 어긋나면 `대사 불일치`(차액)이고
-  짝의 근거는 `사람 선택`이다(확인한 사람이 행위자로 남는다). 같은 지출이 아니라고 하면 `짝 없음`이 된다.
+  짝의 근거는 `사람 선택`이다(확인한 사람이 행위자로 남는다). 보인 줄이 이 증빙의 것이 아니라고 하면 그 줄만 빼고 대사를 다시 돌린다 — 남은 후보가 없으면 `짝 없음(증빙)`이다.
+  **경쟁 확인은 "이 카드 줄은 어느 증빙인가"를 정한다**(#26). 그 줄을 노린 증빙(`claims`) 모두에 기록을 남긴다 — 고른 증빙은 `같은 지출`, 나머지는 `이 줄 아님`이고, 이미 짝이 선 증빙이나 `후보 복수`인 증빙도 든다.
+  진 증빙은 그 줄만 잃고 남은 후보로 다시 대사한다(`withoutDecidedLines`). 효력 있는 결정으로 한 증빙에 선 줄은 다른 증빙의 후보에서 빠지고, 그 줄의 `claims`는 그 증빙 하나다 — 한 카드 줄에 짝이 둘 서지 않는다.
   **통화가 다른 짝**을 재무합의자가 같은 거래로 확인하면 `대사 불일치`로 닫되 차액은 계산하지 않는다 —
   차액 칸은 "통화 다름 — 산출하지 않음"이고, 증빙 금액과 카드 줄 원거래 금액을 둘 다 그대로 남긴다.
   원화 환산은 #16 `TRV-14`가 정책 대조에서 한다(`PolicyFacts.reconciliation`으로 넘어간다). 환율 기준일은 #16이 `TRV-14-1`에서 지출일로 정했다(§3.9).
@@ -2344,7 +2346,8 @@ export function afterCandidateChoice(
     return { kind: "닫힘", outcome: { ...rerun, key: "사람 선택" } };
   }
 
-  // 줄 하나로 돌렸으므로 `후보 복수`·`짝 없음(증빙)`은 나오지 않는다. 짝 확인은 날짜 창이 덮인 뒤에만 열리므로 `명세 대기`도 나오지 않는다.
+  // 줄 하나로 돌렸으므로 `후보 복수`·`짝 없음(증빙)`은 나오지 않는다. 짝 확인은 날짜 창이 덮인 뒤에만 열리고
+  // 수집 기준일은 줄지 않으므로(`PairBasis`의 `[설계 가정]`) `명세 대기`도 나오지 않는다.
   throw new Error(`고른 줄로 다시 돈 대사가 ${rerun.kind}다`);
 }
 ```
@@ -2518,7 +2521,7 @@ export type PairCheck = {
  * 막힌 이유를 한 단계씩 보내므로(§7.4) 한 짝에 기록이 둘(기안자 또는 총무 예약 담당, 그다음 재무합의자)일 수 있다.
  * 공통 감사 envelope([ADR-0012](../adr/0012-transition-audit-provenance-in-one-transaction.md) 결정 2)의 본문이다 —
  * 행위자·책임자·시각은 envelope에 있고, 행위자와 책임자는 둘 다 확인한 사람이다.
- * 경쟁을 푼 행위 하나가 여러 증빙의 확인을 닫으면 증빙마다 기록을 남기고, envelope의 `command_id`가 같다.
+ * 경쟁을 푼 행위 하나는 그 줄을 노린 증빙마다 기록을 남기고(§7.4), envelope의 `command_id`가 같다.
  */
 export type PairCheckEntry = {
   auditEntryId: string;
@@ -2533,7 +2536,7 @@ export type PairCheckEntry = {
   /**
    * 같은 지출이면 남은 조건이 있을 때 다음 사람에게 가고, 없으면 짝이 닫힌다(`closeAffirmedPair`, §7.4).
    * `후보 복수`에서 고른 줄은 `afterCandidateChoice`가 그 줄로 대사를 다시 돌려 남은 조건을 정한다 — 경쟁·값 모순을 건너뛰지 않는다.
-   * 같은 지출이 아니면 늘 `짝 없음(증빙)`으로 닫힌다.
+   * `이 줄 아님`이면 그 줄만 이 증빙의 후보에서 빼고 대사를 다시 돌린다(`withoutDecidedLines`). 경쟁에서 진 증빙도 이것이다.
    */
   decision:
     | {
@@ -2543,7 +2546,7 @@ export type PairCheckEntry = {
           | { kind: "다음 단계"; remaining: AutoConfirmBlock[] }
           | { kind: "닫힘"; outcome: ReconciliationOutcome };
       }
-    | { kind: "같은 지출 아님" };
+    | { kind: "이 줄 아님"; cardLineIds: string[] };
   /** 결정 때 대사의 입력. 이것이 그대로인 동안 대사가 다시 돌아도 이 결정을 다시 묻지 않는다(`withStandingDecision`). */
   basis: PairBasis;
   /** 원본을 펼쳐 봤는가([ADR-0009](../adr/0009-evidence-is-crop-plus-original-toggle.md)). `ConfirmationEntry`처럼 지표의 원천이다(§11). */
@@ -2557,6 +2560,7 @@ export type PairCheckEntry = {
  * 그 줄을 노린 다른 증빙의 대사 입력 필드. 항목이 하나라도 다르거나 늘고 줄면 결정은 효력을 잃는다.
  * 경쟁한 증빙의 입력을 함께 넣으므로 한쪽이 바뀌면 다른 쪽의 결정도 효력을 잃는다 — 한 카드 줄에 짝이 둘 서지 않는다.
  * 수집 기준일은 넣지 않는다. 짝 확인은 날짜 창이 덮인 뒤에만 열리고(`명세 대기`는 보내지 않는다), 그 뒤 들어온 줄은 후보 줄 목록을 바꾼다.
+ * 이것은 후보 풀의 수집 기준일이 줄지 않는다는 데 기댄다 `[설계 가정]` — 새 카드 파일이 더 이른 기준일로 풀에 들면 성립하지 않는다.
  */
 export type PairBasis = Array<{
   input: "증빙 필드" | "카드 줄";
@@ -2564,6 +2568,23 @@ export type PairBasis = Array<{
   id: string;
   revision: number;
 }>;
+
+/** 결정이 아직 효력이 있는가 — 결정 때의 입력과 지금 입력이 같다. */
+export function decisionStands(entry: PairCheckEntry, current: PairBasis): boolean {
+  return sameBasis(entry.basis, current);
+}
+
+/**
+ * 사람의 결정이 선 뒤의 후보(#26). 대사를 다시 돌리기 전에 쓴다. 이 증빙에 효력 있는 `이 줄 아님`의 줄과,
+ * 효력 있는 `같은 지출`로 다른 증빙에 선 줄을 뺀다. 그렇게 선 줄의 `claims`는 그 증빙 하나다.
+ */
+export function withoutDecidedLines(
+  candidates: CardLine[],
+  rejectedHere: ReadonlySet<string>,
+  takenElsewhere: ReadonlySet<string>,
+): CardLine[] {
+  return candidates.filter((line) => !rejectedHere.has(line.id) && !takenElsewhere.has(line.id));
+}
 
 function sameBasis(left: PairBasis, right: PairBasis): boolean {
   const key = (basis: PairBasis) =>
@@ -2590,8 +2611,9 @@ export function withStandingDecision(
 
   const { decision } = latest;
 
-  if (decision.kind === "같은 지출 아님") {
-    return { kind: "짝 없음(증빙)" };
+  // `이 줄 아님`은 후보에서 그 줄을 뺀 채 돈 대사(`withoutDecidedLines`)가 이미 반영했다.
+  if (decision.kind === "이 줄 아님") {
+    return fresh;
   }
 
   return decision.result.kind === "닫힘"
