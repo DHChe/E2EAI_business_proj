@@ -527,7 +527,7 @@ stateDiagram-v2
   같은 키·같은 해시는 무동작이고, 같은 키·다른 해시는 정정 revision이 없으면 충돌이다. codex의 "결손 행이 있는 batch는 staging 상태로 남긴다"는 C6으로 받지 않는다.
 - **조직 스냅샷을 가져오지 못하면 기안을 막는다.** 오래된 스냅샷으로 결재선을 계산하지 않는다(claude §4.4.3) `[설계 가정]`.
 
-**§7.5 요구 칸 대조.** `docs/design/receipt-pipeline.md` §7.5(`:2360-2368`)의 일곱 칸은 모두 충족하고, `CardLine`(`:1817-1830`)이 요구하는 둘을 더 준다(ADR-0021 결정 8). `카드 사용자`와 수집 기준일은 #26이 더했다([ADR-0031](adr/0031-reconciliation-pending-states-and-input-driven-rerun.md) 결정 4·7).
+**§7.5 요구 칸 대조.** `docs/design/receipt-pipeline.md` §7.5(`:2361-2369`)의 일곱 칸은 모두 충족하고, `CardLine`(`:1817-1830`)이 요구하는 둘을 더 준다(ADR-0021 결정 8). `카드 사용자`와 수집 기준일은 #26이 더했다([ADR-0031](adr/0031-reconciliation-pending-states-and-input-driven-rerun.md) 결정 4·7).
 
 | 칸 | `CardLine` | 이용 내역 | 청구 명세 | 비고 |
 | --- | --- | --- | --- | --- |
@@ -547,7 +547,7 @@ stateDiagram-v2
 표는 claude §4.5를 옮겼다. 파일 칸의 함정은 `[설계 가정]`이다.
 
 일별 이용 내역에는 청구 원화가 없다. 그래서 `CardLine`은 이용 내역의 칸만 갖는 대사 입력이고, 청구 원화와 할부 회차는 월 청구 명세가 뒤에 붙이는 `CardBilling`이다(`docs/design/receipt-pipeline.md:1836-1842`, [ADR-0031](adr/0031-reconciliation-pending-states-and-input-driven-rerun.md) 결정 4).
-청구 명세의 줄은 이용 내역의 줄에 잇고, 대사 입력 칸이 다르면 카드 줄의 새 revision으로 받아 대사가 다시 돈다(`:2371-2374`) `[설계 가정]`.
+청구 명세의 줄은 이용 내역의 줄에 잇고, 대사 입력 칸이 다르면 카드 줄의 새 revision으로 받아 대사가 다시 돈다(`:2372-2375`) `[설계 가정]`.
 
 ## 10. `job`과 실패 격리
 
