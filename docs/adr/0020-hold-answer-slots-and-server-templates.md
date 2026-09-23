@@ -81,7 +81,7 @@ codex와 claude는 셋을 다르게 나눴다.
 | 프롬프트 지시만(SlipScan ADR-7, Issue #10 갱신 2) | 모델이 숫자를 바꿔 써도 잡는 코드가 없다(비교 문서 `:69`) |
 | 계약 1개 + 보류 답변은 템플릿만(grok §3.4 B) | ADR-0011 결정 2(보류 답변은 모델의 수동 루프)를 개정해야 하고, 열린 질문은 템플릿에 없다(grok §3.4) |
 | 읽기 도구 4개 — `read_field`·`read_card_snapshot` 포함(grok §5.2) | ADR-0011:27의 "계산 기록과 조항 원문" 문언 밖이다(C2) |
-| 답변 토큰 스트리밍(SlipScan ADR-6, `slipscan:docs/ARCHITECTURE.md:521`) | [ADR-0015](0015-typescript-web-stage-sse-no-unverified-answer-text.md) 결정 5와 충돌한다(`docs/adr/0015-typescript-web-stage-sse-no-unverified-answer-text.md:26`) |
+| 답변 토큰 스트리밍(SlipScan ADR-6, `slipscan:docs/ARCHITECTURE.md:520`) | [ADR-0015](0015-typescript-web-stage-sse-no-unverified-answer-text.md) 결정 5와 충돌한다(`docs/adr/0015-typescript-web-stage-sse-no-unverified-answer-text.md:26`) |
 
 ## 결과
 

@@ -67,7 +67,7 @@ admin은 감사자이고 값을 수정하지 못한다(`docs/adr/0002-admin-read
 | 모든 비결재 조작의 책임자를 기안자로 고정(#9 grok, `docs/adr/0012-transition-audit-provenance-in-one-transaction.md:45`) | 확정 전 오독의 책임이 출장자에게 찍힌다(`:55-56`). 세 레인 모두 기각했다(A11) |
 | 규정상 그 주장을 맡은 자리(grok §7.1) | 규칙의 결과가 기계 조작 대부분에서 기안자다. #9에서 지적된 약점이 그대로 남는다(비교 문서 `:103`) |
 | 검토 의무자 → 차례 주인 → 커넥터 소유자 + `responsible_rule` 칸(claude §6.4) | 영수증 추출의 책임자가 기안자로 남는다(비교 문서 `:104`). 사용자가 U1으로 codex 안을 골랐다 |
-| 모든 이벤트를 전결권자로(codex §8 0019 기각 열, `docs/adr/0012-transition-audit-provenance-in-one-transaction.md:53`) | 전결권자는 기안 전에는 없다(`APV-11-1`, `docs/company/approval-matrix.md:254`, claude §6.4 비교표) |
+| 모든 이벤트를 전결권자로(codex §8 0019 기각 열, `docs/adr/0012-transition-audit-provenance-in-one-transaction.md:53`) | 전결권자는 기안 전에는 없다(`APV-11-1`, `docs/company/approval-matrix.md:256`, claude §6.4 비교표) |
 | AI 운영 책임자 1인, 또는 시스템 자체 책임(claude §6.4 비교표, codex §8 0019 기각 열) | 책임자는 사람이다(`docs/adr/0012-transition-audit-provenance-in-one-transaction.md:30`). 한 사람에게 모든 기계 조작을 몰면 기록이 아무것도 가르지 못한다(claude §6.4) |
 | 촉발한 사람(claude §6.4 비교표) | 도착 순서라는 경주가 같은 판정의 책임자를 바꾼다(claude §6.4) |
 | 부재 시 팀장·기안자·admin 자동 대체 | 명목 책임자를 만든다(위 근거). admin 대체는 [ADR-0002](0002-admin-read-only-audit-axis.md)의 감사자 축과 부딪친다 |

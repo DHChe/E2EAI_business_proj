@@ -52,7 +52,7 @@
 ## 근거
 
 **왜 ERP가 없는가.** 판정이 읽는 ERP 값이 없다. 지급 처리는 재무팀의 상태 전이이고(`docs/PRD.md:25`, `:86`), 회계 장부의 원화 금액은 확정하지 않는다(`docs/PRD.md:136`).
-규정도 "회계 장부에 적을 원화 금액은 이 규정이 정하지 않는다"고 적는다(`TRV-14-3`, `docs/company/travel-policy.md:326`). 이 논거는 claude §4.4.4다.
+규정도 "회계 장부에 적을 원화 금액은 이 규정이 정하지 않는다"고 적는다(`TRV-14-3`, `docs/company/travel-policy.md:332`). 이 논거는 claude §4.4.4다.
 쓰는 커넥터를 두지 않으면 ADR-0011 반증 3도 닫힌다(비교 문서 `:116`).
 
 **잃는 것.** 무대 4계통 중 ERP가 화면에 한 번도 나오지 않는다. 틈 ③(`docs/company/tools.md:40-44`)은 증빙 파이프라인·대사와 재무팀의 지급 처리 상태 전이로 끝난다(claude §4.4.4).
@@ -66,7 +66,7 @@
 **왜 두 번째 결재 상태를 두지 않는가.** 앱 DB가 결재의 유일한 원장이다(A8). 한성워크에서 하던 결재는 승인자 큐로 옮긴다(`docs/PRD.md:24`). 결재 상태가 둘이면 큐와 감사가 어긋난다. 내구 실행 계층을 두지 않은 이유(`docs/adr/0011-messages-api-direct-waits-are-document-state.md:74-75`, grok §3.3)에서 끌어온 유추다.
 
 **왜 계정 분류를 하지 않는가.** 계정 분류는 회계 장부의 일이다. 이 MVP는 장부 원화를 확정하지 않고, ERP 커넥터도 없다(claude §7.3).
-여비가 아닌 지출은 분리까지만 한다(`docs/PRD.md:137`, `TRV-10-1` `docs/company/travel-policy.md:218`). 분류 규칙을 두려면 규정 원본에 조항이 먼저 있어야 한다(`docs/adr/0005-policy-source-of-truth.md:30-32`, `docs/PRD.md:138`).
+여비가 아닌 지출은 분리까지만 한다(`docs/PRD.md:137`, `TRV-10-1` `docs/company/travel-policy.md:220`). 분류 규칙을 두려면 규정 원본에 조항이 먼저 있어야 한다(`docs/adr/0005-policy-source-of-truth.md:30-32`, `docs/PRD.md:138`).
 
 **왜 깨진 줄만 격리하는가.** 파일 전체를 거부하면 한 줄의 결손이 같은 파일의 다른 줄의 대사까지 멈춘다 `[유도]`. 격리한 줄은 0건으로 치지 않고 드러낸다(codex §4.1, claude §4.4.1).
 
