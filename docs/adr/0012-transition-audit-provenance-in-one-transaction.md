@@ -87,7 +87,7 @@ grok은 추출·계산의 책임자를 기안자로 고정하자고 했고, 그 
   > _`82f02d8`의 `docs/design/receipt-pipeline.md:287-305`의 `ConfirmationEntry`와 어긋나지만(책임자 칸이 없다), 타입만 옮기면 R-e·S11 충족을 증명하지 못한다.
   > 이 ADR은 공통 감사 envelope의 필수 책임자로 보완한다. 설계 문서는 고치지 않고 후속으로 남긴다(codex §12, grok §2 가정 3)._
 
-  **보완(#26, 2026-09-23)**: #26이 설계 문서를 고쳤다. `ConfirmationEntry`와 짝 확인 기록(`PairCheckEntry`)은 이 envelope의 본문이고, 행위자·책임자·시각은 envelope에만 둔다 — 두 타입에서 `actor`·`at`을 뺐다([ADR-0031](0031-reconciliation-pending-states-and-input-driven-rerun.md) 결정 1).
+  **보완(#26, 2026-09-23)**: #26이 설계 문서를 고쳤다. `ConfirmationEntry`와 짝 확인 기록(`PairCheckEntry`)은 이 envelope의 본문이고, 행위자·책임자·시각은 envelope에만 둔다 — `ConfirmationEntry`에서 `actor`·`at`을 뺐고 새 `PairCheckEntry`도 그 칸을 두지 않는다([ADR-0031](0031-reconciliation-pending-states-and-input-driven-rerun.md) 결정 1).
 
 - 기존 결정과의 관계.
   - [ADR-0002](0002-admin-read-only-audit-axis.md): admin에게는 값 수정·원복 명령이 없다(`docs/adr/0002-admin-read-only-audit-axis.md:25`).
