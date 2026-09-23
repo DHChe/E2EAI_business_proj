@@ -18,6 +18,12 @@
 
 # harness 실행 로그 — 재생성 가능, 커밋하지 않는다.
 phases/**/step*-output.json
+# 실행기 산출물(결과·marker·잠금·리뷰 원문·gh 대기열) — docs/agents/harness.md 실행기 절.
+phases/**/.run/
 
 # Claude Code가 만드는 linked worktree — 런타임 상태, 커밋하지 않는다.
 .claude/worktrees/
+
+# Python 바이트코드 — AC·리뷰가 테스트를 돌리면 생긴다.
+__pycache__/
+*.pyc
