@@ -12,6 +12,7 @@ import posixpath
 import re
 import shutil
 import signal
+import stat
 import subprocess
 import sys
 import tempfile
@@ -232,6 +233,7 @@ class Executor:
         self._review_text = {}
         self._git_guard_paths = None
         self._git_guard_changed = False
+        self._guard_pending = None
         self._ignored_baselines = {}
         # Resolve once, before any child can change repository configuration.
         self.git_guard_path = self.root / os.fsdecode(self.git(
@@ -368,8 +370,10 @@ class Executor:
         if marker["stage"] == "feat_done" and not env_changed:
             if match[1] == "fix":
                 data = self.load_index()
+                path = self.index_path.relative_to(self.root).as_posix()
+                committed = json.loads(self.git("show", f"HEAD:{path}").stdout)
                 data["review"]["status"] = "pending"
-                data["review"]["fixes"] = data["review"].get("fixes", 0) + 1
+                data["review"]["fixes"] = committed.get("review", {}).get("fixes", 0) + 1
                 data["review"].pop("blocked_reason", None)
                 self.save_index(data)
                 self.commit_meta(f"{marker['unit']} 반영")
@@ -383,6 +387,7 @@ class Executor:
             reason = "④ 크래시 뒤 .env 지문 변경: 보관 바이트 없음, 수동 복원 필요"
             if marker["unit"].startswith("step"):
                 self.confirm_step(int(marker["unit"][4:]), "error", reason)
+                self.issue_comment(f"{marker['unit']} error: {reason}")
             else:
                 self.finish_fix(int(marker["unit"][3:]), AttemptOutcome("error", reason=reason))
             raise HarnessExit(EXIT_ERROR, reason)
@@ -486,10 +491,19 @@ class Executor:
         return self.run_dir / f"{unit}-result.json"
 
     def env_fingerprint(self) -> dict[str, str]:
-        return {path.name: hashlib.sha256(path.read_bytes()).hexdigest()
-                for path in self.root.iterdir()
-                if (path.name == ".env" or path.name.startswith(".env."))
-                and path.name != ".env.example" and path.is_file()}
+        result = {}
+        for path in self.root.iterdir():
+            if (path.name != ".env" and not path.name.startswith(".env.")) \
+                    or path.name == ".env.example":
+                continue
+            if path.is_file():
+                value = path.read_bytes()
+            elif path.is_symlink() or (os.path.lexists(path) and not path.is_dir()):
+                value = repr(self.capture_path(path)).encode()
+            else:
+                continue
+            result[path.name] = hashlib.sha256(value).hexdigest()
+        return result
 
     def ignored_paths(self) -> set[str]:
         paths = set()
@@ -508,8 +522,11 @@ class Executor:
         if path.is_dir():
             return ("dir", {p.name: Executor.capture_path(p) for p in sorted(path.iterdir())},
                     path.stat().st_mode & 0o7777)
-        if path.exists():
+        if path.is_file():
             return ("file", path.read_bytes(), path.stat().st_mode & 0o7777)
+        if os.path.lexists(path):
+            mode = path.lstat().st_mode
+            return ("special", stat.S_IFMT(mode), mode & 0o7777)
         return None
 
     @staticmethod
@@ -517,7 +534,7 @@ class Executor:
         # Unlink links themselves, including links substituted for directories.
         if Executor.capture_path(path) == saved:
             return
-        if path.is_symlink() or (path.exists() and not path.is_dir()):
+        if path.is_symlink() or (os.path.lexists(path) and not path.is_dir()):
             path.unlink()
         elif path.is_dir():
             if saved and saved[0] == "dir":
@@ -540,6 +557,10 @@ class Executor:
             path.symlink_to(content)
             if hasattr(os, "lchmod"):
                 os.lchmod(path, mode)
+        elif kind == "special":
+            if content != stat.S_IFIFO:
+                raise OSError(f"복원할 수 없는 특수 파일 종류: {content}")
+            os.mkfifo(path, mode)
         else:
             path.write_bytes(content)
             path.chmod(mode)
@@ -561,11 +582,24 @@ class Executor:
     def capture_env(self) -> dict:
         return {p.name: self.capture_path(p) for p in self.root.iterdir()
                 if (p.name == ".env" or p.name.startswith(".env."))
-                and p.name != ".env.example" and (p.is_file() or p.is_symlink())}
+                and p.name != ".env.example" and os.path.lexists(p)}
 
     def restore_env(self, saved: dict) -> None:
         for name in self.capture_env().keys() | saved.keys():
             self.restore_path(self.root / name, saved.get(name))
+
+    def restore_env_change(self, before: dict[str, str], saved: dict,
+                           regular_reason: str, context: str = "") -> str | None:
+        after = self.env_fingerprint()
+        if after == before:
+            return None
+        changed = {name for name in before.keys() | after.keys()
+                   if before.get(name) != after.get(name)}
+        self.restore_env(saved)
+        if any(saved.get(name) and saved[name][0] == "link" for name in changed):
+            suffix = f" ({context})" if context else ""
+            return f"④ .env 링크 대상 변경: 수동 복원 필요{suffix}"
+        return regular_reason
 
     def git_fingerprint(self) -> dict:
         if self._git_guard_paths is None:
@@ -596,9 +630,9 @@ class Executor:
 
     def git_guard_failed(self, before) -> bool:
         fingerprint, saved = before
-        if self.git_fingerprint() == fingerprint:
-            return False
         try:
+            if self.git_fingerprint() == fingerprint:
+                return False
             for name, entry in saved.items():
                 self.restore_path(self._git_guard_paths[name], entry)
             if self.git_fingerprint() != fingerprint:
@@ -608,8 +642,15 @@ class Executor:
             write_json_atomic(self.git_guard_path, {"baseline": fingerprint, "reason": str(exc)})
             raise HarnessExit(EXIT_ERROR,
                 f"Git 설정이 복원되지 않았다. 확인 뒤 {self.git_guard_path}를 지워라") from exc
+        finally:
+            if self._guard_pending is before:
+                self._guard_pending = None
         self._git_guard_changed = True
         return True
+
+    def restore_pending_git_guard(self) -> None:
+        if self._guard_pending is not None:
+            self.git_guard_failed(self._guard_pending)
 
     def read_result(self, unit: str) -> dict | None:
         try:
@@ -627,6 +668,7 @@ class Executor:
         failure = None
         for line in lines:
             git_before = self.capture_git_guard()
+            self._guard_pending = git_before
             result = self.run_child(["bash", "-o", "pipefail", "-c", line],
                                     env=self.child_env(), timeout=self.ac_timeout)
             if self.git_guard_failed(git_before):
@@ -670,6 +712,7 @@ class Executor:
                 self.save_marker(self.marker)
 
             try:
+                self._guard_pending = git_before
                 child = self.run_codex(unit, prompt, on_spawn=on_spawn)
             except BaseException:
                 if not spawned:
@@ -680,11 +723,11 @@ class Executor:
                 self.rollback(unit, k, pre_sha)
                 return AttemptOutcome("error", reason="④ Git 설정 변경 감지·복원", attempts=k)
             self.save_marker(self.marker)
-            if self.env_fingerprint() != env_before:
-                self.restore_env(env_saved)
+            env_reason = self.restore_env_change(
+                env_before, env_saved, "④ .env 지문 변경: 복원됨")
+            if env_reason is not None:
                 self.rollback(unit, k, pre_sha)
-                return AttemptOutcome("error", reason="④ .env 지문 변경: 복원됨",
-                                      attempts=k)
+                return AttemptOutcome("error", reason=env_reason, attempts=k)
             result = self.read_result(unit)
             if child.timed_out or child.returncode != 0:
                 code = "timeout" if child.timed_out else f"종료 코드 {child.returncode}"
@@ -722,10 +765,11 @@ class Executor:
                         self.restore_env(env_saved)
                         self.rollback(unit, k, pre_sha)
                         return AttemptOutcome("error", reason="④ Git 설정 변경 감지·복원", attempts=k)
-                    if self.env_fingerprint() != env_before:
-                        self.restore_env(env_saved)
+                    env_reason = self.restore_env_change(
+                        env_before, env_saved, "④ .env 지문 변경: AC 뒤 복원됨", "AC 뒤")
+                    if env_reason is not None:
                         self.rollback(unit, k, pre_sha)
-                        return AttemptOutcome("error", reason="④ .env 지문 변경: AC 뒤 복원됨", attempts=k)
+                        return AttemptOutcome("error", reason=env_reason, attempts=k)
                     if failure is None:
                         return AttemptOutcome("completed", summary=result["summary"],
                                               attempts=k, pre_sha=pre_sha)
@@ -1175,6 +1219,7 @@ class Executor:
             fingerprint = self.env_fingerprint()
             git_before = self.capture_git_guard()
             try:
+                self._guard_pending = git_before
                 child = self.run_child(self.review_argv(reviewer, scope),
                                        env=self.child_env(), timeout=self.review_timeout)
             except OSError as exc:
@@ -1239,9 +1284,10 @@ class Executor:
                 return "④ 기준선 Git 설정 변경 감지·복원"
             if failure and "⑦" in failure:
                 self.rollback(f"baseline-step{spec.step}", 1, end_sha)
-            if self.env_fingerprint() != env_before:
-                self.restore_env(env_saved)
-                return "④ 기준선 .env 지문 변경: 복원됨"
+            env_reason = self.restore_env_change(
+                env_before, env_saved, "④ 기준선 .env 지문 변경: 복원됨", "기준선")
+            if env_reason is not None:
+                return env_reason
             if failure is not None:
                 return f"step{spec.step}: {failure}"
         return None
@@ -1287,6 +1333,8 @@ class Executor:
         else:
             review["status"] = "failed"
             self.set_top_status("error")
+        if outcome.status != "completed":
+            print(f"수정 {outcome.status}: {outcome.reason or '사유 없음'}", file=sys.stderr)
         self.save_index(data)
         self.commit_meta(f"fix{round_no} 반영" if outcome.status == "completed"
                          else f"fix{round_no} {outcome.status}")
@@ -1384,14 +1432,31 @@ class Executor:
             code = self.review_gate(specs)
             return self.push_branch() if code == EXIT_OK and self.push else code
         except HarnessExit as exc:
+            try:
+                self.restore_pending_git_guard()
+            except HarnessExit as guard_exc:
+                exc = guard_exc
             print(exc.message, file=sys.stderr)
             return exc.code
         except (OSError, ValueError, KeyError, TypeError) as exc:
+            try:
+                self.restore_pending_git_guard()
+            except HarnessExit as guard_exc:
+                print(guard_exc.message, file=sys.stderr)
+                return guard_exc.code
             print(str(exc), file=sys.stderr)
             return EXIT_ERROR
         except (HarnessInterrupted, KeyboardInterrupt) as exc:
+            try:
+                self.restore_pending_git_guard()
+            except HarnessExit as guard_exc:
+                print(guard_exc.message, file=sys.stderr)
+                return guard_exc.code
             print(str(exc), file=sys.stderr)
             return EXIT_ERROR
+        except BaseException:
+            self.restore_pending_git_guard()
+            raise
         finally:
             self.restore_signal_handlers()
 

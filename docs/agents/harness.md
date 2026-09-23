@@ -218,6 +218,8 @@ env의 토큰 변수 제거와 credential.helper 비우기. 파일·키체인의
 
 ④는 세션 종료 뒤와 AC 뒤 모두 검사한다. 시도·기준선 시작 때 루트 `.env`·`.env.*`(`.env.example` 제외)의 바이트를 메모리에 보관하고 불일치면 수정·삭제를 복원하고 새 파일은 제거한 뒤 재시도 없이 error로 확정한다. AC 뒤에는 ⑦도 검사한다. ⑤의 무시 경로 기준선은 unit 첫 시도 직전에 한 번만 잡아 marker에 보존하며 재시도·크래시 복구에서도 유지한다. 이전 버전 marker에 기준선이 없으면 재개 첫 시도 직전 값을 쓴다.
 자식(세션·AC·기준선 AC·리뷰어) 시작 전에 저장소 공용 config 바이트와 hooks·info의 모든 항목(종류·바이트/링크 대상·권한)을 메모리에 보관한다. config 비교는 저장소 밖 임시 cwd에서 `git config --file <path> --null --list`의 (키, 값) 목록 중 `branch.*`를 뺀 전부로 한다. hooks·info는 링크를 따라가지 않는 내용 해시다. 차이는 다른 git 호출 전에 보관본으로 복원하고 다시 비교한다. 복원 성공 시 시도는 스냅샷·롤백 후 step/fix error와 두 index를 chore 커밋하고 marker를 지워 exit 1, 기준선은 phase error를 커밋해 exit 1이다. 복원 실패면 두 index를 쓰지 않고 기준 해시·사유를 기동 때 계산한 `--git-path harness/{phase}/git-guard.json`에 남겨 exit 1이다. 다음 기동은 잠금 직후 recover·prepare·다른 git 호출 전에 guard 파일을 확인해 멈추며, 설정을 확인·복원한 사람이 그 파일을 지운 뒤 재개한다. 전역 `~/.gitconfig`는 검사 밖이다.
+자식 실행 중 SIGTERM·SIGHUP·SIGINT나 실행 예외가 발생해도 메모리 보관본을 먼저 비교·복원한다. 다만 SIGKILL과 정전은 프로세스가 정리 코드를 실행할 수 없으므로 이 보장을 제공하지 못한다.
+④에서 심볼릭 링크인 `.env`는 링크 자체만 보관하며 대상 내용은 복원하지 않는다. 대상 지문이 바뀌면 `수동 복원 필요`로 확정한다.
 
 ### 재시도·롤백·커밋
 

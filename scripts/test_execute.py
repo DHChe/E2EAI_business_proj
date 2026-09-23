@@ -1183,6 +1183,74 @@ sys.exit(scenario.get('exit', 0))
             self.make_executor(ex.root).prepare()
             self.assertEqual(ex.changed_paths(), [])
 
+    def test_git_fifo_restored_without_blocking_and_recovery_is_safe(self):
+        ex, counter, _ = self.fixture()
+        ex.prepare()
+        config = ex.root / '.git/config'
+        before = config.read_bytes()
+        canary = self.temp_dir / 'fifo-canary'
+        monitor = self.temp_dir / 'fifo-monitor'
+        monitor.write_text('#!/bin/sh\necho ran > ' + str(canary) + '\n')
+        monitor.chmod(0o755)
+        original = ex.run_codex
+        def session(*args, **kw):
+            child = original(*args, **kw)
+            os.mkfifo(ex.root / '.git/hooks/0pipe')
+            with config.open('a') as stream:
+                stream.write('\n[core]\nfsmonitor = ' + str(monitor) + '\n')
+            return child
+        started = time.monotonic()
+        with mock.patch.object(ex, 'run_codex', side_effect=session):
+            out = self.attempt(ex)
+        self.assertLess(time.monotonic() - started, 5)
+        self.assertEqual((out.status, counter.read_text()), ('error', '1'))
+        self.assertEqual(config.read_bytes(), before)
+        self.assertFalse((ex.root / '.git/hooks/0pipe').exists())
+        self.assertFalse(canary.exists())
+        marker = ex.load_marker()
+        marker['pgid'] = None
+        ex.save_marker(marker)
+        recovered = self.make_executor(ex.root)
+        recovered.recover()
+        self.assertFalse(canary.exists())
+
+    def test_interrupted_child_restores_git_before_next_startup(self):
+        ex, _, _ = self.fixture([{'files': {'src/alpha.txt': 'alpha'}}])
+        canary = self.temp_dir / 'interrupt-canary'
+        monitor = self.temp_dir / 'interrupt-monitor'
+        monitor.write_text('#!/bin/sh\necho ran > ' + str(canary) + '\n')
+        monitor.chmod(0o755)
+        command = ("printf '\\n[core]\\nfsmonitor = " + str(monitor)
+                   + "\\n' >> .git/config; kill -TERM \"$PPID\"; sleep 5")
+        instruction = ex.phase_path / 'step0.md'
+        instruction.write_text(step_md(0, 'alpha', ['src/'], [command]))
+        ex.git('add', '--', str(instruction.relative_to(ex.root)))
+        ex.git('commit', '-qm', 'interrupting AC fixture')
+        config = ex.root / '.git/config'
+        before = config.read_bytes()
+        self.assertEqual(ex.run(), 1)
+        self.assertEqual(config.read_bytes(), before)
+        self.assertFalse(canary.exists())
+        self.assertTrue(ex.marker_path.exists())
+        ex._lock_file.close()
+        resumed = self.make_executor(ex.root)
+        with mock.patch.object(resumed, '_kill_stale_codex'), \
+                mock.patch.object(resumed, 'run_steps'), \
+                mock.patch.object(resumed, 'review_gate', return_value=0):
+            self.assertEqual(resumed.run(), 0)
+        self.assertFalse(canary.exists())
+
+    def test_special_env_capture_and_ignored_removal_do_not_read_fifo(self):
+        ex, _, _ = self.fixture()
+        env_pipe = ex.root / '.env.pipe'
+        ignored_pipe = ex.root / 'ignored.pipe'
+        os.mkfifo(env_pipe)
+        os.mkfifo(ignored_pipe)
+        self.assertEqual(ex.capture_env()['.env.pipe'][0], 'special')
+        self.assertIn('.env.pipe', ex.env_fingerprint())
+        ex.remove_ignored(ignored_pipe)
+        self.assertFalse(ignored_pipe.exists())
+
     def test_git_restore_failure_blocks_recovery_without_index_edits(self):
         ex, _, _ = self.fixture()
         ex.prepare()
@@ -1285,6 +1353,7 @@ sys.exit(scenario.get('exit', 0))
         self.assertEqual(resumed.changed_paths(), [])
         self.assertEqual((ex.root / 'src/.env.local').read_text(), 'human secret')
         self.assertIsNone(resumed.resume)
+        self.assertTrue(any('수동 복원 필요' in ' '.join(args) for args in self.calls('gh')))
 
     def test_env_deletion_and_creation_restore_original_set(self):
         ex, counter, _ = self.fixture([{'files': {'.env.new': 'new secret'}}])
@@ -1299,6 +1368,16 @@ sys.exit(scenario.get('exit', 0))
         self.assertEqual((out.status, counter.read_text()), ('error', '1'))
         self.assertEqual((ex.root / '.env').read_bytes(), b'original secret')
         self.assertFalse((ex.root / '.env.new').exists())
+
+    def test_symlink_env_target_change_requires_manual_restore(self):
+        ex, _, _ = self.fixture()
+        target = self.temp_dir / 'linked-env-target'
+        target.write_bytes(b'original')
+        (ex.root / '.env').symlink_to(target)
+        out = self.attempt(ex, ['echo changed > .env'])
+        self.assertEqual(out.status, 'error')
+        self.assertIn('④ .env 링크 대상 변경: 수동 복원 필요', out.reason)
+        self.assertEqual(target.read_bytes(), b'changed\n')
 
     def test_feat_done_crash_env_change_rolls_back_and_errors(self):
         ex, _, _ = self.fixture()
@@ -2474,6 +2553,22 @@ print(json.dumps({'result' if name == 'claude' else 'text': text}))
         self.assertFalse(self.calls('codex'))
         self.assert_state(ex, 'passed', 'completed')
         self.assertEqual((ex.root / 'src/fix1.txt').read_text(), 'fixed')
+
+    def test_fix_feat_done_after_saved_index_counts_once(self):
+        ex = self.fixture()
+        self.seed_resume(ex)
+        (ex.root / 'src/fix1.txt').write_text('fixed')
+        execute.write_json_atomic(ex.result_path('fix1'),
+                                  {'status': 'completed', 'summary': 'fixed'})
+        ex.commit_feat('fix: interrupted after index save', ex.head())
+        data = ex.load_index()
+        data['review'].update(status='pending', fixes=1)
+        ex.save_index(data)
+        recovered = self.make_executor(ex.root)
+        recovered.recover()
+        self.assertEqual(recovered.load_index()['review']['fixes'], 1)
+        self.assertFalse(recovered.marker_path.exists())
+        self.assertEqual(recovered.changed_paths(), [])
 
     def test_fix_attempt_exhaustion_clears_marker(self):
         ex = self.fixture({'claude': ['failed']})

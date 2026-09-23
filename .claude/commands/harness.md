@@ -60,7 +60,7 @@ description: Issue를 자기완결 step 지시서로 내려 phase를 설계한�
 | 종료 코드 | 사람이 할 일 |
 | --- | --- |
 | 0 | 완료 요약과 리뷰 결과를 확인하고 Issue close와 병합을 한다 |
-| 1 | 원인을 고치고 `docs/agents/harness.md` 복구 절차에 따라 해당 error step을 pending으로 되돌려 재실행한다. 내부 실패는 marker 진단을 확인한다. Git 설정 복원 실패로 `git-guard.json`이 있으면 설정을 확인·복원한 뒤 출력된 guard 파일을 지운다(그 전에는 기동이 멈춘다). 리뷰 기준선 실패는 AC 원인을 해결하며(코드 수정은 `feat-{phase}`에 직접 커밋한 뒤 재실행), push만 실패했다면 completed를 유지하고 `--push`로 재실행한다 |
+| 1 | 원인을 고치고 `docs/agents/harness.md` 복구 절차에 따라 해당 error step을 pending으로 되돌려 재실행한다. 수정 unit의 ④·⑤ error는 index를 고치지 말고 원인(`.env` 복원, 허용 경로 밖 무시 경로 정리, Git 설정 확인)만 해결해 재실행하며 완료한 수정 수는 유지한다. 내부 실패는 marker 진단을 확인한다. Git 설정 복원 실패로 `git-guard.json`이 있으면 설정을 확인·복원한 뒤 출력된 guard 파일을 지운다(그 전에는 기동이 멈춘다). 리뷰 기준선 실패는 AC 원인을 해결하며(코드 수정은 `feat-{phase}`에 직접 커밋한 뒤 재실행), push만 실패했다면 completed를 유지하고 `--push`로 재실행한다 |
 | 2 | blocked 사유를 해결하고 복구 절차에 따라 step 또는 `review.status`를 pending으로 되돌려 재실행한다 |
 | 3 | `.run/review-r*` 원문에서 리뷰 실패·unverifiable 사유를 확인하고 해결한 뒤 재실행한다. 코드 수정은 `feat-{phase}`에 직접 커밋한 뒤 재실행 |
 
