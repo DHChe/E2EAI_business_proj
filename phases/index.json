@@ -3,8 +3,7 @@
     {
       "dir": "24-harness-executor",
       "issue": 24,
-      "status": "error",
-      "failed_at": "2026-09-23T00:04:33+09:00"
+      "status": "pending"
     }
   ]
 }
