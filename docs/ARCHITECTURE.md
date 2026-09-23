@@ -249,6 +249,7 @@ job = envelope + input_hash + policy_edition + model/prompt/schema_versions
 | `PARTIAL_APPROVAL_NOT_ADOPTED` | 항목별 부분 승인 | [ADR-0024](adr/0024-rejection-resubmission-and-card-bound-approvals.md) 결정 10 |
 | `WITHDRAW_NOT_ALLOWED` | 정산의 철회 | [ADR-0025](adr/0025-withdrawal-only-for-preapproval.md) 결정 3 |
 | `REOPEN_IN_PROGRESS` | 재심이 열린 정산의 지급 처리 | [ADR-0027](adr/0027-reopen-returns-to-first-finance-consent.md) 결정 5 |
+| `UNDEFINED_BY_26` | #26이 정하지 않고 #20에 넘긴 전이다 — 재무합의자 0명 정산에서 값 모순 짝 보류가 열린 채 한 결재권자의 승인 | [ADR-0031](adr/0031-reconciliation-pending-states-and-input-driven-rerun.md) 결정 8 |
 
 `STALE_REVISION`은 SlipScan의 상태 전이 패턴을 절반만 받은 것이다. 현재 상태를 조건에 걸고 행을 잠그는 부분은 받는다(`slipscan:lib/pipeline/process-document.ts:292-303`).
 상태가 바뀌어 있으면 로그만 남기고 조용히 돌아가는 부분(`:305-307`)은 받지 않는다(claude §3.3, C8).
@@ -284,7 +285,7 @@ job = envelope + input_hash + policy_edition + model/prompt/schema_versions
 | 초안 수정·채택·상신 | 기안자 | 그 사람 | codex §6.2 12행, `docs/company/travel-procedure.md:192` |
 | 기안자의 보류 답변 | 질문받은 기안자 | 그 사람 | `CONTEXT.md:86-88` |
 | 수기 확정 | 확정한 사람 | 그 사람 | `docs/adr/0012-transition-audit-provenance-in-one-transaction.md:54` |
-| 짝 확인(경쟁·대조 불가) / (값 모순) | 기안자 / 재무합의자 | 그 사람 | `CONTEXT.md:310`, codex §6.2 16·17행 |
+| 짝 확인(경쟁·대조 불가·후보 복수) / (값 모순) | 기안자, 보인 카드 줄이 모두 총무팀 관리 카드면 배정된 총무 예약 담당 `[설계 가정]` / 재무합의자 | 그 사람 | `CONTEXT.md:310`, codex §6.2 16·17행, [ADR-0031](adr/0031-reconciliation-pending-states-and-input-driven-rerun.md) 결정 7 |
 | 재량 판단 기록 | 조항의 `decided_by`로 해소된 사람 | 그 사람 | `docs/adr/0005-policy-source-of-truth.md:76-77`. 결재권자가 여럿일 때는 #20(C5) |
 | 승인·동의·반려·보류 | 현재 단계의 승인자 | 그 사람 | `docs/adr/0012-transition-audit-provenance-in-one-transaction.md:35` |
 | 예약 확정 연결 / 근태 반영 | 총무 / 인사 | 그 사람 | `PRC-8-1`·`PRC-8-2`(`docs/company/travel-procedure.md:148`, `:150`) |
@@ -399,15 +400,16 @@ stateDiagram-v2
     UNC --> NOCONF: 수기 확정 시도 · 확정 불가
   }
   state "대사 짝" as PAIR {
-    state "후보 복수 / 짝 보류" as PEND
-    state "대사 완료 / 대사 불일치 / 짝 없음" as OUT
-    [*] --> PEND: 대사 · 후보 경쟁 또는 대조 불가
+    state "후보 복수 / 짝 보류 / 명세 대기" as PEND
+    state "대사 완료 / 대사 불일치 / 짝 없음(증빙)" as OUT
+    [*] --> PEND: 대사 · 후보 경쟁 또는 대조 불가 / 이용 내역 미도착
     [*] --> OUT: 대사
-    PEND --> OUT: 짝 확인 뒤 대사
+    PEND --> OUT: 짝 확인 또는 이용 내역 도착 뒤 대사
   }
 ```
 
 이름은 `CONTEXT.md:303`, `:310`, `:317`과 `docs/adr/0013-postgres-object-storage-isolated-by-world-id.md:38`에 있던 것이다. 두 축은 가드로 이어진다. 정산 상신은 판정 입력 필드가 모두 닫혀야 하고(`PRC-11-2`), 상신 뒤 짝 보류는 현재 단계의 승인·동의만 막는다.
+`명세 대기`는 이용 내역이 그 날짜를 아직 덮지 않은 중간 상태이고 사람에게 가지 않는다. 상신 뒤에는 짝 보류와 같은 가드를 따른다. 대사는 입력(필드·카드 줄 revision)이 바뀔 때만 다시 돌고, 이의 플래그만으로는 돌지 않는다. 사람의 짝 확인은 그 근거 revision이 그대로인 동안 효력이 있다([ADR-0031](adr/0031-reconciliation-pending-states-and-input-driven-rerun.md) 결정 3–5).
 값 변경이 문서를 되돌리는지는 그 변경을 수락하는 system 전이가 정한다(아래 표의 "변경 수락" 행).
 
 **전이 표.** 문서 축의 전이 전부다. 모든 명령은 기대 revision을 싣고, 어긋나면 `STALE_REVISION`이다(§5). 표에 없는 명령 — 자기 결재, 협조자·총무·재무팀·내부감사·기안자의 반려, `기안`·`반려`·`철회`에서의 이의 플래그 같은 것 — 은 §5의 권한·상태 거부다.
@@ -440,6 +442,7 @@ stateDiagram-v2
 | 정산 재심 표지가 붙은 대기 | 재심 단계의 동의·승인 | 그 단계 승인자 | 현재 단계 담당자, 자기 결재 아님. 재량 관문·상신 뒤 짝 보류·배정된 짝 확인(값 모순)이 없다. 재량 판단이 결재선 입력을 바꾸지 않았다(바꿨으면 위 #21 거절 행). 재심 표지는 이 행의 출발 조건이다 | 재심 범위에 다음 단계가 남았으면 그 단계. 범위의 마지막 단계에서는 재심 중 바뀐 카드가 없으면 복귀점과 원 완료 시각(지급 뒤 상태로의 복귀는 `[설계 가정]`), 바뀐 카드가 있으면 새 `완료`와 새 완료 시각. 재무 범위만의 쟁점이면 범위의 마지막은 마지막 재무합의자다. 카드가 바뀌면 범위는 결재선 끝까지 넓어진다 | — | ADR-0027 결정 2·4·7. #17 표 3행 |
 | 재심 표지가 붙은 정산 | 지급 처리 | 재무팀 | — | 거절 | `REOPEN_IN_PROGRESS` | ADR-0027 결정 5 |
 | 재심 정정 뒤 새 `완료`(이미 지급 처리를 거친 정산) | 지급 처리 — 차액 | 재무팀 | — | 거절 | `UNDEFINED_BY_17` (#20) | ADR-0027 결정 9 |
+| `결재대기`(i)(재무합의자 0명 정산) | 승인 | 결재권자 i | 값 모순 짝 보류가 열려 있다 — 맡을 재무합의자가 없다 | 거절 | `UNDEFINED_BY_26` (#20) | [ADR-0031](adr/0031-reconciliation-pending-states-and-input-driven-rerun.md) 결정 8 |
 
 **3자 승인 루프의 골격.** 루프의 세 당사자는 기안자·재무합의자·결재권자다. 에이전트는 **보류의 한 대상**으로만 루프에 들어오고 결재 행위를 하지 않는다(A9).
 
@@ -462,8 +465,8 @@ stateDiagram-v2
 | --- | --- | --- | --- | --- |
 | 기안 초안 채택·상신 | 기안자 | 판독기의 초안을 고쳐 상신한다 | 문서 상태 `기안`. 초안은 판정 입력이 아니다 | U6 |
 | 수기 확정 | 기안자 | `추출 불확실`을 백지 입력으로 닫는다 | 필드가 열려 있고 정산 상신이 막힌다 | `CONTEXT.md:315-317`, `PRC-11-2` |
-| 짝 확인(경쟁·대조 불가·후보 복수) | 기안자 | 같은 지출인지, 어느 줄인지 | 대사 상태 `짝 보류`·`후보 복수`(영속) | `CONTEXT.md:310`, `docs/adr/0013-postgres-object-storage-isolated-by-world-id.md:38` |
-| 짝 확인(값 모순) | 재무합의자 | 같은 거래인지 | 현재 단계의 승인·동의만 막는다(C3). 확인 담당자는 재무합의자이며 반려·보류는 받는다 | `CONTEXT.md:310`, 비교 문서 `:193` |
+| 짝 확인(경쟁·대조 불가·후보 복수) | 기안자. 보인 카드 줄이 모두 총무팀 관리 카드면 배정된 총무 예약 담당 `[설계 가정]` | 같은 지출인지, 어느 줄인지 | 대사 상태 `짝 보류`·`후보 복수`(영속). 판단은 근거 revision이 그대로인 동안 효력이 있다 | `CONTEXT.md:310`, `docs/adr/0013-postgres-object-storage-isolated-by-world-id.md:38`, [ADR-0031](adr/0031-reconciliation-pending-states-and-input-driven-rerun.md) 결정 3·7 |
+| 짝 확인(값 모순) | 재무합의자 | 같은 거래인지. 같은 거래로 확인하면 사유를 남긴다 | 현재 단계의 승인·동의만 막는다(C3). 확인 담당자는 재무합의자이며 반려·보류는 받는다. 재무합의자 0명 정산이면 `UNDEFINED_BY_26`(#20) | `CONTEXT.md:310`, 비교 문서 `:193`, [ADR-0031](adr/0031-reconciliation-pending-states-and-input-driven-rerun.md) 결정 2·8 |
 | 재량 판단 기록 | 조항의 `decided_by` | 판단과 사유 | `gate=on` — 승인·동의만 막는다 | `docs/adr/0012-transition-audit-provenance-in-one-transaction.md:46` |
 | 결재 | 결재권자 / 재무합의자 | 승인·반려·보류 / 동의·반려·보류. 보류 중에도 답 없이 결정한다 | 문서 상태와 현재 단계 | `docs/adr/0003-approver-actions-three.md:23`, [ADR-0026](adr/0026-hold-answer-deadline-time-changes-no-state.md) 결정 5 |
 | 보류 답변 | 기안자, 또는 답변기(작업) | 승인자의 질문에 답한다 | 문서 상태 `보류`. 대상이 에이전트면 같은 트랜잭션에서 답변 `job`을 넣는다. 대상이 기안자면 답변 기한을 계산해 표시한다(값은 #20) | `docs/adr/0003-approver-actions-three.md:25-26`, claude §5.1, ADR-0026 결정 3–4 |
@@ -473,7 +476,7 @@ stateDiagram-v2
 | 철회 | 기안자(사전승인만) | 반려된 사전승인을 닫는다. 출장 취소로 본다 | 문서 상태 `반려` | [ADR-0025](adr/0025-withdrawal-only-for-preapproval.md) 결정 1–2 |
 | 예약 확정 연결 | 총무 | 확정 예약을 사전승인 문서에 연결하고 벗어난 항목의 사유를 적는다 | 인계 상태(결재 아님) | `PRC-8-1`, `PRC-8-3` |
 | 근태 반영 | 인사 | 확정 일정으로 반영한다 | 인계 상태 | `PRC-8-2` |
-| 청구 명세 가져오기 | 재무팀 | 월 청구 명세를 가져온다 | 대사는 이용 내역으로 이미 돌고, 청구 원화만 기다린다 | U4 |
+| 청구 명세 가져오기 | 재무팀 | 월 청구 명세를 가져온다 | 대사는 이용 내역으로 이미 돌고, 청구 원화만 기다린다. 청구 원화는 `CardBilling`으로 붙고 대사를 다시 돌리지 않는다. 이용일·이용금액이 다르면 카드 줄의 새 revision이다 | U4, [ADR-0031](adr/0031-reconciliation-pending-states-and-input-driven-rerun.md) 결정 4 |
 | 지급 처리 | 재무팀 | 순액을 기록해 지급 기한을 닫는 상태 전이. 음수면 `반환 대기`로 간다 | 문서 상태 `완료` | `docs/PRD.md:25`, `:86`, [ADR-0028](adr/0028-negative-net-goes-to-repayment-pending.md) 결정 1–2 |
 | 반환 확인 | 재무팀 | 반환된 사실을 기록한다 | 문서 상태 `반환 대기` | ADR-0028 결정 3 |
 | 이의 플래그 | 내부감사 | 재심을 연다 | 정산은 `재무합의대기` 첫 단계로 가고 복귀점을 저장한다. 사전승인은 상태를 바꾸지 않는다 | `docs/adr/0002-admin-read-only-audit-axis.md:29`, [ADR-0027](adr/0027-reopen-returns-to-first-finance-consent.md) 결정 2·11–12 |
@@ -519,12 +522,12 @@ stateDiagram-v2
 
 - **as-is 문서는 고치지 않는다.** `docs/company/tools.md:16`의 "월 단위 수동 다운로드"는 as-is 기록이고, 매일 가져오기는 to-be 개선이다(U4).
 - **깨진 줄은 그 줄만 격리한다.** 파일 전체를 거부하지 않고, 격리한 줄은 0건으로 치지 않고 드러낸다(C6, [ADR-0021](adr/0021-three-read-only-mock-connectors-no-erp.md) 결정 6).
-- **아직 오지 않은 것과 없는 것을 가른다.** 카드 명세 미도착을 `짝 없음`으로 처리하지 않는다(`docs/design/receipt-pipeline.md:68`). codex는 `pending`·`invalid`·`absent`로 갈랐다(codex §4.1) `[설계 가정]`.
+- **아직 오지 않은 것과 없는 것을 가른다.** 카드 명세 미도착을 `짝 없음`으로 처리하지 않는다(`docs/design/receipt-pipeline.md:68`). 이용 내역의 수집 기준일(`coveredThrough`)이 증빙 날짜 창의 끝보다 앞이면 `명세 대기`다([ADR-0031](adr/0031-reconciliation-pending-states-and-input-driven-rerun.md) 결정 4). codex는 `pending`·`invalid`·`absent`로 갈랐다(codex §4.1) `[설계 가정]`.
 - **가져오기 봉투** `[설계 가정]`(codex §4.1): `world_id, source_system, source_record_id, source_revision, received_at, effective_at, payload_hash, batch_id`.
   같은 키·같은 해시는 무동작이고, 같은 키·다른 해시는 정정 revision이 없으면 충돌이다. codex의 "결손 행이 있는 batch는 staging 상태로 남긴다"는 C6으로 받지 않는다.
 - **조직 스냅샷을 가져오지 못하면 기안을 막는다.** 오래된 스냅샷으로 결재선을 계산하지 않는다(claude §4.4.3) `[설계 가정]`.
 
-**§7.5 요구 칸 대조.** `docs/design/receipt-pipeline.md` §7.5(`:2218-2225`)의 여섯 칸은 모두 충족하고, `CardLine`(`:1798-1810`)이 요구하는 셋을 더 준다(ADR-0021 결정 8).
+**§7.5 요구 칸 대조.** `docs/design/receipt-pipeline.md` §7.5(`:2300-2308`)의 일곱 칸은 모두 충족하고, `CardLine`(`:1815-1828`)이 요구하는 둘을 더 준다(ADR-0021 결정 8). `카드 사용자`와 수집 기준일은 #26이 더했다([ADR-0031](adr/0031-reconciliation-pending-states-and-input-driven-rerun.md) 결정 4·7).
 
 | 칸 | `CardLine` | 이용 내역 | 청구 명세 | 비고 |
 | --- | --- | --- | --- | --- |
@@ -534,15 +537,17 @@ stateDiagram-v2
 | 가맹점 사업자등록번호 | `merchantRegNo` | 국내 ✓ | 국내 ✓ | `null` 허용 |
 | 가맹점 소재국 | `merchantCountry` | ✓ | ✓ | 통화로 추측하지 않는다 |
 | 할부 개월 | `installmentMonths` | ✓ | ✓ + 회차 | |
+| 카드 사용자 | `holder` | ✓ | ✓ | 총무팀 관리 카드를 가른다 `[설계 가정]` |
+| 수집 기준일(파일마다) | `coveredThrough` | ✓ | — | `명세 대기`의 기준 |
 | §7.5 밖 — 카드 끝 4자리 | `cardLast4` | ✓ | ✓ | 더 준다 |
-| §7.5 밖 — 청구 원화 | `billedKrw` | 없음 | ✓ | 청구 명세에서만 |
+| §7.5 밖 — 청구 원화·할부 회차 | `CardBilling`(`CardLine` 아님) | 없음 | ✓ | 청구 명세에서만. 대사의 입력이 아니다 |
 | §7.5 밖 — 가맹점명 | `merchantName` | ✓ | ✓ | 더 준다 |
-| §7.5 밖 — 가맹점 업종 | 칸 없음 | — | — | #18 후속(비교 문서 `:214`) |
+| §7.5 밖 — 가맹점 업종 | 칸 없음 | — | — | 두지 않는다. 공급 분류와 같은 사실이 아니다([ADR-0031](adr/0031-reconciliation-pending-states-and-input-driven-rerun.md) 결정 6) |
 
 표는 claude §4.5를 옮겼다. 파일 칸의 함정은 `[설계 가정]`이다.
 
-일별 이용 내역은 `billedKrw`가 없어 현행 `CardLine` 입력 계약과 바로 호환되지 않는다(`docs/design/receipt-pipeline.md:1806`).
-청구 전 대사 입력과 청구 후 값의 구분은 #18 후속에서 정하며, 이 문서는 그 타입을 확정하지 않는다.
+일별 이용 내역에는 청구 원화가 없다. 그래서 `CardLine`은 이용 내역의 칸만 갖는 대사 입력이고, 청구 원화와 할부 회차는 월 청구 명세가 뒤에 붙이는 `CardBilling`이다(`docs/design/receipt-pipeline.md:1834-1840`, [ADR-0031](adr/0031-reconciliation-pending-states-and-input-driven-rerun.md) 결정 4).
+청구 명세의 줄은 이용 내역의 줄에 잇고, 이용일·이용금액이 다르면 카드 줄의 새 revision으로 받아 대사가 다시 돈다(`:2311-2313`) `[설계 가정]`.
 
 ## 10. `job`과 실패 격리
 
@@ -579,8 +584,10 @@ stateDiagram-v2
 | #20 | #17에서: 기안자 답변 기한의 값. 재무합의자 0명 정산의 재심. 재심 정정 뒤 차액의 사건과 기한. 정산이 끝내 없는 출장의 사전승인 플래그를 볼 자리. 반환 방법·기한. 위약금·재기안 차수의 적용 판·반려 사유 의무 같은 규정 초안 | 상태 비교 문서 `:248-249`, [ADR-0023](adr/0023-document-and-evidence-axes-named-rejections.md) 결정 8 |
 | #21 | #17에서: 재량 판단이 결재선 입력을 바꿀 때 재기안·선 연장·최악값 중 무엇인가. 그때까지 그 판단에 기대는 동의·승인은 `UNDEFINED_BY_17` | 상태 비교 문서 `:247`, [ADR-0024](adr/0024-rejection-resubmission-and-card-bound-approvals.md) 결정 12 |
 | #22 | #17에서: 재기안 차수·효력 상실·결재선 변경 되돌림·재심 표지·답변 기한 경과·반환 대기·반환 확인의 표시 이름. `진행중`·`결재선 진행`·`결재대기`의 정리 | 상태 비교 문서 `:250` |
-| #18 후속 | `CardLine`의 가맹점 업종 칸. 여행사 결제가 걸리는 카드와 그 줄의 짝 확인 담당 | 비교 문서 `:67`, `:164`, `:214` |
-| #18 후속 | 일별 이용 내역(U4)과 `CardLine`의 타입 공백. 이용 내역은 `billedKrw`가 없어 현행 입력 계약과 바로 호환되지 않는다. 청구 전 대사 입력과 청구 후 값의 구분 | `docs/design/receipt-pipeline.md:1806`, 비교 문서 `:178` |
+| #26(닫힘) | ~~`CardLine`의 가맹점 업종 칸. 여행사 결제가 걸리는 카드와 그 줄의 짝 확인 담당~~ 가맹점 업종 칸은 두지 않는다. 여행사 결제는 총무팀 관리 카드에 걸리고 그 줄의 짝 확인(경쟁·대조 불가·후보 복수)은 총무 예약 담당이다 `[설계 가정]` | 비교 문서 `:67`, `:164`, `:214`, [ADR-0031](adr/0031-reconciliation-pending-states-and-input-driven-rerun.md) 결정 6–7 |
+| #26(닫힘) | ~~일별 이용 내역(U4)과 `CardLine`의 타입 공백. 이용 내역은 `billedKrw`가 없어 현행 입력 계약과 바로 호환되지 않는다. 청구 전 대사 입력과 청구 후 값의 구분~~ `CardLine`은 대사 입력, 청구 원화는 `CardBilling`. 미도착은 `명세 대기` | 비교 문서 `:178`, [ADR-0031](adr/0031-reconciliation-pending-states-and-input-driven-rerun.md) 결정 4 |
+| #20 | #26에서: 재무합의자 0명 정산의 값 모순 짝 확인. 그때까지 그 정산의 승인은 `UNDEFINED_BY_26` | [ADR-0031](adr/0031-reconciliation-pending-states-and-input-driven-rerun.md) 결정 8 |
+| #22 · #25 · #11 | #26에서: 완료 뒤 대사 변동의 표시 이름(#22). 짝 확인 화면(#25). 선결제 숙박처럼 결제일과 이용일이 다른 짝의 누락 건수(#11) | [ADR-0031](adr/0031-reconciliation-pending-states-and-input-driven-rerun.md) 결과 |
 | #18 후속 | 방향 분류기 실행 자산의 검증 | A13 |
 | #22 | 상신 뒤 짝 보류·값 모순 짝 확인·재량 관문을 한 이름("열린 의무")으로 올릴지(C3). 수기 확정의 정의 보정(C9, `CONTEXT.md:315`) | 비교 문서 `:193`, `:199` |
 | #11 | codex의 구현 검증 계약 7개(미배정 차단, 주입 문장, 방향 반대 서술 등). 루프 상한·회전각 칸의 측정 | codex §11, 비교 문서 `:160`, `:194` |

@@ -51,7 +51,7 @@ ARCHITECTURE는 이미 업무 상태·실행 상태(`job`)·표시 상태를 나
 | 증빙(짝) | `후보 복수` / `짝 보류` | 대사 | 짝 확인 뒤 대사 결과 |
 | 증빙(짝) | `대사 완료` / `대사 불일치` / `짝 없음` | 대사, 짝 확인 | 새 필드 revision이나 새 카드 줄이 오면 다시 계산 |
 
-   증빙 축의 이름은 `CONTEXT.md:303`, `:310`(`짝 없음` 포함), `:317`, 대사 결과 타입(`docs/design/receipt-pipeline.md:835-839` — `짝 없음`은 여기서 증빙·카드 두 타입으로 갈린다), 영속 내부 상태(`docs/adr/0013-postgres-object-storage-isolated-by-world-id.md:38`)에 이미 있다.
+   증빙 축의 이름은 `CONTEXT.md:303`, `:310`(`짝 없음` 포함), `:317`, 대사 결과 타입(`docs/design/receipt-pipeline.md:841-844` — `짝 없음`은 여기서 증빙·카드 두 타입으로 갈린다. **보완(#26, 2026-09-23)**: 카드 쪽은 증빙의 결과가 아니라서 `UnmatchedCardLine`(설계 문서 §7.4)으로 옮겼다), 영속 내부 상태(`docs/adr/0013-postgres-object-storage-isolated-by-world-id.md:38`)에 이미 있다.
    검산 결과(`CONTEXT.md:296`)와 법정 판정은 계산 결과이고, 누구를 기다리는 상태가 아니다(codex §6 표 아래).
    `지급 처리됨`·`반환 대기`에서 받는 이의 플래그는 [ADR-0027](0027-reopen-returns-to-first-finance-consent.md) 결정 6의 `[설계 가정]`이다. 그 재심의 무변경 복귀도 같다(결정 4).
 

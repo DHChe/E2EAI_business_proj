@@ -32,7 +32,7 @@
 
 **왜 TypeScript인가.** 설계 문서의 TS는 "설계를 못박기 위한 버리는 코드"다(`docs/design/receipt-pipeline.md:6`). 법적으로 묶지 않는다(codex §4, grok §7, claude §4.2).
 그래도 그 블록들은 저장소에서 가장 정밀한 타입 명세다. 설계 문서에 TS 블록이 21개 있고(`grep -c '^```ts' docs/design/receipt-pipeline.md` = 21),
-zod 슬롯(`docs/design/receipt-pipeline.md:372-441`)은 구조화 출력의 스키마로 그대로 들어간다(claude §4.2). 리듀서를 서버와 화면(버튼 활성 조건)이 같은 코드로 쓴다(claude §4.2 W1 R-f).
+zod 슬롯(`docs/design/receipt-pipeline.md:373-442`)은 구조화 출력의 스키마로 그대로 들어간다(claude §4.2). 리듀서를 서버와 화면(버튼 활성 조건)이 같은 코드로 쓴다(claude §4.2 W1 R-f).
 Python으로 가면 명세가 둘이 되거나 생성기가 하나 는다 — "묶지는 않지만 강하게 기운다"(claude §4.2).
 
 **왜 Hono인가.** 두 레인(grok·claude)이 골랐고 codex의 Fastify와 R-a~R-g에서 갈리지 않는다. 2:1로 정하고, 바꾸는 비용이 작다는 것을 이 ADR에 적어 둔다.
@@ -72,7 +72,7 @@ S4는 인용이 조항 원문의 연속 부분문자열인지, 숫자가 계산 
   이것은 모순이 아니라 **설계 채택과 실행 자산 검증 사이의 공백**이고, ~~#18 후속·#10으로 넘긴다.~~ **정정(#10, 2026-09-22)**: #10은 4-class 가중치를 지금 채택하지 않고 사이드카 자리만 유지한다. 자산 검증은 #18 후속이다. 방향은 EXIF만 쓰고, EXIF가 없으면 `방향 미보정`을 기록한 채 진행한다(`docs/research/agent-architecture-comparison.md:60` A13, `:194` C4, `docs/ARCHITECTURE.md` §10). 사이드카의 자리만 이 ADR이 남긴다.
 - 기존 문서와의 관계.
 
-  > _`docs/design/receipt-pipeline.md:2666`은 "방향 분류기를 어디서 돌리는가(런타임·배포 형태)"를 #4로 보냈다. #4는 결정하지 않는 조사 문서이고 런타임·배포는 #9·#10의 몫이다(`docs/PRD.md:173`).
+  > _`docs/design/receipt-pipeline.md:2821`은 "방향 분류기를 어디서 돌리는가(런타임·배포 형태)"를 #4로 보냈다. #4는 결정하지 않는 조사 문서이고 런타임·배포는 #9·#10의 몫이다(`docs/PRD.md:173`).
   > 이 ADR의 답은 결정 7(필요하면 `job` 한 종류의 Python 사이드카)이다. 설계 문서는 고치지 않고 후속으로 남긴다(claude §11 모순 2)._
 
   - [ADR-0008](0008-extraction-uncertainty-is-first-class.md)의 `Confirmed<T>` 경계를 TS 타입과 런타임 검증 둘로 지킨다.

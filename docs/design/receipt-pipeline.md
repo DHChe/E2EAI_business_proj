@@ -65,7 +65,7 @@ A(금액·통화 오류)와 B(유형 오분류)는 버리지 않는다 — 둘�
 | ① 분류 | 이미지 | 지면 단서 · 공급 국가 · 모델의 유형 추정 | `is_evidence=no` 또는 `document_count=multiple` → 제출자에게 재업로드. API 실패는 §2.10 | 1회(동기) |
 | ② 유형별 추출 | 같은 이미지(캐시) + 코드가 고른 경로 | 세 칸 필드 · 항목 · 바운딩 박스 | 스키마 검증 실패 → `unparsable`(1회 재시도) | 1회 |
 | ③ 검산 | ②의 정규화 값 | 규칙별 `검산 성공 / 검산 실패 / 검산 불가` + 불확실 신호 | 규칙 전제 미충족은 실패가 아니라 **불가** | 없음 |
-| 대사 | 정규화 값 + 법인카드 명세 | `대사 완료 / 대사 불일치 / 짝 없음` (+ 내부 상태 `후보 복수` · `짝 보류`) | 명세 미도착 → 대기. 짝 없음은 실패가 아니라 결과 | 없음 |
+| 대사 | 정규화 값 + 법인카드 이용 내역(§7.2 `CardLine`) | `대사 완료 / 대사 불일치 / 짝 없음` (+ 중간 상태 `후보 복수` · `짝 보류` · `명세 대기`) | 이용 내역이 그 날짜를 아직 덮지 않음 → `명세 대기`. 짝 없음은 실패가 아니라 결과 | 없음 |
 | 수기 확정 | 잔여 (i) 목록 | 확정값 · 감사 로그 항목 | 사람도 못 읽음 → 재촬영 요청, 원본이 없으면 `확정 불가` | 없음 |
 | 법정 판정 | 확정 증빙 | 수취 의무 3값 + (ii) 목록 | 판정에 필요한 사실이 없으면 **판정 불가** | 없음 |
 | 정책 대조 | `PolicyFacts`(#16) | 조항 대조 결과 | #16의 몫 | 없음 |
@@ -281,10 +281,13 @@ export function toOriginalBox(box: Box, placement: SegmentPlacement): Box {
 - 사람도 읽지 못하면 두 갈래다 — 원본이 있으면 **재촬영 요청**, 원본이 사라졌으면 `확정 불가`로 닫는다.
   `확정 불가`는 (i)가 계속 열려 있는 상태가 아니라 **닫힌 상태**이고, 법정 판정에서 `판정 불가`의 입력이 된다(§6).
 
-감사 로그는 `누가 · 무엇을 · 언제 · 원래 에이전트가 읽은 값은 무엇이었는지`를 남긴다(CONTEXT §3 감사 로그). 이 설계가 더하는 칸:
+감사 로그는 `누가 · 무엇을 · 언제 · 원래 에이전트가 읽은 값은 무엇이었는지`를 남긴다(CONTEXT §3 감사 로그).
+누가·언제와 책임자는 공통 감사 envelope([ADR-0012](../adr/0012-transition-audit-provenance-in-one-transaction.md) 결정 2)에 있고, 아래는 그 본문이다.
+수기 확정의 행위자와 책임자는 둘 다 확정한 사람이다(ADR-0012 근거). 이 설계가 더하는 칸:
 
 ```ts
 export type ConfirmationEntry = {
+  /** 공통 감사 envelope의 행. 행위자·책임자·시각은 거기에만 있고 본문에 다시 적지 않는다(#26). */
   auditEntryId: string;
   evidenceId: string;
   field: JudgmentInputField;
@@ -300,8 +303,6 @@ export type ConfirmationEntry = {
   /** 확정값으로 검산·대사를 다시 돌린 결과. 실패한 채로 확정하려면 사유가 필요하다. */
   recheck: "통과" | "실패";
   overrideReason: string | null;
-  actor: string;
-  at: string;
 };
 ```
 
@@ -832,11 +833,15 @@ export type AmountDifference =
   | { kind: "차액"; amount: Money }
   | { kind: "통화 다름 — 산출하지 않음"; evidenceAmount: Money; cardLineOriginal: Money };
 
+/**
+ * 증빙 한 장의 대사 결과. 법정 판정·정책 대조로 넘어가는 것은 이것뿐이다 —
+ * 사람이 고르기 전이거나 카드 이용 내역을 기다리는 중간 상태(`PendingMatch`, §7.2)는 이 타입이 될 수 없다(#26).
+ * 증빙이 붙지 않은 카드 줄("영수증 없음")은 증빙의 결과가 아니라 카드 줄 쪽 결과다(`UnmatchedCardLine`, §7.4).
+ */
 export type ReconciliationOutcome =
   | { kind: "대사 완료"; cardLineId: string; key: MatchKey }
   | { kind: "대사 불일치"; cardLineId: string; key: MatchKey; difference: AmountDifference }
-  | { kind: "짝 없음(증빙)" }
-  | { kind: "짝 없음(카드)"; cardLineId: string };
+  | { kind: "짝 없음(증빙)" };
 
 /** 해외 지출의 한국 부가가치세는 "공제 배제"가 아니라 "원천 부존재"다. 타입이 칸을 가른다. */
 export type KrVat =
@@ -1791,23 +1796,47 @@ export function documentDefects(
 - **`짝 보류`** 는 후보가 하나지만 자동 확정 조건에 막혀 사람이 확인하는 상태다. 막힌 조건을 함께 남기고,
   막힌 이유가 누구에게 갈지를 정한다(§7.4). `후보 복수`는 그대로 후보가 둘 이상 남은 상태다.
   다만 짝의 근거(끝4·금액·날짜)에 판독 불가가 있으면 그것을 함께 남긴다(`unresolved`) — 짝을 고르기 전에 추출 문제부터 닫는다(§7.4).
+- **`명세 대기`** 는 카드 이용 내역이 증빙 날짜 창의 끝까지 아직 들어오지 않아 후보가 없는 상태다(#26). 아직 오지 않은 것을 `짝 없음`으로 두지 않는다(`docs/ARCHITECTURE.md` §9).
+  이용 내역은 승인 기준으로 매일 들어오므로([ADR-0021](../adr/0021-three-read-only-mock-connectors-no-erp.md) 결정 5) 대개 하루 안에 풀린다. 사람에게 보내지 않는다.
+- **세 중간 상태(`후보 복수`·`짝 보류`·`명세 대기`)는 결과가 아니다.** 영속 상태이지만([ADR-0013](../adr/0013-postgres-object-storage-isolated-by-world-id.md) 결정 9) 법정 판정·정책 대조로 넘어가지 않는다 — 넘어가는 것은 `ReconciliationOutcome`(§3.8)뿐이다.
+  `Confirmed<T>`가 추출 불확실이 닫혔다는 뜻이듯, 이 타입 경계가 대사가 닫혔다는 뜻이다(#26).
+- **후보 풀**은 출장자 본인이 쓰는 카드의 줄과 총무팀이 관리하는 카드의 줄이다 `[설계 가정]`. 여행사 결제가 총무팀이 관리하는 카드에 걸리기 때문이다(§7.4, #26).
 - 교차 대조의 Codex 레인이 요구한 더 강한 조건 — 독립 원거래 ID, 또는 카드 계정 + 승인번호 + 날짜 + 가맹점 ID의 복합 일치 — 은 **채택하지 않는다.**
   위 세 조건만으로 자동 확정한다.
 
 ```ts
+/** 법인카드 한 장을 누가 쓰는가. 여행사 결제는 총무팀이 관리하는 카드에 걸린다 `[설계 가정]`(§7.4, #26). */
+export type CardHolder = { kind: "개인"; personId: string } | { kind: "총무팀 관리" };
+
+/**
+ * 법인카드 이용 내역(승인 기준, 매일 가져온다)의 한 줄. 대사의 입력은 이것뿐이다.
+ * 청구 원화와 할부 회차는 월 청구 명세가 뒤에 붙인다(`CardBilling`). 대사는 그것을 기다리지 않는다(#26).
+ */
 export type CardLine = {
   id: string;
   cardLast4: string;
+  holder: CardHolder;
   approvalNumber: string | null;
   /** 이용일. 청구일이 아니다. */
   usedAt: string;
   /** 이용금액 — 원거래 통화의 금액. 청구액도 아니고 할부 분할액도 아니다. */
   original: Money;
-  billedKrw: Money;
   merchantName: string;
   merchantRegNo: string | null;
   merchantCountry: string;
   installmentMonths: number;
+};
+
+/**
+ * 월 청구 명세가 카드 줄 하나에 붙이는 값. 이 문서의 대사·판정 코드는 이것을 읽지 않는다(#26).
+ * 청구 명세의 이용일·이용금액이 이용 내역과 다르면 이 기록이 아니라 카드 줄의 새 revision으로 받고, 대사가 다시 돈다(§7.5).
+ */
+export type CardBilling = {
+  cardLineId: string;
+  /** 청구 연월. 할부면 한 카드 줄에 회차마다 하나씩 붙는다. */
+  billingMonth: string;
+  billedKrw: Money;
+  installmentNo: number;
 };
 
 export type EvidenceForMatch = {
@@ -1842,14 +1871,19 @@ export type AutoConfirmBlock =
       field: "금액" | "날짜" | "가맹점 등록번호" | "가맹점 소재국";
     };
 
-export type MatchOutcome =
-  | { kind: "대사 완료"; cardLineId: string; key: "승인번호" | "카드·금액·날짜" }
+/**
+ * 대사의 중간 상태. 영속 상태지만 결과가 아니다 — 법정 판정·정책 대조로 넘어가지 않는다(#26).
+ * 자동 `대사 불일치`는 같은 통화에서만 난다 — 통화가 다르면 `짝 보류`다.
+ */
+export type PendingMatch =
   /** `unresolved`는 짝의 근거 가운데 판독 불가인 것 — 짝을 고르기 전에 닫는다(§7.4). */
   | { kind: "후보 복수"; cardLineIds: string[]; unresolved: PairField[] }
   | { kind: "짝 보류"; cardLineId: string; blockedBy: AutoConfirmBlock[] }
-  /** 자동으로는 같은 통화에서만 난다 — 통화가 다르면 `짝 보류`다. */
-  | { kind: "대사 불일치"; cardLineId: string; difference: AmountDifference }
-  | { kind: "짝 없음(증빙)" };
+  /** 이용 내역이 증빙 날짜 창의 끝까지 아직 들어오지 않았다. `coveredThrough`는 그 이용 내역의 수집 기준일이다. */
+  | { kind: "명세 대기"; coveredThrough: string };
+
+/** 대사 한 번의 출력. 결과(§3.8)이거나 중간 상태다. */
+export type MatchOutcome = ReconciliationOutcome | PendingMatch;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -1938,14 +1972,19 @@ export function narrowByMerchant(
  *
  * `claims`는 카드 줄마다 그 줄을 후보로 가진 증빙의 목록이다. §7.3 마지막 행에 따라
  * 중복이나 같은 짝의 보조 문서로 판정된 증빙은 넣지 않는다.
+ * `coveredThrough`는 가져온 이용 내역의 수집 기준일이다. 후보가 없어도 그 날짜가 증빙 날짜 창의 끝보다 앞이면
+ * `짝 없음`이 아니라 `명세 대기`다(#26).
  */
 export function decideMatch(
   evidence: EvidenceForMatch,
   candidates: CardLine[],
   claims: ReadonlyMap<string, readonly string[]>,
+  coveredThrough: string,
 ): MatchOutcome {
   if (candidates.length === 0) {
-    return { kind: "짝 없음(증빙)" };
+    return awaitingStatement(evidence, coveredThrough)
+      ? { kind: "명세 대기", coveredThrough }
+      : { kind: "짝 없음(증빙)" };
   }
 
   if (candidates.length > 1) {
@@ -2048,23 +2087,33 @@ export function decideMatch(
     return { kind: "짝 보류", cardLineId: line.id, blockedBy };
   }
 
+  const byApproval =
+    evidence.approvalNumber !== null && evidence.approvalNumber === line.approvalNumber;
+  const key: MatchKey = byApproval ? "승인번호" : "카드·금액·날짜";
+
   if (amountDifference !== null) {
     // 같은 통화에서 금액만 다르다 — 짝은 서고, 차액은 확정된 사실로 남는다(§7.4).
     return {
       kind: "대사 불일치",
       cardLineId: line.id,
+      key,
       difference: { kind: "차액", amount: amountDifference },
     };
   }
 
-  const byApproval =
-    evidence.approvalNumber !== null && evidence.approvalNumber === line.approvalNumber;
+  return { kind: "대사 완료", cardLineId: line.id, key };
+}
 
-  return {
-    kind: "대사 완료",
-    cardLineId: line.id,
-    key: byApproval ? "승인번호" : "카드·금액·날짜",
-  };
+/**
+ * 이용 내역이 증빙 날짜 창의 끝까지 아직 오지 않았는가. 날짜 후보가 하나라도 창 밖으로 남으면 기다린다.
+ * 날짜가 없으면 기다릴 날이 없다. 공급 국가를 모르면 넓은 쪽(국외 ±1일)으로 본다.
+ */
+function awaitingStatement(evidence: EvidenceForMatch, coveredThrough: string): boolean {
+  const window = evidence.supplyCountry === "KR" ? 0 : 1;
+
+  return evidence.dateCandidates.some(
+    (date) => dayDiff(date, coveredThrough) + window > 0,
+  );
 }
 ```
 
@@ -2127,6 +2176,11 @@ export function commonPrefixLength(left: string, right: string): number {
 | **승인번호 우선**이 잘못된 짝을 확정한다 | 카드사가 승인번호를 재사용하는 경우 | 승인번호가 붙어도 금액을 비교한다. 같은 통화에서 금액만 다르면 `대사 불일치`, 금액이 다르면서 다른 막힘도 있거나 통화가 다르면 `짝 보류`다 — 짝이 먼저, 차액은 그다음이다. 날짜 창·가맹점 사업자등록번호·소재국이 어긋나면 조건 3이, 끝4·금액·날짜를 판독하지 못했거나 지면에 없어 대조하지 못했으면 조건 2가 `짝 보류`로 막는다. 승인번호만으로 확정하는 길은 없다 |
 | 같은 거래의 **문서가 둘**(카드전표 + 품목 영수증)일 때 둘 다 같은 줄을 요구한다 | 국내 식당에서 흔하다 | 증빙 유형이 같으면 중복, 다르면 같은 짝의 보조 문서로 붙인다 |
 
+**이 키가 놓치는 짝도 있다**(#26). 결제일과 이용일이 다른 선결제가 그렇다 — 여행사나 온라인으로 미리 결제한 숙박은 숙박 명세서의 날짜가 숙박 기간이고,
+카드 줄의 이용일은 결제일이다. 날짜 창에 들지 않으므로 그 증빙은 `짝 없음(증빙)`이 되고 카드 줄은 영수증 없음이 된다.
+국내 공급이면 법정 판정에서 법인카드 + `대사 완료` 갈래(§6, 시행령 §158④)를 타지 못한다. 이 설계는 막지 않는다 —
+창을 넓히면 첫 행의 오탐이 커진다 `[유도]`. 건수는 #11이 잰다.
+
 ### 7.4 대사가 닫는 것과 남기는 것
 
 - **닫는다**: 통화 후보, 금액 구분자 후보, 날짜 후보, 그리고 "영수증의 금액이 맞는가" 자체.
@@ -2135,13 +2189,16 @@ export function commonPrefixLength(left: string, right: string): number {
   다만 증빙 쪽 금액이 오독일 가능성이 남아 있으면(검산 불가 + 교차 확인 없음) 먼저 (i)로 사람에게 간다 —
   오독과 실제 차액을 구별할 수단이 그것뿐일 때만 그렇다.
 - **사람이 고른다**: `후보 복수`와 `짝 보류`는 자동으로 묶지 않은 중간 상태다. 누가 확인하는지는 막힌 이유가 정한다 —
-  **모순이면 재무합의자, 그 밖에는 기안자다**(§10 `routeToHuman`).
+  **모순이면 재무합의자, 그 밖에는 기안자다**(§10 `routeToHuman`). 다만 보이는 카드 줄이 모두 총무팀이 관리하는 카드의 것이면
+  기안자 대신 **배정된 총무 예약 담당**이 확인한다 `[설계 가정]`(#26). 여행사 결제는 그 카드에 걸린다 — as-is의 틈 ②가 "총무 내부"이고(`docs/company/tools.md:34`)
+  총무팀이 법인카드를 관리한다(`docs/company/org.md:12`). 출장자는 그 결제를 하지 않았고, 여러 출장의 증빙이 한 줄을 다투는 경쟁은 한 기안자가 풀 수 없다.
   - **추출 문제**(`미해결 추출 문제` — 끝4·금액·날짜 판독 불가, 대조가 값을 풀지 못함) → 기안자가 재촬영 또는 수기 확정한다.
     짝이 서지 않은 건과 같은 길이다(H6). 닫히면 대사를 다시 돌린다.
-  - **경쟁**(`경쟁 후보` — 같은 카드 줄을 다른 증빙도 노림, 그리고 `후보 복수`) → 기안자가 어느 증빙이 그 카드 줄인지(`후보 복수`면 어느 카드 줄이 그 증빙인지) 고른다.
-  - **대조 불가**(`대조 불가 필드` — 끝4·금액·날짜가 지면에 없음) → 기안자가 같은 지출인지 확인한다. 경쟁과 같은 화면이다.
+  - **경쟁**(`경쟁 후보` — 같은 카드 줄을 다른 증빙도 노림, 그리고 `후보 복수`) → 기안자(총무팀 관리 카드면 총무 예약 담당)가 어느 증빙이 그 카드 줄인지(`후보 복수`면 어느 카드 줄이 그 증빙인지) 고른다.
+  - **대조 불가**(`대조 불가 필드` — 끝4·금액·날짜가 지면에 없음) → 기안자(총무팀 관리 카드면 총무 예약 담당)가 같은 지출인지 확인한다. 경쟁과 같은 화면이다.
   - **값 모순**(`값 모순` — 날짜 창·가맹점 사업자등록번호·소재국, 통화 다름, 금액과 다른 모순이 함께) → 재무합의자가 같은 거래인지 확인한다.
-    모순이 있는 짝을 기안자가 스스로 세우지 않게 하는 자기 확인 방지다.
+    모순이 있는 짝을 기안자가 스스로 세우지 않게 하는 자기 확인 방지다. 같은 거래로 세우면 사유를 남긴다 — 수기 확정의 `overrideReason`과 같은 자리다(§10 `PairCheckEntry`).
+    재무합의자가 0명인 정산(`APV-9-4`)에는 이 확인을 맡을 사람이 없다. 담당을 임의로 대신하지 않고, 그 짝이 열린 동안 결재권자의 승인을 `UNDEFINED_BY_26`로 거절한다 — #20이 정한다(#26, [ADR-0027](../adr/0027-reopen-returns-to-first-finance-consent.md) 결정 10과 같은 자리).
 
   이유가 여럿이면 **추출 문제 → 경쟁·대조 불가 → 값 모순** 순서로 한 단계씩 보낸다 — 추출 문제가 먼저 닫혀야 나머지를 판단할 수 있다.
   `후보 복수`도 같다 — 짝의 근거에 판독 불가가 남았으면(`unresolved`) 짝 선택보다 재촬영·수기 확정이 먼저이고, 닫히면 대사를 다시 돌린다.
@@ -2153,24 +2210,48 @@ export function commonPrefixLength(left: string, right: string): number {
   원화 환산은 #16 `TRV-14`가 정책 대조에서 한다(`PolicyFacts.reconciliation`으로 넘어간다). 환율 기준일은 #16이 `TRV-14-1`에서 지출일로 정했다(§3.9).
   0 차액, 임의 환율, `대사 완료`로 닫지 않는다. 예: 해외 가맹점이 원화로 청구하는 DCC(증빙 JPY, 카드 줄 원거래 KRW).
   화면은 원본과 카드 줄(`후보 복수`면 후보 줄 전부)을 함께 보이고, `짝 보류`는 막힌 조건(`blockedBy`)도 보인다.
-- **"영수증 없음"** = 증빙이 붙지 않은 카드 줄이다.
+  확인한 결정은 그것이 기댄 입력 — 증빙의 짝 근거 필드 revision과 화면에 보인 카드 줄의 revision — 이 그대로인 동안 유지된다 `[유도]`(#26).
+  대사는 입력이 바뀔 때마다 다시 돌므로(아래), 다른 입력 때문에 다시 돌 때 같은 짝을 다시 묻지 않는다. 기댄 입력이 바뀌면 결정은 효력을 잃고 대사가 새로 정한다 —
+  승인이 승인자가 읽은 카드에 묶이는 것과 같은 모양이다([ADR-0024](../adr/0024-rejection-resubmission-and-card-bound-approvals.md) 결정 5).
+- **대사는 입력이 바뀔 때만 다시 돈다**(#26). 입력은 증빙 필드 revision과 카드 줄 revision이다. 문서 상태와 관계없다 — `완료`나 지급 뒤에 도착한 카드 줄도 그때 대사를 돌린다.
+  같은 입력이면 결과도 같으므로, 값이나 카드 줄이 바뀌지 않은 이의 플래그는 대사를 다시 돌리지 않는다([ADR-0027](../adr/0027-reopen-returns-to-first-finance-consent.md) 결정 8을 닫는다).
+  `완료`·`지급 처리됨`·`반환 대기`에서 대사 결과가 바뀌면 문서는 움직이지 않는다. 바뀐 사실은 내부감사에게 보이고, 재심은 이의 플래그가 연다.
+  재심에서 카드가 승인 때 읽은 것과 다르면 ADR-0027 결정 7을 따른다. 그 표시 이름은 #22다.
+- **"영수증 없음"** = 증빙이 붙지 않은 카드 줄이다. 증빙 한 장의 결과가 아니라 카드 줄 쪽 결과다(`UnmatchedCardLine`).
+  `후보 복수`·`짝 보류`의 후보 줄은 아직 영수증 없음이 아니다 — 짝이 정해지면 달라진다.
 - **#16 연결**: #16이 법정 `판정 불가`의 사내 처리를 `대사 완료` 여부로 가른다(#16 ADR-0007). `대사 완료`의 의미를 바꾸면 #16에 영향이 간다.
 
 ```ts
-/** 증빙이 붙지 않은 카드 줄 = "영수증 없음". 증빙 유형이 아니라 대사의 결과다. */
+/** 증빙이 붙지 않은 카드 줄 = "영수증 없음". 증빙 유형도 증빙의 결과도 아니고, 카드 줄 쪽 대사 결과다(#26). */
+export type UnmatchedCardLine = { kind: "짝 없음(카드)"; cardLineId: string };
+
+/** 짝이 선 줄도, 사람이 고르는 중인 후보 줄도 아닌 카드 줄. */
 export function cardLinesWithoutEvidence(
   lines: CardLine[],
   outcomes: Map<string, MatchOutcome>,
-): CardLine[] {
-  const matched = new Set<string>();
+): UnmatchedCardLine[] {
+  const claimed = new Set<string>();
 
   for (const outcome of outcomes.values()) {
-    if (outcome.kind === "대사 완료" || outcome.kind === "대사 불일치") {
-      matched.add(outcome.cardLineId);
+    switch (outcome.kind) {
+      case "대사 완료":
+      case "대사 불일치":
+      case "짝 보류":
+        claimed.add(outcome.cardLineId);
+        break;
+      case "후보 복수":
+        for (const id of outcome.cardLineIds) {
+          claimed.add(id);
+        }
+        break;
+      default:
+        break;
     }
   }
 
-  return lines.filter((line) => !matched.has(line.id));
+  return lines
+    .filter((line) => !claimed.has(line.id))
+    .map((line) => ({ kind: "짝 없음(카드)", cardLineId: line.id }));
 }
 
 /**
@@ -2213,7 +2294,8 @@ export function closeAffirmedPair(evidenceAmount: Money, line: CardLine): Reconc
 
 ### 7.5 모의 커넥터에 요구하는 칸 (#10)
 
-이 키는 카드 명세가 아래를 갖고 있어야 선다. 없으면 대사는 이름과 날짜로 퇴화하고, 사람에게 가는 건수가 늘어난다. 표의 여섯 칸 밖에 `CardLine`(`:1798-1810`)이 요구하는 카드 끝 4자리(`cardLast4`)·청구 원화(`billedKrw`)·가맹점명(`merchantName`)도 명세가 준다(#10, [ADR-0021](../adr/0021-three-read-only-mock-connectors-no-erp.md) 결정 8).
+이 키는 카드 명세가 아래를 갖고 있어야 선다. 없으면 대사는 이름과 날짜로 퇴화하고, 사람에게 가는 건수가 늘어난다. 표의 칸 밖에 `CardLine`(`:1815-1828`)이 요구하는 카드 끝 4자리(`cardLast4`)·가맹점명(`merchantName`)도 이용 내역이 준다(#10, [ADR-0021](../adr/0021-three-read-only-mock-connectors-no-erp.md) 결정 8).
+청구 원화(`billedKrw`)와 할부 회차는 월 청구 명세가 뒤에 붙이는 `CardBilling`이고 대사의 입력이 아니다(#26).
 
 | 칸 | 왜 필요한가 |
 | --- | --- |
@@ -2223,6 +2305,12 @@ export function closeAffirmedPair(evidenceAmount: Money, line: CardLine): Reconc
 | `가맹점 사업자등록번호` | 이름 대신 쓰는 좁히기 |
 | `가맹점 소재국` | 날짜 창과 공급 장소 |
 | `할부 개월` | 분할 청구액과 이용금액을 가르는 표시 |
+| `카드 사용자` | 후보 풀과 짝 확인 담당(§7.2, §7.4). 여행사 결제가 걸리는 총무팀 관리 카드를 가른다 `[설계 가정]`(#26) |
+
+- **수집 기준일**(#26). 이용 내역을 가져올 때마다 어느 날까지의 이용을 담았는지(`coveredThrough`)를 함께 받는다. `명세 대기`의 기준이다(§7.2).
+- **청구 명세를 이용 내역에 잇는다** `[설계 가정]`(#26). 청구 명세의 줄은 승인번호로 이용 내역의 줄에 잇고, 승인번호가 없으면 카드 끝4·이용일·이용금액·가맹점명이 모두 같은 줄에 잇는다.
+  이을 줄이 없으면 새 카드 줄로 받아 대사를 돌린다. 둘 이상이면 잇지 않고 그 줄만 격리한다([ADR-0021](../adr/0021-three-read-only-mock-connectors-no-erp.md) 결정 6과 같은 방식).
+  이은 줄의 이용일·이용금액이 이용 내역과 다르면 카드 줄의 새 revision이고, 대사가 다시 돈다(§7.4). 같으면 `CardBilling`만 붙고 대사는 돌지 않는다.
 
 ## 8. 불확실성 전파 경로 — 필드 단위
 
@@ -2239,7 +2327,7 @@ export function closeAffirmedPair(evidenceAmount: Money, line: CardLine): Reconc
 | `buyerRegNo` | 3칸 | 회사 등록번호와 일치 검사 | — | 백지 입력 | (ii) §32①2호 | 값 |
 | `docType` 증빙 유형 | ①단서 → 코드 유도 + 모델 추정 | 단계 간 대조 | — | 후보 선택 | L1의 4종 판정, (ii) 규칙 선택 | 유형 + 유도 근거 단서 |
 | `supplyPlace` 공급 장소 | ①의 국가 단서 | — | 가맹점 소재국 | 백지 입력 | **L1의 첫 분기**(§79 4호) | 판정 근거 |
-| `supplyCategory` 공급 분류 | ①의 분류 + 단서 문자열 | — | 가맹점 업종 | 후보 선택 | L1의 §79 면제, #16의 여비 항목 | 판정 근거 |
+| `supplyCategory` 공급 분류 | ①의 분류 + 단서 문자열 | — | — (가맹점 업종은 공급 분류와 같은 사실이 아니다 — 호텔 안 식당, 여행사 업종으로 걸린 항공권. 칸을 두지 않는다, #26) | 후보 선택 | L1의 §79 면제, #16의 여비 항목 | 판정 근거 |
 | `cashReceiptPurpose` | 3칸 + ①단서 | 단계 간 대조 | — | 후보 선택 | (ii) 지출증빙 여부 | 하자 문구 |
 | `servicePeriod` 숙박·탑승 기간 | 3칸 | — | — | 후보 선택 | #16의 기간 안분 데이터 | 값 |
 | `totalKrw` 원화 환산액 | 파생값 | — | 청구 원화와 별도 칸 | — | #16의 금액 조항 | 값 + 환율·기준일·판(版) 참조 |
@@ -2331,7 +2419,8 @@ H8이 0건을 보장하는 것은 수취 의무 미충족이고, 판정 불가 0
 | 현금 등 · 국외 | 짝 없음 | 없음 | 거래일, 통화, 합계, 공급 장소, 공급 분류, 기간 | **6** |
 | 현금 등 · 국내 (세금계산서) | 짝 없음 | 없음 | 위 6개 + 증빙 유형, 공급가액, 부가세액, 공급자 등록번호, 공급받는 자 등록번호 | **11** |
 | 법인카드 · 추출 문제로 막힘 | `짝 보류` · `후보 복수` | 아직 없음 — 짝이 서기 전이다 | 짝이 없는 건과 같다(H6이면 재촬영, 아니면 수기 확정 1세션). 끝4 판독 불가는 판정 입력이 아니므로 재촬영이다. 닫히면 대사를 다시 돌린다 | 국외 **6** · 국내 **11** |
-| 법인카드 · 경쟁·대조 불가·값 모순으로 막힘 | `짝 보류` · `후보 복수` | 아직 없음 — 짝이 서기 전이다 | 필드가 아니라 **짝 확인**이다 — 경쟁·대조 불가·`후보 복수`는 기안자, 값 모순은 재무합의자. 짝이 서면 대사를 다시 돌려 위 `대사 완료` 행으로 간다 | 필드 **0** + 짝 확인(기안자 1회, 재무합의자 1회까지) |
+| 법인카드 · 경쟁·대조 불가·값 모순으로 막힘 | `짝 보류` · `후보 복수` | 아직 없음 — 짝이 서기 전이다 | 필드가 아니라 **짝 확인**이다 — 경쟁·대조 불가·`후보 복수`는 기안자(보이는 카드 줄이 모두 총무팀 관리 카드면 총무 예약 담당, #26), 값 모순은 재무합의자. 짝이 서면 대사를 다시 돌려 위 `대사 완료` 행으로 간다 | 필드 **0** + 짝 확인(기안자 또는 총무 예약 담당 1회, 재무합의자 1회까지) |
+| 이용 내역 미도착 | `명세 대기` | 아직 없음 — 들어오면 대사를 다시 돌린다 | **보내지 않는다.** 짝이 서면 시스템 연동이 닫을 필드를 미리 묻지 않는다(H3) | **0** |
 
 법인카드가 주 결제 수단인 출장에서 **사람에게 갈 수 있는 필드의 상한이 2~5개**라는 것이 이 설계의 실제 답이다.
 그리고 그 자리들도 신호가 섰을 때만 열린다. 이 상한은 짝이 선 뒤의 것이다 — 짝이 서지 않은 법인카드 건은
@@ -2351,16 +2440,53 @@ export type FieldState = {
   affectsJudgment: boolean;
 };
 
+/** 짝 확인을 맡는 자리(§7.4). */
+export type PairCheckRole = "기안자" | "총무 예약 담당" | "재무합의자";
+
 /** 사람이 짝을 확인하는 요청. 필드 확정이 아니므로 H2의 필드 상한에 들지 않고, R1~R4에는 든다(§10.1). */
 export type PairCheck = {
   evidenceId: string;
   /** 화면에 원본과 함께 보일 카드 줄. `후보 복수`면 여럿이다. */
   cardLineIds: string[];
-  /** 모순이면 재무합의자, 그 밖에는 기안자다(§7.4). */
-  actor: "기안자" | "재무합의자";
+  /** 모순이면 재무합의자, 그 밖에는 기안자다. 보이는 카드 줄이 모두 총무팀 관리 카드면 기안자 대신 총무 예약 담당이다(§7.4). */
+  actor: PairCheckRole;
   /** 남은 막힌 조건 전부. 화면에 함께 보인다. `후보 복수`면 비어 있다. */
   blockedBy: AutoConfirmBlock[];
   openedAt: string;
+};
+
+/**
+ * 짝 확인 한 단계의 기록(#26). 사람이 `후보 복수`·`짝 보류`를 닫는 행위마다 하나다.
+ * 막힌 이유를 한 단계씩 보내므로(§7.4) 한 짝에 기록이 둘(기안자 또는 총무 예약 담당, 그다음 재무합의자)일 수 있다.
+ * 공통 감사 envelope([ADR-0012](../adr/0012-transition-audit-provenance-in-one-transaction.md) 결정 2)의 본문이다 —
+ * 행위자·책임자·시각은 envelope에 있고, 행위자와 책임자는 둘 다 확인한 사람이다.
+ * 경쟁을 푼 행위 하나가 여러 증빙의 확인을 닫으면 증빙마다 기록을 남기고, envelope의 `command_id`가 같다.
+ */
+export type PairCheckEntry = {
+  auditEntryId: string;
+  evidenceId: string;
+  /** 이 단계가 닫은 대사 상태. */
+  from: "후보 복수" | "짝 보류";
+  role: PairCheckRole;
+  /** 원본과 함께 보인 카드 줄. `후보 복수`면 여럿이다. */
+  shownCardLineIds: string[];
+  /** 이 단계가 닫은 막힌 조건. `후보 복수`면 비어 있다. */
+  closed: AutoConfirmBlock[];
+  decision: { kind: "같은 지출"; cardLineId: string } | { kind: "같은 지출 아님" };
+  /** 남은 조건이 있으면 다음 사람에게 간다. 없으면 짝이 닫힌다 — `closeAffirmedPair`(§7.4), 또는 같은 지출이 아니면 `짝 없음(증빙)`. */
+  result:
+    | { kind: "다음 단계"; remaining: AutoConfirmBlock[] }
+    | { kind: "닫힘"; outcome: ReconciliationOutcome };
+  /** 결정이 기댄 입력의 판. 이 판이 그대로인 동안 대사가 다시 돌아도 이 결정을 다시 묻지 않는다(§7.4). */
+  basis: {
+    /** 증빙의 대사 입력 필드 revision 가운데 가장 새 것. */
+    evidenceRevision: number;
+    cardLineRevisions: Array<{ cardLineId: string; revision: number }>;
+  };
+  /** 원본을 펼쳐 봤는가([ADR-0009](../adr/0009-evidence-is-crop-plus-original-toggle.md)). `ConfirmationEntry`처럼 지표의 원천이다(§11). */
+  originalViewed: boolean;
+  /** 값 모순이 있는 짝을 같은 거래로 세울 때만 필수다 — 수기 확정의 `overrideReason`과 같은 자리. 그 밖에는 null. */
+  reason: string | null;
 };
 
 export type HumanRouting =
@@ -2370,12 +2496,26 @@ export type HumanRouting =
   | { kind: "보내지 않는다"; reason: string };
 
 /**
- * 짝을 누가 확인하는가. 경쟁·대조 불가를 값 모순보다 먼저 닫는다 — 둘 중 하나라도 남았으면 기안자다.
- * 기안자가 확인한 조건은 `blockedBy`에서 빠지고, 값 모순이 남았으면 다음 호출에서 재무합의자에게 간다.
+ * 모순이 아닌 짝 확인을 누가 하는가. 보이는 카드 줄이 모두 총무팀이 관리하는 카드의 것이면 총무 예약 담당, 아니면 기안자다 `[설계 가정]`(#26).
+ * 섞여 있으면 기안자다 — 자기 카드로 결제했는지는 기안자가 안다.
+ */
+function nonContradictionRole(
+  cardLineIds: string[],
+  holders: ReadonlyMap<string, CardHolder>,
+): PairCheckRole {
+  return cardLineIds.every((id) => holders.get(id)?.kind === "총무팀 관리")
+    ? "총무 예약 담당"
+    : "기안자";
+}
+
+/**
+ * 짝을 누가 확인하는가. 경쟁·대조 불가를 값 모순보다 먼저 닫는다 — 둘 중 하나라도 남았으면 기안자(또는 총무 예약 담당)다.
+ * 그 사람이 확인한 조건은 `blockedBy`에서 빠지고, 값 모순이 남았으면 다음 호출에서 재무합의자에게 간다.
  */
 function pairCheck(
   evidenceId: string,
   reconciliation: MatchOutcome,
+  holders: ReadonlyMap<string, CardHolder>,
   now: string,
 ): PairCheck | null {
   switch (reconciliation.kind) {
@@ -2383,19 +2523,20 @@ function pairCheck(
       return {
         evidenceId,
         cardLineIds: reconciliation.cardLineIds,
-        actor: "기안자",
+        actor: nonContradictionRole(reconciliation.cardLineIds, holders),
         blockedBy: [],
         openedAt: now,
       };
     case "짝 보류": {
-      const drafterFirst = reconciliation.blockedBy.some(
+      const cardLineIds = [reconciliation.cardLineId];
+      const nonContradictionFirst = reconciliation.blockedBy.some(
         (block) => block.condition === "경쟁 후보" || block.condition === "대조 불가 필드",
       );
 
       return {
         evidenceId,
-        cardLineIds: [reconciliation.cardLineId],
-        actor: drafterFirst ? "기안자" : "재무합의자",
+        cardLineIds,
+        actor: nonContradictionFirst ? nonContradictionRole(cardLineIds, holders) : "재무합의자",
         blockedBy: reconciliation.blockedBy,
         openedAt: now,
       };
@@ -2411,15 +2552,22 @@ function pairCheck(
  * ② `짝 보류`는 막힌 이유를 추출 문제 → 경쟁·대조 불가 → 값 모순 순서로 한 단계씩 보낸다(§7.4).
  *    `후보 복수`도 짝의 근거에 추출 문제가 남았으면(`unresolved`) 그것이 짝 선택보다 먼저다.
  *    추출 문제는 짝이 없는 건과 같은 길(①과 수기 확정)이고, 판정 입력이 아닌 끝4를 읽지 못했으면 재촬영이다.
- *    경쟁·대조 불가·`후보 복수`는 기안자의, 값 모순은 재무합의자의 짝 확인이다.
+ *    경쟁·대조 불가·`후보 복수`는 기안자(보이는 카드 줄이 모두 총무팀 관리 카드면 총무 예약 담당)의, 값 모순은 재무합의자의 짝 확인이다.
  *    그 단계가 닫히면 대사를 다시 돌리고 이 함수를 다시 부른다.
+ *    `명세 대기`는 보내지 않는다 — 이용 내역이 들어오면 대사를 다시 돌리고 이 함수를 다시 부른다(#26).
  * ③ 시스템 연동이 같은 사실을 갖고 있으면 보내지 않는다.
  * ④ 그 경로에서 판정 입력이 아닌 필드는 보내지 않는다.
  */
 export function routeToHuman(
   evidenceId: string,
   states: FieldState[],
-  options: { totalUnreadable: boolean; reconciliation: MatchOutcome; now: string },
+  options: {
+    totalUnreadable: boolean;
+    reconciliation: MatchOutcome;
+    /** 카드 줄마다 그 카드를 누가 쓰는가(§7.2). */
+    holders: ReadonlyMap<string, CardHolder>;
+    now: string;
+  },
 ): HumanRouting {
   const { reconciliation } = options;
   const paired = reconciliation.kind === "대사 완료" || reconciliation.kind === "대사 불일치";
@@ -2428,6 +2576,13 @@ export function routeToHuman(
     return {
       kind: "재촬영 요청",
       reason: "합계를 읽지 못했고 카드 명세와 짝도 서지 않았다 — 필드를 하나씩 받아도 근거가 남지 않는다",
+    };
+  }
+
+  if (reconciliation.kind === "명세 대기") {
+    return {
+      kind: "보내지 않는다",
+      reason: "카드 이용 내역이 증빙 날짜를 아직 덮지 않았다 — 들어오면 대사를 다시 돌린다",
     };
   }
 
@@ -2449,7 +2604,7 @@ export function routeToHuman(
   }
 
   if (unresolved.length === 0) {
-    const check = pairCheck(evidenceId, reconciliation, options.now);
+    const check = pairCheck(evidenceId, reconciliation, options.holders, options.now);
 
     if (check !== null) {
       return { kind: "짝 확인", check };
@@ -2660,9 +2815,9 @@ H8은 좁힌 문구로 받는다 — 법인카드 + `대사 완료`는 수취 �
 | 법정 판정이 `판정 불가`로 떨어진 건의 사내 처리 | #16 (경계 2) |
 | 기간 안분 규칙, 왕복교통비의 범위, 여비 항목 분류 | #16 (경계 4) |
 | 사내 증빙 제출 의무와 기한 | #16 (출장관리규정) |
-| 법인카드 명세 커넥터가 실제로 주는 칸의 충실도 | #10 — [ADR-0021](../adr/0021-three-read-only-mock-connectors-no-erp.md) 결정 8(§7.5의 요구 목록 + 끝4·청구 원화·가맹점명). 출장 일정 커넥터는 없다 |
+| 법인카드 명세 커넥터가 실제로 주는 칸의 충실도 | #10 — [ADR-0021](../adr/0021-three-read-only-mock-connectors-no-erp.md) 결정 8(§7.5의 요구 목록 + 끝4·청구 원화·가맹점명). #26이 청구 원화를 대사 입력에서 빼 청구 명세의 `CardBilling`으로 옮기고, 카드 사용자와 수집 기준일을 더했다(§7.5). 출장 일정 커넥터는 없다 |
 | 지표의 화면·주기·임계 운영 | #11 |
-| 수기 확정 후 재개, 값 수정 후의 상태 전이, admin 재심이 대사를 다시 거치는 조건 | #17 — 값 수정은 새 필드 revision으로 검산·대사를 다시 돌리고([ADR-0023](../adr/0023-document-and-evidence-axes-named-rejections.md) 결정 2), 문서는 카드가 바뀐 가장 앞 단계로 되돌린다([ADR-0024](../adr/0024-rejection-resubmission-and-card-bound-approvals.md) 결정 5). 재심 중 값이 바뀌면 대사를 다시 거친다([ADR-0027](../adr/0027-reopen-returns-to-first-finance-consent.md) 결정 7). 플래그 자체가 대사를 다시 돌리는지는 열려 있고 대사 쪽 후속(#18 후속)에서 정한다(결정 8) |
+| 수기 확정 후 재개, 값 수정 후의 상태 전이, admin 재심이 대사를 다시 거치는 조건 | #17 — 값 수정은 새 필드 revision으로 검산·대사를 다시 돌리고([ADR-0023](../adr/0023-document-and-evidence-axes-named-rejections.md) 결정 2), 문서는 카드가 바뀐 가장 앞 단계로 되돌린다([ADR-0024](../adr/0024-rejection-resubmission-and-card-bound-approvals.md) 결정 5). 재심 중 값이 바뀌면 대사를 다시 거친다([ADR-0027](../adr/0027-reopen-returns-to-first-finance-consent.md) 결정 7). 플래그 자체는 대사를 다시 돌리지 않는다 — 대사는 입력이 바뀔 때만 돈다(#26, [ADR-0031](../adr/0031-reconciliation-pending-states-and-input-driven-rerun.md) 결정 5, §7.4) |
 | 방향 분류기를 어디서 돌리는가(런타임·배포 형태) | #4 |
 | 실제 영수증 이미지로 돌린 결과와 스키마 컴파일 확인 | `/harness` phase (§3.6·§11.3) |
 | 독일·멕시코·베트남 로캘의 검산 규칙 | 이 문서는 갖고 있지 않다. 규칙이 생기기 전까지 그 로캘은 `검산 불가`이고 대사가 유일한 교차 확인이다 |
