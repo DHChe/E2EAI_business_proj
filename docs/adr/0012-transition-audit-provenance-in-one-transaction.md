@@ -82,10 +82,12 @@ grok은 추출·계산의 책임자를 기안자로 고정하자고 했고, 그 
   3. 감사 조회에서 책임자가 에이전트이거나, 결재 행위의 행위자가 에이전트이거나, 두 식별자가 한 열로 접혀 있다(grok §13).
   4. DB 제약으로 결재 행위 가드를 표현할 수 없는 결재 규칙이 생긴다(예: #17이 넣는 교차 규칙). 그러면 가드를 애플리케이션 한 층으로 줄이고 그 사실을 ADR에 적는다(claude §5.6-4).
 - 결재 행위 가드를 명령 처리기에만 둘지 DB 제약으로 한 번 더 막을지는 구현 phase가 정한다. claude는 트리거로 한 번 더 막는 안을 냈다(claude §3.4).
-- 수기 확정 기록은 설계 문서의 `ConfirmationEntry` 칸을 받는다(`docs/design/receipt-pipeline.md:287-305`). 그 타입에는 `actor`만 있고 책임자 칸이 없다.
+- 수기 확정 기록은 설계 문서의 `ConfirmationEntry` 칸을 받는다(`82f02d8`의 `docs/design/receipt-pipeline.md:287-305`). 그 타입에는 `actor`만 있고 책임자 칸이 없다.
 
-  > _`docs/design/receipt-pipeline.md:287-305`의 `ConfirmationEntry`와 어긋나지만(책임자 칸이 없다), 타입만 옮기면 R-e·S11 충족을 증명하지 못한다.
+  > _`82f02d8`의 `docs/design/receipt-pipeline.md:287-305`의 `ConfirmationEntry`와 어긋나지만(책임자 칸이 없다), 타입만 옮기면 R-e·S11 충족을 증명하지 못한다.
   > 이 ADR은 공통 감사 envelope의 필수 책임자로 보완한다. 설계 문서는 고치지 않고 후속으로 남긴다(codex §12, grok §2 가정 3)._
+
+  **보완(#26, 2026-09-23)**: #26이 설계 문서를 고쳤다. `ConfirmationEntry`와 짝 확인 기록(`PairCheckEntry`)은 이 envelope의 본문이고, 행위자·책임자·시각은 envelope에만 둔다 — `ConfirmationEntry`에서 `actor`·`at`을 뺐고 새 `PairCheckEntry`도 그 칸을 두지 않는다([ADR-0031](0031-reconciliation-pending-states-and-input-driven-rerun.md) 결정 1).
 
 - 기존 결정과의 관계.
   - [ADR-0002](0002-admin-read-only-audit-axis.md): admin에게는 값 수정·원복 명령이 없다(`docs/adr/0002-admin-read-only-audit-axis.md:25`).

@@ -35,7 +35,7 @@ grok은 PostgreSQL을 기각하면서도 그 이유가 "기능 부족이 아니�
 6. **기한은 저장하지 않는다.** 기준일(기안일·도달일 등)·주입한 시계·공휴일 달력·판을 저장하고 매번 계산한다(`PRC-3-1`, `docs/company/travel-procedure.md:48`).
 7. **증빙 원본과 모델에 보낸 이미지를 둘 다 보존한다.** 좌표가 보낸 이미지의 픽셀 좌표이기 때문이다. 크롭은 저장하지 않고 그 이미지와 박스로 다시 만든다(ADR-0009).
 8. **독립 재계산(S2·S3·S10)을 위해 입력을 전부 저장한다.** 평가기는 그 입력을 읽어 별도 경로로 계산한다. **제품 함수를 두 번 부르는 것은 독립이 아니다**(codex §5.1, grok §11, claude §5.3).
-9. 대사의 내부 상태 `후보 복수`·`짝 보류`는 영속 상태로 받는다(claude §5.3). 타입 정리는 #18 후속이다.
+9. 대사의 내부 상태 `후보 복수`·`짝 보류`는 영속 상태로 받는다(claude §5.3). 타입 정리는 #18 후속이다. **보완(#26, 2026-09-23)**: #26이 결과(`ReconciliationOutcome`)와 중간 상태(`PendingMatch`)를 갈랐고, 중간 상태에 `명세 대기`를 더했다([ADR-0031](0031-reconciliation-pending-states-and-input-driven-rerun.md) 결정 3–4).
 
 ## 근거
 
@@ -84,7 +84,7 @@ SQLite를 쓰지 않으므로 사실 검증 2(SQLite WAL-reset 버그)는 기록
   4. #11이 판이 여럿 동시에 살아야 하는 시나리오를 넣는다. 그러면 옛 판의 자리를 먼저 정한다(claude §7 ADR-G).
 - **후속.**
   - 하네스 AC와 #11 평가가 PostgreSQL 인스턴스를 어떻게 얻는지(compose 서비스, 테스트용 임시 DB 등)는 구현 phase가 정한다. 세계 격리는 `world_id`다.
-  - 대사 내부 상태의 타입 정리는 #18 후속이다(`docs/design/receipt-pipeline.md:68`에는 있고 `ReconciliationOutcome` `:835-839`에는 없다, claude §11 모순 8).
+  - 대사 내부 상태의 타입 정리는 #18 후속이다(`82f02d8`의 `docs/design/receipt-pipeline.md:68`에는 있고 `ReconciliationOutcome` `:835-839`에는 없다, claude §11 모순 8). **보완(#26, 2026-09-23)**: #26에서 닫았다([ADR-0031](0031-reconciliation-pending-states-and-input-driven-rerun.md) 결정 3).
 - 기존 결정과의 관계.
   - [ADR-0005](0005-policy-source-of-truth.md) ④는 판을 "문서 단위와 조항 단위 둘 다"(`docs/adr/0005-policy-source-of-truth.md:81`)로 두고(조항 단위는 `:84`의 `TRV-15-2`), `PRC-2-2`는 한 출장에 사전승인 기안일의 판을 정산까지 적용한다(`docs/company/travel-procedure.md:33`).
 
