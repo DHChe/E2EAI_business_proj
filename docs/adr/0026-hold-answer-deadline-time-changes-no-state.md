@@ -32,7 +32,7 @@ ARCHITECTURE는 기한을 저장하지 않고 경과를 표시만 하며, 기한
 ## 근거
 
 **왜 시간이 상태를 바꾸지 않는가.** 자동 반려는 결재 행위다. 결재 4행위의 행위자는 현재 단계 담당자인 사람뿐이다(`docs/adr/0012-transition-audit-provenance-in-one-transaction.md:35-36`).
-다른 사람에게 넘기면 결재선이 바뀐다. 결재선은 진행 중에 바뀌지 않고(`APV-11-1`, `docs/company/approval-matrix.md:254`), 결재자 부재 때 대신 결재하는 `대결`은 MVP 범위 밖이다(`CONTEXT.md:100`).
+다른 사람에게 넘기면 결재선이 바뀐다. 결재선은 진행 중에 바뀌지 않고(`APV-11-1`, `docs/company/approval-matrix.md:256`), 결재자 부재 때 대신 결재하는 `대결`은 MVP 범위 밖이다(`CONTEXT.md:100`).
 이 규정은 기한 경과에 대한 불이익을 정하지 않는다(`PRC-15-2`, `docs/company/travel-procedure.md:291`). 경과를 전이의 방아쇠로 쓰면 이 취지와 부딪힌다(claude §4 `[유도]`).
 
 **왜 답변 기한인가.** 표시만 하면 정산 보류 중에 살아 있는 시계가 하나도 없는 빈틈이 남는다(claude §11 F-(c)의 약점). 답변 기한은 새 전이 없이, 이미 있는 승인자의 결정을 그 사람의 큐 앞에 다시 세울 뿐이다(claude §4 논거).
