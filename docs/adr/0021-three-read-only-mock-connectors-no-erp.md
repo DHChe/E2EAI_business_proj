@@ -92,7 +92,7 @@
   6. 메일 판독값의 총무 백지 입력이 사람 호출을 늘려 R3·R4를 넘긴다(claude §4.7-3).
 - ADR-0011 반증 3은 이 결정으로 생길 자리가 없다. 남는 외부 호출은 Anthropic API뿐이고, 업무 부작용이 아니라 비용 부작용이다(claude §4.1).
 - 무대 문서의 #10 포인터(`docs/company/tools.md:7`, `docs/company.md:97`)는 이 ADR이 답한다. 두 줄에는 이 ADR을 가리키는 완료 포인터만 붙였다. as-is 기록인 카드 명세의 월 단위 수동 다운로드(`docs/company/tools.md:16`)는 고치지 않았다(U4).
-- 여행사 예약의 결제가 누구의 법인카드에 걸리는지는 문서에 없다 — `docs/company/tools.md:36-37`은 예약 확정과 카드 결제가 따로 일어난다고만 적는다(claude §4.4.2). 그 카드 줄의 짝 확인 담당은 #18 후속으로 넘긴다(비교 문서 `:164`, `:214`). **보완(#26, 2026-09-23)**: 총무팀이 관리하는 카드에 걸린다고 두고 `[설계 가정]`, 그 줄의 짝 확인(경쟁·대조 불가·후보 복수)은 배정된 총무 예약 담당이다([ADR-0031](0031-reconciliation-pending-states-and-input-driven-rerun.md) 결정 7).
+- 여행사 예약의 결제가 누구의 법인카드에 걸리는지는 문서에 없다 — `docs/company/tools.md:36-37`은 예약 확정과 카드 결제가 따로 일어난다고만 적는다(claude §4.4.2). 그 카드 줄의 짝 확인 담당은 #18 후속으로 넘긴다(비교 문서 `:164`, `:214`). **보완(#26, 2026-09-23)**: 총무팀이 관리하는 카드에 걸린다고 두고 `[설계 가정]`, 그 줄의 짝 확인(경쟁·대조 불가·후보 복수·고른 줄을 잃음)은 배정된 총무 예약 담당이다([ADR-0031](0031-reconciliation-pending-states-and-input-driven-rerun.md) 결정 7).
 - 칸·주기·실패 주입의 표는 `docs/ARCHITECTURE.md` §9다.
 - 기존 결정과의 관계.
   - [ADR-0011](0011-messages-api-direct-waits-are-document-state.md): 반증 3(`docs/adr/0011-messages-api-direct-waits-are-document-state.md:93`)이 생길 쓰기 커넥터가 없다.
