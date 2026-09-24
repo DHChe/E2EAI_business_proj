@@ -191,7 +191,7 @@ D11은 "고른 ID가 정답 목록 안에 있는지"만 적었다. 그래서 목
 
 ## 7. 후속
 
-1. **원문 보존.** → 완료(2026-09-24). #11 세 레인 브랜치를 origin에 push했다. #10 레인 커밋 셋(`97d1dd9`·`46e5540`·`a30c5f7`)은 가리키는 브랜치가 없어 git이 청소할 때 지워질 수 있었다. 그래서 원래 이름(`DHChe/frontier-10-arch-{codex,grok,claude}`)으로 브랜치를 다시 만들어 함께 push했다.
+1. **원문 보존.** → 완료(2026-09-24). #11 세 레인 브랜치를 origin에 push했다. #10 레인 커밋 셋(`97d1dd9`·`46e5540`·`a30c5f7`)은 가리키는 브랜치가 없어 git이 청소할 때 지워질 수 있었다. 그래서 원래 이름(`DHChe/frontier-10-arch-{codex,grok,claude}`)으로 브랜치를 다시 만들어 함께 push했다. 같은 이유로 조사 문서와 이슈가 가리키던 원문 브랜치 15개도 되살려 push했다. #8 프로토타입 둘(`frontier-8-proto-{codex,claude}`, codex는 통합안 `ad7dcfa`가 끝), #9 레인 셋(`frontier-9-stack-*`), #17 레인 셋(`frontier-17-states-*`), #10·#17 검수 넷(`frontier-{10,17}-review-{codex,grok}`)이다. 이름이 문서에 없던 재확인 커밋 셋은 `frontier-10-recheck-codex`·`frontier-17-recheck-codex`·`frontier-17-recheck2-codex`로 붙였다.
 2. **작성.** `docs/EVAL.md`와 ADR 0032~를 쓴다. 함께 고칠 문서:
    - PRD S3·S10·S4·S12
    - ADR-0016 보완 표시(C7)
