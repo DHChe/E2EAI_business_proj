@@ -79,7 +79,7 @@ A(금액·통화 오류)와 B(유형 오분류)는 버리지 않는다 — 둘�
 순서는 고정이다: **EXIF 방향 → 내용 기반 방향 분류 → (PDF면) 직접 래스터화 → 조각 계획 → pre-resize → 인코딩.**
 
 - **방향 보정은 넣는다.** 보정 후 폐쇄형 모델의 다운스트림 OCR이 최대 +14%p, 304M·0.5초 `[1차]`.
-  `slipscan:lib/pipeline/image.ts:5`의 `.rotate()`는 **EXIF 회전만** 반영한다(그 저장소도 확인 항목으로 남겼다 — `slipscan:docs/ARCHITECTURE.md:558`).
+  `slipscan:lib/pipeline/image.ts:5`의 `.rotate()`는 **EXIF 회전만** 반영한다(그 저장소도 확인 항목으로 남겼다 — `slipscan:docs/ARCHITECTURE.md:559`).
   스캔본·회전된 사진은 EXIF가 없으므로 내용 기반 4-class 분류가 따로 필요하다.
 - **기하 보정(dewarping)은 넣지 않는다.** CER 50.89%→16.95%는 Tesseract 기준이고 VLM 근거가 아니다 `[1차, 원문 대조]`.
 - **이진화·대비강화·노이즈 제거는 넣지 않는다** `[근거 없음]`.
@@ -342,7 +342,7 @@ export type ConfirmationEntry = {
   이미지를 텍스트보다 앞에 두고 각 이미지 앞에 라벨을 붙이라는 권고도 여기서 함께 지켜진다 `[1차, A.3]`.
   캐시 최소 길이(512~4096 토큰) 미만이면 **에러 없이 조용히 비캐싱 처리**되므로 적중률은 측정 항목이다(§11) `[1차]`.
 - **재시도**는 #19의 분류표를 그대로 쓴다. `slipscan:lib/claude/client.ts:29`의 `maxRetries: 0`은 승계하지 않는다 —
-  그 값의 근거는 "240초 타임아웃 × 재시도가 함수 300초를 넘는다"(`slipscan:docs/ARCHITECTURE.md:541`)였고, 배포 형태에 딸린 제약이다.
+  그 값의 근거는 "240초 타임아웃 × 재시도가 함수 300초를 넘는다"(`slipscan:docs/ARCHITECTURE.md:542`)였고, 배포 형태에 딸린 제약이다.
 
 | 신호 | 처리 | `slipscan`의 처리 |
 | --- | --- | --- |
@@ -2620,7 +2620,7 @@ H8은 좁힌 문구로 받는다 — 법인카드 + `대사 완료`는 수취 �
 | 불확실한 값은 키로 쓰지 않는다 | `slipscan:lib/pipeline/duplicates.ts:45` | 원칙 승계. 다만 버리는 대신 **후보 집합**으로 바꾼다 |
 | 수동 실행 하네스 | `slipscan:scripts/try-extract.ts:24, 47-52` | `--expect-amount`/`--expect-count`를 필드별 기대값과 측정 모드로 넓힌다 |
 | 프롬프트의 주입 방어 문장 | `slipscan:lib/claude/prompts/extract.ts:25` | 그대로 |
-| 음수 금액(취소·환불) | `slipscan:lib/claude/prompts/extract.ts:24`, `slipscan:docs/ARCHITECTURE.md:534` | 그대로. 환불 카드 줄과 짝지어진다 |
+| 음수 금액(취소·환불) | `slipscan:lib/claude/prompts/extract.ts:24`, `slipscan:docs/ARCHITECTURE.md:535` | 그대로. 환불 카드 줄과 짝지어진다 |
 | 카드 끝 4자리 정규화 | `slipscan:lib/claude/schemas.ts:32-39` | 승계하되 `raw`를 버리지 않는다 |
 | `max_tokens: 32_000`, `effort: "low"` | `slipscan:lib/claude/extract.ts:153, 166` | 값만 승계. 근거는 없고 측정 대상이다(§11.3) |
 | Asia/Seoul 날짜 키 | `slipscan:lib/stats/aggregate.ts:80-98` | **국내 대사에만** 쓴다 |
@@ -2639,7 +2639,7 @@ H8은 좁힌 문구로 받는다 — 법인카드 + `대사 완료`는 수취 �
 | 단일 리사이즈 상수(긴 변 2576 · JPEG 기본값) | `slipscan:lib/pipeline/image.ts:6-7`, `slipscan:docs/PRD.md:275` | A4는 서버가 더 줄이고, 긴 영수증은 글자 방향이 깎인다 `[1차, A.1·A.2]` |
 | `refusal` → `unreadable`, 그 외 → `unparsable` | `slipscan:lib/claude/extract.ts:32-40` | 거절은 200이고 파일 문제가 아니다. `max_tokens`는 상향 재시도가 답이다 `[1차]` |
 | 400 → `unreadable` | `slipscan:lib/pipeline/process-document.ts:103-108` | 요청 문제를 제출자의 파일 문제로 보여 준다. 스키마 복잡도 400이 여기로 떨어지면 원인을 못 찾는다 |
-| `maxRetries: 0` | `slipscan:lib/claude/client.ts:29`, `slipscan:docs/ARCHITECTURE.md:541` | 근거가 배포 형태(함수 300초)에 딸려 있다. 재시도 정책은 #19의 표를 쓴다 |
+| `maxRetries: 0` | `slipscan:lib/claude/client.ts:29`, `slipscan:docs/ARCHITECTURE.md:542` | 근거가 배포 형태(함수 300초)에 딸려 있다. 재시도 정책은 #19의 표를 쓴다 |
 | 모르는 카테고리 → `other` 조용한 대체 | `slipscan:lib/claude/extract.ts:50-74` | 조용한 기본값은 C의 정의상 금지다 |
 | `hasMatchingIdentity`(카드끝4 우선, 가맹점명 완전일치) | `slipscan:lib/pipeline/duplicates.ts:26-39`, `slipscan:docs/PRD.md:299` | 상호 표기 차이를 못 넘고, 강한 식별자(승인번호·등록번호)를 쓰지 않는다 |
 | 같은 서울 날짜 키로 짝짓기 | `slipscan:lib/pipeline/duplicates.ts:49, 59` | 해외 거래에서 하루가 어긋난다 |
