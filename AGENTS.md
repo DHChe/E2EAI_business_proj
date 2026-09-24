@@ -18,12 +18,29 @@ Single-context: 저장소 루트에 `CONTEXT.md` 하나와 `docs/adr/`를 둔다
 실행한다. step 설계 7원칙, 상태 기계, JSON 스키마는 `docs/agents/harness.md` 참고.
 진입점은 `/harness`, 검수는 `/review`다.
 
+### `.env` 역할 분담
+
+AI는 루트에 `.env.example`(키 이름과 설명만, 실제 값 없음)만 만든다. `.env`·`.env.*` 실제 값 파일과
+그 이름의 디렉토리는 만들지 마라(가상환경은 `.venv`). 이유: 실제 값은 사람이 채우며, 실행기는 이
+이름들을 보호 대상으로 보고 재시도 없이 멈춘다.
+사람은 값을 실행기 실행 전이나 실행기가 종료 코드로 끝난 뒤에 채운다. 신호·크래시로 멈췄다면 먼저
+재기동해 복구를 끝낸 뒤 채운다(복구는 시도 전 지문과 달라진 `.env`를 error로 확정한다). 세션·AC·기준선
+도중 바뀐 값은 되돌리고 새 파일은 지우며, 리뷰어 도중이면 지우지 않고 멈춘다.
+
 ### Bash 안전 가드
 
 `.claude/hooks/guard-bash.py`가 PreToolUse에서 되돌릴 수 없는 Bash 명령을 차단한다.
 차단당하면 우회하지 말고 대안을 쓴다 — `git reset --hard` 대신 `git stash`,
 `git clean -f` 대신 `git stash -u`, `git push --force` 대신 `--force-with-lease`.
 가드를 고쳐야 한다면 `.claude/hooks/test_guard_bash.py`에 케이스를 먼저 추가한다.
+
+실행기 롤백 예외: `git reset --hard`와 `git clean -fd`는 실행기(`scripts/execute.py`)
+프로세스만, 반드시 `refs/harness/` 스냅샷을 남긴 뒤 실행한다. 세션과 사람에게는 여전히 금지다.
+Codex 세션은 `.codex/hooks.json`으로 같은 `guard-bash.py`를 받는다.
+`--ignore-user-config`는 이 훅을 끄므로 쓰지 않는다.
+Grok은 이 가드를 실행하지 않는다(가드 밖). Grok 리뷰어의 보호는 `--deny Write --deny Edit`, 사후 HEAD·트리 검사와
+되돌림, 저장소 공용 config(`branch.*` 제외)·hooks·info 검사, 차이는 git 호출 전에 복원. 전역 `~/.gitconfig`는 검사 밖. 계약문에도 기댄다. env의 토큰 변수 제거와 credential.helper 비우기. 파일·키체인의 자격 자체는 남는다.
+모든 자식에서 ORCA_*·BASH_ENV·ENV도 제거한다. marker는 `.git`의 `harness/{phase}/attempt.json`에 두고 `.run/` 리뷰 원문은 되읽지 않는다. 새 무시 산출물은 unit 허용 경로 안에서 허용한다. ⑤ 판정·롤백은 `status --ignored=matching`의 접힌 집합 하나를 쓰고 실패 롤백은 그 집합에서 새 허용 항목만 지운다. 기존 무시 디렉토리 안의 새 파일, `graft/`·`.omc/` 도구 상태와 하위, basename `.env`·`.env.*`는 지우지 않는다.
 
 <!-- graft:start -->
 ## Graft — repo context graph

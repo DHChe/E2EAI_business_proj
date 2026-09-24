@@ -144,9 +144,9 @@ flowchart LR
 | 바깥으로 쓰기 없음 (모의 커넥터 읽기 전용) | 실패 격리 | 커밋 전 외부 부작용의 재시도를 멱등 key로 막지 못한다(ADR-0011 반증 3) | `docs/adr/0011-messages-api-direct-waits-are-document-state.md:93`, [ADR-0021](adr/0021-three-read-only-mock-connectors-no-erp.md) 결정 2 |
 | 운영 배정 ↔ 실행 | 책임 | 책임자 없는 조작이 먼저 돌고, 뒤에 기안자·admin 같은 기본값으로 책임자가 채워진다 | `docs/adr/0012-transition-audit-provenance-in-one-transaction.md:44`, [ADR-0019](adr/0019-non-approval-owner-is-assigned-operations-person.md) 결정 6·7 |
 | 업무 담당자 ↔ 내부감사(admin) | 권한 | 감사자가 값을 고치고 자기 변경을 감사한다 | `docs/adr/0002-admin-read-only-audit-axis.md:23-27` |
-| 사람 역할 사이 | 권한 | 자기 결재, 결재선 밖 사람의 결재가 생긴다 | `APV-8-2`(`docs/company/approval-matrix.md:176`), `:317` |
+| 사람 역할 사이 | 권한 | 자기 결재, 결재선 밖 사람의 결재가 생긴다 | `APV-8-2`(`docs/company/approval-matrix.md:176`), `:332` |
 | 세계(`world_id`) | 권한 | 한 방문자·평가 시나리오의 명령이 다른 세계의 결재·카드 줄을 읽거나 바꾼다 | `docs/adr/0013-postgres-object-storage-isolated-by-world-id.md:31-32` |
-| 결재 ↔ 인사·총무 인계 | 책임 | 예약·근태 반영에 결재선이 생겨 판단 봉우리가 늘어난다 | `PRC-8-3`(`docs/company/travel-procedure.md:152`), `docs/company/approval-matrix.md:317` |
+| 결재 ↔ 인사·총무 인계 | 책임 | 예약·근태 반영에 결재선이 생겨 판단 봉우리가 늘어난다 | `PRC-8-3`(`docs/company/travel-procedure.md:152`), `docs/company/approval-matrix.md:332` |
 | 방향 분류 사이드카 ↔ 추출 | 실패 격리 | 검증되지 않은 자산이나 사이드카 장애가 추출 전체를 멈춘다. 그래서 자산이 없으면 EXIF만 쓰고 진행한다(C4) | `docs/adr/0015-typescript-web-stage-sse-no-unverified-answer-text.md:29`, `:70-72` |
 | 시나리오 구동기 ↔ 제품 코어 | 실패 격리 | 제품이 무대의 정답(진짜 짝, 진짜 금액)을 읽으면 독립 재계산과 #11의 판정이 오염된다(claude §2.2 B11) | `docs/adr/0013-postgres-object-storage-isolated-by-world-id.md:37`, `docs/PRD.md:147` |
 
@@ -244,7 +244,7 @@ job = envelope + input_hash + policy_edition + model/prompt/schema_versions
 | --- | --- | --- |
 | `RESPONSIBLE_UNASSIGNED` | 그 업무 종류에 유효한 배정이 없다. **API 호출·파일 판독·커넥터 가져오기 전에** 거절하고, 운영 로그에 요청자와 사유만 남긴다 | [ADR-0019](adr/0019-non-approval-owner-is-assigned-operations-person.md) 결정 7, codex §6.3 |
 | `STALE_REVISION` | 명령이 건 기대 revision이 현재와 다르다 | C8 |
-| `UNDEFINED_BY_17` | #17이 정하지 않고 다른 티켓에 넘긴 전이다 — 재무합의자 0명 정산의 재심, 재심 정정 뒤 차액의 지급 처리(#20), 재량 판단이 결재선 입력을 바꾼 뒤의 동의·승인(#21) | `docs/adr/0011-messages-api-direct-waits-are-document-state.md:35-37`, [ADR-0023](adr/0023-document-and-evidence-axes-named-rejections.md) 결정 8 |
+| `UNDEFINED_BY_17` | #17이 정하지 않고 #20에 넘긴 전이다 — 재무합의자 0명 정산의 재심, 재심 정정 뒤 차액의 지급 처리. 재량 판단은 결재선을 바꾸지 않는다([ADR-0029](adr/0029-approval-line-from-claimed-values.md)) | `docs/adr/0011-messages-api-direct-waits-are-document-state.md:35-37`, [ADR-0023](adr/0023-document-and-evidence-axes-named-rejections.md) 결정 8 |
 | `REDRAFT_REQUIRED` | 상신 뒤 `결재대기`·`재무합의대기` 중에 기안자가 폼 항목이나 값을 직접 고친다 | [ADR-0024](adr/0024-rejection-resubmission-and-card-bound-approvals.md) 결정 8 |
 | `PARTIAL_APPROVAL_NOT_ADOPTED` | 항목별 부분 승인 | [ADR-0024](adr/0024-rejection-resubmission-and-card-bound-approvals.md) 결정 10 |
 | `WITHDRAW_NOT_ALLOWED` | 정산의 철회 | [ADR-0025](adr/0025-withdrawal-only-for-preapproval.md) 결정 3 |
@@ -253,7 +253,7 @@ job = envelope + input_hash + policy_edition + model/prompt/schema_versions
 
 `STALE_REVISION`은 SlipScan의 상태 전이 패턴을 절반만 받은 것이다. 현재 상태를 조건에 걸고 행을 잠그는 부분은 받는다(`slipscan:lib/pipeline/process-document.ts:292-303`).
 상태가 바뀌어 있으면 로그만 남기고 조용히 돌아가는 부분(`:305-307`)은 받지 않는다(claude §3.3, C8).
-그 밖의 거부 — 자기 결재(`docs/adr/0012-transition-audit-provenance-in-one-transaction.md:35`), 재량 관문이 열린 동안의 승인·동의(`:46`), 다른 세계 — 의 이름은 구현에서 정한다 `[설계 가정]`.
+그 밖의 거부 — 자기 결재(`docs/adr/0012-transition-audit-provenance-in-one-transaction.md:35`), 재량 관문이 열린 동안 판단 책임자 단계의 승인·동의(`:46`, [ADR-0030](adr/0030-discretion-judged-by-last-in-role.md) 결정 2), 다른 세계 — 의 이름은 구현에서 정한다 `[설계 가정]`.
 
 ## 6. 책임자 배정
 
@@ -286,7 +286,7 @@ job = envelope + input_hash + policy_edition + model/prompt/schema_versions
 | 기안자의 보류 답변 | 질문받은 기안자 | 그 사람 | `CONTEXT.md:86-88` |
 | 수기 확정 | 확정한 사람 | 그 사람 | `docs/adr/0012-transition-audit-provenance-in-one-transaction.md:54` |
 | 짝 확인(경쟁·대조 불가·후보 복수·고른 줄을 잃음) / (값 모순) | 기안자, 보인 카드 줄이 모두 총무팀 관리 카드면 배정된 총무 예약 담당 `[설계 가정]` / 재무합의자 | 그 사람 | `CONTEXT.md:310`, codex §6.2 16·17행, [ADR-0031](adr/0031-reconciliation-pending-states-and-input-driven-rerun.md) 결정 7 |
-| 재량 판단 기록 | 조항의 `decided_by`로 해소된 사람 | 그 사람 | `docs/adr/0005-policy-source-of-truth.md:76-77`. 결재권자가 여럿일 때는 #20(C5) |
+| 재량 판단 기록 | 조항의 `decided_by`로 해소된 사람 | 그 사람 | `docs/adr/0005-policy-source-of-truth.md:76-77`. 역할의 마지막 사람이다 — 여비규정 재량 조항은 전결권자, `PRC-13-5`는 마지막 재무합의자([ADR-0030](adr/0030-discretion-judged-by-last-in-role.md) 결정 1) |
 | 승인·동의·반려·보류 | 현재 단계의 승인자 | 그 사람 | `docs/adr/0012-transition-audit-provenance-in-one-transaction.md:35` |
 | 예약 확정 연결 / 근태 반영 | 총무 / 인사 | 그 사람 | `PRC-8-1`·`PRC-8-2`(`docs/company/travel-procedure.md:148`, `:150`) |
 | 지급 처리 | 재무팀 | 그 사람 | `docs/PRD.md:25`, `:86` |
@@ -313,7 +313,7 @@ assignment = world_id + assignment_id + version + operation_kind + scope
 3. **기한을 닫는 사건은 사람의 행위다.** 다섯 기한에는 모두 닫는 사람이 있다(`docs/PRD.md:47`). 다섯은 현행 규정의 기한이다. #17이 신설한 기안자 답변 기한은 #20이 값과 문언을 정한 뒤 계산한다([ADR-0026](adr/0026-hold-answer-deadline-time-changes-no-state.md) 결정 3–4). 그 사건의 책임자는 표의 사람 행이 이미 준다.
 4. **정확성은 독립 재계산으로 잰다.** S10은 저장된 입력으로 기한을 다시 계산해 비교한다(`docs/PRD.md:160`, `docs/adr/0013-postgres-object-storage-isolated-by-world-id.md:37`).
 
-결재선 계산은 표에 남긴다. 결재선은 기안 시점에 계산되어 확정되고 진행 중에 바뀌지 않는다(`APV-11-1`, `docs/company/approval-matrix.md:254`). 그래서 저장되는 산출물이 있다 `[유도]`.
+결재선 계산은 표에 남긴다. 결재선은 기안 시점에 계산되어 확정되고 진행 중에 바뀌지 않는다(`APV-11-1`, `docs/company/approval-matrix.md:256`). 그래서 저장되는 산출물이 있다 `[유도]`.
 기한이 저장되거나 기한 경과가 자동 전이를 일으키게 되면(#17의 타임아웃 에스컬레이션) 그 전이의 책임자 행을 다시 둔다. **#17의 판정**: 그 조건은 생기지 않았다. #17이 새로 둔 기안자 답변 기한도 저장하지 않는 계산값이고, 시간은 문서 상태를 바꾸지 않는다. 그래서 타임아웃의 책임자 행은 두지 않는다([ADR-0026](adr/0026-hold-answer-deadline-time-changes-no-state.md) 결정 1·4·8).
 
 ## 7. 상태 기계와 사람 승인 지점
@@ -325,7 +325,7 @@ assignment = world_id + assignment_id + version + operation_kind + scope
 **가드**(A9·A10·C3).
 
 - 재무합의의 순차·차단은 명령 가드이고, 그 값은 `APV-9-3` 블록에서 읽는다(`docs/company/approval-matrix.md:228`, [ADR-0014](adr/0014-apv-9-3-exposed-declaratively.md)).
-- **반려·보류는 늘 받는다.** 재량 관문(`gate=on`)이 열린 동안에는 승인·동의만 막는다(`docs/adr/0012-transition-audit-provenance-in-one-transaction.md:46`).
+- **반려·보류는 늘 받는다.** 재량 관문(`gate=on`)이 열린 동안에는 판단 책임자 본인 단계의 승인·동의만 막는다(`docs/adr/0012-transition-audit-provenance-in-one-transaction.md:46`, [ADR-0030](adr/0030-discretion-judged-by-last-in-role.md) 결정 2). 앞 단계는 두 갈래를 실은 카드를 보고 승인·동의한다(결정 3).
 - 상신 뒤 새로 생긴 짝 보류(A10)·`후보 복수`·`명세 대기`와 재무합의자에게 배정된 짝 확인(값 모순)도 현재 단계의 승인·동의만 막는다(C3, [ADR-0031](adr/0031-reconciliation-pending-states-and-input-driven-rerun.md) 결정 4). 문서 상태는 바꾸지 않는다. 이 대기를 도메인 용어로 올릴지는 #22다.
 - 반려된 문서는 기안자의 `반려`에 있고, 재상신은 결재선의 처음부터다([ADR-0024](adr/0024-rejection-resubmission-and-card-bound-approvals.md) 결정 4). 보류의 답변은 열린 질문을 닫고, 입력을 바꾸지 않았거나 결재선과 이미 승인한 카드가 그대로면 같은 승인자의 대기로 돌아간다. 그 밖의 입력을 바꾼 답변과 상신 뒤의 값 수정·짝 보류 해소는 카드 차이 규칙을 따른다(ADR-0024 결정 5, [ADR-0026](adr/0026-hold-answer-deadline-time-changes-no-state.md) 결정 7).
 - 상신 뒤 `재무합의대기`·`결재대기` 중에 기안자가 폼 항목이나 값을 직접 고치면 `REDRAFT_REQUIRED`다. 기안자가 상신 뒤에 값을 바꾸는 길은 보류 답변·짝 확인·수기 확정 같은 배정된 일뿐이다(ADR-0024 결정 8).
@@ -419,12 +419,12 @@ stateDiagram-v2
 | 출발 | 사건 | 행위자 | 가드 | 도착 | 거절 이름 | 근거 |
 | --- | --- | --- | --- | --- | --- | --- |
 | `기안` | 상신 | 기안자 | 정산은 판정 입력 필드가 모두 닫혔다(`PRC-11-2`, `docs/company/travel-procedure.md:192`). 결재선 계산 성공 | 정산은 재무합의자가 있으면 `재무합의대기`(1), `APV-9-4`로 없으면 `결재대기`(1). 사전승인은 `결재대기`(1) | — | `CONTEXT.md:128`, `docs/company/approval-matrix.md:205`, `:233` |
-| `재무합의대기`(k) | 동의 | 재무합의자 k | 현재 단계 담당자, 자기 결재 아님. 재량 관문·상신 뒤 짝 보류·`후보 복수`·`명세 대기`·배정된 짝 확인(값 모순)이 없다. 재량 판단이 결재선 입력을 바꾸지 않았다(바꿨으면 아래 #21 거절 행). 정산 재심 표지가 없다(있으면 아래 재심 행) | `재무합의대기`(k+1), 마지막이면 `결재대기`(1) | 권한·상태 거부(§5) | `CONTEXT.md:66`, `docs/adr/0012-transition-audit-provenance-in-one-transaction.md:35`, `:46` |
+| `재무합의대기`(k) | 동의 | 재무합의자 k | 현재 단계 담당자, 자기 결재 아님. 자기가 판단 책임자인 재량 관문·상신 뒤 짝 보류·`후보 복수`·`명세 대기`·배정된 짝 확인(값 모순)이 없다. 정산 재심 표지가 없다(있으면 아래 재심 행) | `재무합의대기`(k+1), 마지막이면 `결재대기`(1) | 권한·상태 거부(§5) | `CONTEXT.md:66`, `docs/adr/0012-transition-audit-provenance-in-one-transaction.md:35`, `:46`, [ADR-0030](adr/0030-discretion-judged-by-last-in-role.md) 결정 2 |
 | `결재대기`(i) | 승인 | 결재권자 i | 동의와 같다. 재무합의자 0명 정산에 값 모순 짝 보류가 열려 있으면 아래 #26 거절 행. 사전승인의 재심 표지는 막지 않는다 — 이 행을 따른다 | `결재대기`(i+1), 전결권자면 `완료` | 권한·상태 거부(§5) | `CONTEXT.md:74`, ADR-0027 결정 11 |
 | `재무합의대기`·`결재대기` | 보류(질문, 대상은 기안자 또는 에이전트) | 그 단계 승인자 | 현재 단계 담당자. 관문·짝 보류는 막지 않는다 | `보류`(단계, 대상) | — | `CONTEXT.md:86-88` |
 | `보류` | 답변 — 입력을 바꾸지 않음 | 기안자 / 답변기(`job`) | 열린 질문이 있다 | 열린 질문을 닫고 같은 승인자의 대기. 그날이 새 도달일(`PRC-14-2`) | — | [ADR-0026](adr/0026-hold-answer-deadline-time-changes-no-state.md) 결정 7, `docs/company/travel-procedure.md:283` |
 | `보류` | 답변 — 입력을 바꿈(새 증빙·값) | 기안자 | 열린 질문이 있다 | 열린 질문을 닫고 변경을 수락한다. 결재선이 바뀌면 `반려`(사유: 결재선 변경) `[설계 가정]`, 이미 승인한 단계의 카드가 바뀌면 바뀐 가장 앞 단계의 대기, 둘 다 아니면 같은 승인자의 대기. 다시 차례가 된 날이 새 도달일(`PRC-14-2`) | — | ADR-0026 결정 7, ADR-0024 결정 5, `docs/company/travel-procedure.md:283` |
-| `보류` | 답 없이 동의·승인·반려 | 같은 승인자 | 대기에서 결정할 때와 같다. 정산 재심 표지가 붙은 `보류`의 동의·승인은 아래 재심 행의 가드를 따른다. 열린 질문은 답변 없이 종결 | 대기에서 한 결정과 같은 도착. 정산 재심 표지가 붙은 `보류`의 동의·승인은 재심 행(:440)의 도착을 따르고, 반려는 `반려`로 간다(ADR-0027:34) | 권한·상태 거부(§5) | ADR-0026 결정 5, ADR-0027 결정 2·4·7. #17 표 2행 |
+| `보류` | 답 없이 동의·승인·반려 | 같은 승인자 | 대기에서 결정할 때와 같다. 정산 재심 표지가 붙은 `보류`의 동의·승인은 아래 재심 행의 가드를 따른다. 열린 질문은 답변 없이 종결 | 대기에서 한 결정과 같은 도착. 정산 재심 표지가 붙은 `보류`의 동의·승인은 재심 행(:439)의 도착을 따르고, 반려는 `반려`로 간다(ADR-0027:34) | 권한·상태 거부(§5) | ADR-0026 결정 5, ADR-0027 결정 2·4·7. #17 표 2행 |
 | 모든 대기·`보류` | 시간 경과 — 기한, 기안자 답변 기한 | — | — | 전이 없음. 경과를 표시하고, 답변 기한이 지나면 새 도달일을 계산한다 | — | ADR-0026 결정 1–4. #17 표 2행 |
 | `재무합의대기`·`결재대기`·`보류` | 반려(사유 필수) | 그 단계 승인자 | 현재 단계 담당자. 관문·짝 보류는 막지 않는다 | `반려` — 기안자에게 | — | [ADR-0024](adr/0024-rejection-resubmission-and-card-bound-approvals.md) 결정 1–2. #17 표 1행 |
 | `반려` | 재상신 | 기안자 | 상신 가드와 같다. 결재선을 다시 계산한다 `[설계 가정]` | 상신과 같다 — 정산은 재무합의자가 있으면 `재무합의대기`(1), 없으면 `결재대기`(1). 사전승인은 `결재대기`(1). 앞선 승인은 잇지 않는다 | — | ADR-0024 결정 4. #17 표 1행 |
@@ -433,14 +433,13 @@ stateDiagram-v2
 | `재무합의대기`·`결재대기`·`보류` | 변경 수락 — 결재선이 바뀜(답변이 아닌 변경) | system | 다시 계산한 결재선이 확정 결재선과 다르다(`APV-11-2`) | `반려`(사유: 결재선 변경) `[설계 가정]` | — | ADR-0024 결정 5·7. #17 표 4행 |
 | `재무합의대기`·`결재대기` | 폼 항목·값 직접 수정 | 기안자 | — | 거절 | `REDRAFT_REQUIRED` | ADR-0024 결정 8. #17 표 4행 |
 | `재무합의대기`·`결재대기`(정산) | 항목별 부분 승인 | 승인자 | — | 거절 | `PARTIAL_APPROVAL_NOT_ADOPTED` | ADR-0024 결정 10. #17 표 5행 |
-| `재무합의대기`·`결재대기` | 재량 판단이 결재선 입력을 바꾼 뒤의 동의·승인 | 승인자 | — | 거절 | `UNDEFINED_BY_17` (#21) | ADR-0024 결정 12 |
 | `완료`(정산) | 지급 처리 — 순액 기록 | 재무팀 | 재심 표지가 없다. 지급 처리를 거친 적이 없다(있으면 아래 차액 행) | 순액이 양수면 `지급 처리됨`, 0이면 `지급 처리됨` `[설계 가정]`(D10에서 갈림), 음수면 `반환 대기`. 부호와 관계없이 지급 기한(`PRC-16-1`)을 닫는다 | — | [ADR-0028](adr/0028-negative-net-goes-to-repayment-pending.md) 결정 1–2 |
 | `반환 대기` | 반환 확인 | 재무팀 | — | `지급 처리됨` | — | ADR-0028 결정 3 |
 | 정산의 `완료`·`지급 처리됨`·`반환 대기`·진행 중인 대기·`보류` | 이의 플래그 | 내부감사 | 자기가 관여한 건이 아니다(`docs/adr/0002-admin-read-only-audit-axis.md:47-49`). 재심이 열려 있지 않다 | `재무합의대기`(1)과 재심 표지. 복귀점을 저장한다 | 재무합의자 0명이면 `UNDEFINED_BY_17` (#20) | [ADR-0027](adr/0027-reopen-returns-to-first-finance-consent.md) 결정 2–3·6·10. #17 표 3행 |
 | 정산 재심 표지가 붙은 대기·`보류` | 이의 플래그 | 내부감사 | 자기가 관여한 건이 아니다(`docs/adr/0002-admin-read-only-audit-axis.md:47-49`) | 상태 그대로. 쟁점을 열린 재심에 합친다. 복귀점과 원 완료 시각은 덮어쓰지 않는다. 합친 쟁점이 재심 범위를 넓힐 때 어느 단계부터 다시 보는지는 열려 있다 | — | ADR-0027 결정 6. #17 표 3행 |
 | 사전승인의 대기·`보류` | 이의 플래그 | 내부감사 | 자기가 관여한 건이 아니다 | 상태 그대로. 현재 결재권자의 대기에 재심 표지. 표지가 이미 있으면 쟁점을 합친다 `[설계 가정]` | — | ADR-0027 결정 11. #17 표 3행 |
 | 사전승인의 `완료` | 이의 플래그 | 내부감사 | 자기가 관여한 건이 아니다 | 상태 그대로. 플래그는 그 출장의 정산 카드로 간다. 정산이 아직 없으면 기안될 때 붙고 `[설계 가정]`, 끝내 없으면 기다린다 `[설계 가정]` | — | ADR-0027 결정 12–13. #17 표 3행 |
-| 정산 재심 표지가 붙은 대기 | 재심 단계의 동의·승인 | 그 단계 승인자 | 현재 단계 담당자, 자기 결재 아님. 재량 관문·상신 뒤 짝 보류·`후보 복수`·`명세 대기`·배정된 짝 확인(값 모순)이 없다. 재량 판단이 결재선 입력을 바꾸지 않았다(바꿨으면 위 #21 거절 행). 재심 표지는 이 행의 출발 조건이다 | 재심 범위에 다음 단계가 남았으면 그 단계. 범위의 마지막 단계에서는 원 승인이 읽은 카드와 달라진 카드가 없으면(재심 전 대사 변동도 든다, ADR-0031 결정 5) 복귀점과 원 완료 시각(지급 뒤 상태로의 복귀는 `[설계 가정]`), 바뀐 카드가 있으면 새 `완료`와 새 완료 시각. 재무 범위만의 쟁점이면 범위의 마지막은 마지막 재무합의자다. 카드가 바뀌면 범위는 결재선 끝까지 넓어진다 | — | ADR-0027 결정 2·4·7. #17 표 3행 |
+| 정산 재심 표지가 붙은 대기 | 재심 단계의 동의·승인 | 그 단계 승인자 | 현재 단계 담당자, 자기 결재 아님. 자기가 판단 책임자인 재량 관문·상신 뒤 짝 보류·`후보 복수`·`명세 대기`·배정된 짝 확인(값 모순)이 없다. 재심 표지는 이 행의 출발 조건이다 | 재심 범위에 다음 단계가 남았으면 그 단계. 범위의 마지막 단계에서는 원 승인이 읽은 카드와 달라진 카드가 없으면(재심 전 대사 변동도 든다, ADR-0031 결정 5) 복귀점과 원 완료 시각(지급 뒤 상태로의 복귀는 `[설계 가정]`), 바뀐 카드가 있으면 새 `완료`와 새 완료 시각. 재무 범위만의 쟁점이면 범위의 마지막은 마지막 재무합의자다. 카드가 바뀌면 범위는 결재선 끝까지 넓어진다 | — | ADR-0027 결정 2·4·7. #17 표 3행 |
 | 재심 표지가 붙은 정산 | 지급 처리 | 재무팀 | — | 거절 | `REOPEN_IN_PROGRESS` | ADR-0027 결정 5 |
 | 재심 정정 뒤 새 `완료`(이미 지급 처리를 거친 정산) | 지급 처리 — 차액 | 재무팀 | — | 거절 | `UNDEFINED_BY_17` (#20) | ADR-0027 결정 9 |
 | `결재대기`(i)(재무합의자 0명 정산) | 승인 | 결재권자 i | 값 모순 짝 보류가 열려 있다 — 맡을 재무합의자가 없다 | 거절 | `UNDEFINED_BY_26` (#20) | [ADR-0031](adr/0031-reconciliation-pending-states-and-input-driven-rerun.md) 결정 8 |
@@ -468,7 +467,7 @@ stateDiagram-v2
 | 수기 확정 | 기안자 | `추출 불확실`을 백지 입력으로 닫는다 | 필드가 열려 있고 정산 상신이 막힌다 | `CONTEXT.md:315-317`, `PRC-11-2` |
 | 짝 확인(경쟁·대조 불가·후보 복수·고른 줄을 잃음) | 기안자. 보인 카드 줄이 모두 총무팀 관리 카드면 배정된 총무 예약 담당 `[설계 가정]` | 같은 지출인지, 어느 줄인지 | 대사 상태 `짝 보류`·`후보 복수`(영속). 판단은 그 경쟁 묶음의 입력이 그대로인 동안 효력이 있다. 묶음 가드(`명세 대기`, 다른 증빙의 짝 근거 추출 문제, 다른 증빙의 진행 중인 확인 사슬, 완료 문서만 남은 묶음)에 걸리면 열리지 않는다(`docs/design/receipt-pipeline.md` §10 `routeToHuman`). 짝이 서지 않은 총무 카드 줄은 어느 정산에도 귀속하지 않고 총무 예약 담당의 목록에 드러난다 | `CONTEXT.md:310`, `docs/adr/0013-postgres-object-storage-isolated-by-world-id.md:38`, [ADR-0031](adr/0031-reconciliation-pending-states-and-input-driven-rerun.md) 결정 3·7 |
 | 짝 확인(값 모순) | 재무합의자 | 같은 거래인지. 같은 거래로 확인하면 사유를 남긴다 | 현재 단계의 승인·동의만 막는다(C3). 확인 담당자는 재무합의자이며 반려·보류는 받는다. 재무합의자 0명 정산이면 `UNDEFINED_BY_26`(#20) | `CONTEXT.md:310`, 비교 문서 `:193`, [ADR-0031](adr/0031-reconciliation-pending-states-and-input-driven-rerun.md) 결정 2·8 |
-| 재량 판단 기록 | 조항의 `decided_by` | 판단과 사유 | `gate=on` — 승인·동의만 막는다 | `docs/adr/0012-transition-audit-provenance-in-one-transaction.md:46` |
+| 재량 판단 기록 | 조항의 `decided_by` — 역할의 마지막 사람 | 카드에 미리 실린 두 갈래 중 하나와 사유. 자기 차례에서만 기록하고, 결재 전에는 새 기록으로 고친다. 자기 결재로 확정된다 | `gate=on` — 판단 책임자 본인 단계의 승인·동의만 막는다 | `docs/adr/0012-transition-audit-provenance-in-one-transaction.md:46`, [ADR-0030](adr/0030-discretion-judged-by-last-in-role.md) 결정 1–4 |
 | 결재 | 결재권자 / 재무합의자 | 승인·반려·보류 / 동의·반려·보류. 보류 중에도 답 없이 결정한다 | 문서 상태와 현재 단계 | `docs/adr/0003-approver-actions-three.md:23`, [ADR-0026](adr/0026-hold-answer-deadline-time-changes-no-state.md) 결정 5 |
 | 보류 답변 | 기안자, 또는 답변기(작업) | 승인자의 질문에 답한다 | 문서 상태 `보류`. 대상이 에이전트면 같은 트랜잭션에서 답변 `job`을 넣는다. 대상이 기안자면 답변 기한을 계산해 표시한다(값은 #20) | `docs/adr/0003-approver-actions-three.md:25-26`, claude §5.1, ADR-0026 결정 3–4 |
 | 답변 기한이 지난 보류의 결정 | 결재권자 / 재무합의자 | 새 도달일에 다시 앞에 선 건을 승인(동의)·반려하거나 더 기다린다 | 전이 없음. 기한과 새 도달일은 계산값 | ADR-0026 결정 4–5 |
@@ -579,11 +578,10 @@ stateDiagram-v2
 
 | 티켓 | 넘기는 것 | 출처 |
 | --- | --- | --- |
-| #20 | 결재권자가 여럿일 때의 `decided_by`(C5). grok의 교착 지적 — 전결권자만 기록하면 앞 결재권자의 승인이 관문에 막혀 교착할 수 있다(grok §10.2). 기존 규정은 전결권자가 앞 단계보다 먼저 재량 판단을 기록할 수 있는지 정하지 않아, 조건부 위험이다 | 비교 문서 `:143`, `:195`, `docs/adr/0012-transition-audit-provenance-in-one-transaction.md:46`, `docs/company/approval-matrix.md:187` |
+| #20 | #21에서: 재무합의자가 0명인 정산(`APV-9-4`)에서 `PRC-13-5`를 판단할 사람. 판단할 역할이 결재선에 없다 | [ADR-0030](adr/0030-discretion-judged-by-last-in-role.md) 결과 |
 | #20 | 재무팀 담당자 본인의 청구 총액 500만 원 이하 정산에서 `APV-9-4`로 재무합의가 사라지는 귀결 | 비교 문서 `:161`, `docs/company/approval-matrix.md:216-217`, `:233` |
 | #20 | 규정 문언에 개정권 조항을 넣는 일(U5) | 비교 문서 `:187`, [ADR-0022](adr/0022-policy-amendment-by-ceo-no-in-app-publishing.md) 결정 6 |
 | #20 | #17에서: 기안자 답변 기한의 값. 재무합의자 0명 정산의 재심. 재심 정정 뒤 차액의 사건과 기한. 정산이 끝내 없는 출장의 사전승인 플래그를 볼 자리. 반환 방법·기한. 위약금·재기안 차수의 적용 판·반려 사유 의무 같은 규정 초안 | 상태 비교 문서 `:248-249`, [ADR-0023](adr/0023-document-and-evidence-axes-named-rejections.md) 결정 8 |
-| #21 | #17에서: 재량 판단이 결재선 입력을 바꿀 때 재기안·선 연장·최악값 중 무엇인가. 그때까지 그 판단에 기대는 동의·승인은 `UNDEFINED_BY_17` | 상태 비교 문서 `:247`, [ADR-0024](adr/0024-rejection-resubmission-and-card-bound-approvals.md) 결정 12 |
 | #22 | #17에서: 재기안 차수·효력 상실·결재선 변경 되돌림·재심 표지·답변 기한 경과·반환 대기·반환 확인의 표시 이름. `진행중`·`결재선 진행`·`결재대기`의 정리 | 상태 비교 문서 `:250` |
 | #26(닫힘) | ~~`CardLine`의 가맹점 업종 칸. 여행사 결제가 걸리는 카드와 그 줄의 짝 확인 담당~~ 가맹점 업종 칸은 두지 않는다. 여행사 결제는 총무팀 관리 카드에 걸리고 그 줄의 짝 확인(경쟁·대조 불가·후보 복수·고른 줄을 잃음)은 총무 예약 담당이다 `[설계 가정]` | 비교 문서 `:67`, `:164`, `:214`, [ADR-0031](adr/0031-reconciliation-pending-states-and-input-driven-rerun.md) 결정 6–7 |
 | #26(닫힘) | ~~일별 이용 내역(U4)과 `CardLine`의 타입 공백. 이용 내역은 `billedKrw`가 없어 현행 입력 계약과 바로 호환되지 않는다. 청구 전 대사 입력과 청구 후 값의 구분~~ `CardLine`은 대사 입력, 청구 원화는 `CardBilling`. 미도착은 `명세 대기` | 비교 문서 `:178`, [ADR-0031](adr/0031-reconciliation-pending-states-and-input-driven-rerun.md) 결정 4 |
@@ -591,4 +589,7 @@ stateDiagram-v2
 | #22 · #25 · #11 | #26에서: 완료 뒤 대사 변동의 표시 이름(#22). 짝 확인 화면과 낡은 확인을 다시 여는 표시(#25). 선결제 숙박처럼 결제일과 이용일이 다른 짝의 누락 건수, 묶음 재질문, 묶음이 멈춘 시간(#11) | [ADR-0031](adr/0031-reconciliation-pending-states-and-input-driven-rerun.md) 결과 |
 | #18 후속 | 방향 분류기 실행 자산의 검증 | A13 |
 | #22 | 상신 뒤 짝 보류·값 모순 짝 확인·재량 관문을 한 이름("열린 의무")으로 올릴지(C3). 수기 확정의 정의 보정(C9, `CONTEXT.md:315`) | 비교 문서 `:193`, `:199` |
+| #22 | #21에서: "판단 전"·"두 갈래"·"판단 이월"·청구액·인정액의 표시 이름 | [ADR-0029](adr/0029-approval-line-from-claimed-values.md)·[ADR-0030](adr/0030-discretion-judged-by-last-in-role.md) 결과 |
+| #12 | #21에서: 두 갈래 카드(재량 조항이 여럿이면 그 조합)와 판단 이월의 화면 표현. 청구액·인정액·본인 부담액을 나란히 보이는 표현 | [ADR-0029](adr/0029-approval-line-from-claimed-values.md)·[ADR-0030](adr/0030-discretion-judged-by-last-in-role.md) 결과 |
+| #11 | #21에서: ADR-0029·ADR-0030 반증 조건의 측정 — 청구 기준 결재선의 과잉 검토, 앞 단계가 두 갈래를 보는지, 뒤집힌 이월, 두 번째 재무합의자의 확인 도장 | [ADR-0029](adr/0029-approval-line-from-claimed-values.md)·[ADR-0030](adr/0030-discretion-judged-by-last-in-role.md) 결과 |
 | #11 | codex의 구현 검증 계약 7개(미배정 차단, 주입 문장, 방향 반대 서술 등). 루프 상한·회전각 칸의 측정 | codex §11, 비교 문서 `:160`, `:194` |

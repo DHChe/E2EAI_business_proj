@@ -1,0 +1,86 @@
+{
+  "project": "E2EAI_business_proj",
+  "created_at": "2026-09-22T17:41:49+09:00",
+  "base_commit": "605fb8609b4c2157ef5016e43b7e7a34fe4bdb34",
+  "phase": "24-harness-executor",
+  "issue": 24,
+  "steps": [
+    {
+      "step": 0,
+      "name": "phase-state",
+      "status": "completed",
+      "summary": "scripts/execute.py: Executor(root, phase_dir, *, push=False), HarnessExit, now_kst/read_json/write_json_atomic/repo_root/main 및 index·lock·commit_paths·commit_meta·child_env·prepare·run 구현. staged rename/삭제 옛 경로 처리 포함. scripts/test_execute.py: PHASE/ISSUE, step_md, HarnessTestCase(make_repo/make_executor/fake_bin/calls) 및 16개 테스트. AC 14줄 모두 종료 0, Bash 가드 54/54 통과.",
+      "completed_at": "2026-09-22T20:07:05+09:00"
+    },
+    {
+      "step": 1,
+      "name": "step-spec",
+      "status": "completed",
+      "summary": "scripts/execute.py: SpecError(ValueError), frozen StepSpec(step, name, text, allowed, ac), parse_allowed_paths(text: str) -> list[str], path_allowed(path: str, allowed: Sequence[str]) -> bool, parse_ac(text: str) -> list[str], Executor.load_step_specs() -> list[StepSpec] 추가. run()에서 prepare() 직후 HEAD step 전수 검증·오류 수집·self.specs 고정. scripts/test_execute.py: 필수 6개 포함 11개 테스트 추가, 기존 16개 유지. AC 9줄 종료 0, 전체 27개 및 Bash 가드 54/54 통과.",
+      "completed_at": "2026-09-22T20:10:42+09:00"
+    },
+    {
+      "step": 2,
+      "name": "session-runner",
+      "status": "completed",
+      "summary": "scripts/execute.py: ChildResult(returncode, timed_out, stdout, stderr), CODEX_CONFIG_FLAGS, codex_mcp_overrides(servers), Executor.run_child(argv, *, env, timeout, stdin_text=None, stdout_path=None, on_spawn=None), codex_preflight(), codex_argv(overrides, last_path), result_path(unit), build_prompt(unit, task_text, allowed, failure=None), run_codex(unit, prompt, *, on_spawn=None) 추가. session_timeout=1800, child_pgid 및 그룹 정리 구현; run() 미연결. scripts/test_execute.py: 필수 6개와 콜백 예외/SIGKILL/그룹 안전성 테스트 추가. AC 9줄 모두 종료 0, 전체 35개 및 Bash 가드 54/54 통과.",
+      "completed_at": "2026-09-22T20:15:52+09:00"
+    },
+    {
+      "step": 3,
+      "name": "rollback",
+      "status": "completed",
+      "summary": "scripts/execute.py: HarnessInterrupted(BaseException), Executor.worktree_tree(base_sha: str) -> str, snapshot(unit: str, k: int, base_sha: str) -> str, rollback(unit: str, k: int, target_sha: str) -> str, marker_path property, save_marker(marker: dict) -> None, load_marker() -> dict | None, clear_marker() -> None, recover() -> None, install_signal_handlers()/restore_signal_handlers() -> None 추가. run() 기동 순서 및 신호 복원 연결. scripts/test_execute.py: RollbackTests 9개 추가, 복구는 fake ps와 실제 프로세스 그룹 종료로 검증. AC 10줄 모두 종료 0; 전체 44개 및 Bash 가드 54/54 통과.",
+      "completed_at": "2026-09-22T20:32:49+09:00"
+    },
+    {
+      "step": 4,
+      "name": "attempt-loop",
+      "status": "completed",
+      "summary": "scripts/execute.py: MAX_ATTEMPTS=3, AttemptOutcome(status, summary=None, reason=None, attempts=0, pre_sha=\"\"), Executor.env_fingerprint() -> dict[str, str], ignored_paths() -> set[str], read_result(unit) -> dict | None, run_ac(lines) -> str | None, attempt_unit(unit, task_text, allowed, ac, *, start_k=1) -> AttemptOutcome 및 ac_timeout=600 추가. 시도 판정·롤백·marker 보존 구현, run() 미연결. scripts/test_execute.py: AttemptLoopTests 14개 추가; 전체 58개, AC 13줄 모두 종료 0, Bash 가드 54/54 통과.",
+      "completed_at": "2026-09-22T20:37:41+09:00"
+    },
+    {
+      "step": 5,
+      "name": "scoped-commit",
+      "status": "completed",
+      "summary": "scripts/execute.py: Executor.commit_feat(message: str, pre_sha: str) -> str, confirm_step(step: int, status: str, text: str) -> None, run_steps(specs: list[StepSpec]) -> None 추가; run() step 루프 연결 및 recover() feat_done step의 chore 재개 구현. scripts/test_execute.py: 필수 7개 포함 10개 테스트 추가, 기존 run 단위 테스트의 후속 루프 격리. AC 10줄 모두 종료 0, 전체 68개 및 Bash 가드 54/54 통과.",
+      "completed_at": "2026-09-22T20:42:49+09:00"
+    },
+    {
+      "step": 6,
+      "name": "issue-sync",
+      "status": "completed",
+      "summary": "scripts/execute.py: GH_ATTEMPTS=3, gh_timeout=60, Executor.gh(*args: str) -> bool, retry_gh_pending() -> None, issue_comment(body: str) -> None, issue_blocked(reason: str) -> None, issue_resume() -> None 추가. 검증된 대기열 재시도 및 run/step 확정 후 Issue 동기화 연결. scripts/test_execute.py: IssueSyncTests 8개 추가; 전체 76개 및 AC 8줄 종료 0, Bash 가드 54/54 통과.",
+      "completed_at": "2026-09-22T20:48:16+09:00"
+    },
+    {
+      "step": 7,
+      "name": "review-gate",
+      "status": "completed",
+      "summary": "scripts/execute.py: REVIEW_CONTRACT, parse_verdict(text: str) -> str | None, Executor.review_argv(reviewer: str, scope: str) -> list[str], run_reviewer(reviewer: str, round_no: int, end_sha: str, scope: str) -> str, run_baseline(specs: list[StepSpec]) -> str | None, review_round(round_no: int, end_sha: str) -> dict[str, str], review_gate(specs: list[StepSpec]) -> int 및 run() 연결. scripts/test_execute.py: ReviewGateTests 12개 추가; 전체 88개, AC 11줄, Bash 가드 54/54 통과.",
+      "completed_at": "2026-09-22T20:54:55+09:00"
+    },
+    {
+      "step": 8,
+      "name": "fix-loop",
+      "status": "completed",
+      "summary": "scripts/execute.py: MAX_FIX_ROUNDS=2, run_fix(round_no, specs, scope, *, start_k=1)->AttemptOutcome, review_reports, finish_fix, push_branch()->int 추가; fix running/feat_done 복구 및 marker 정리; run 순서 잠금→신호→복구→gh 대기열→prepare/라벨 복원→spec 검증→step→리뷰/최대 2회 수정→선택 push, 종료 0/1/2/3. scripts/test_execute.py: 필수 8개와 복구 4개 추가, 전체 100개 및 AC 11줄 종료 0, Bash 가드 54/54 통과.",
+      "completed_at": "2026-09-22T21:03:02+09:00"
+    },
+    {
+      "step": 9,
+      "name": "harness-docs",
+      "status": "completed",
+      "summary": "docs/agents/harness.md, .claude/commands/harness.md, .claude/commands/review.md, AGENTS.md, docs/PRD.md 갱신: 실행·result 보고·허용 경로·AC·롤백·복구·리뷰/수정 루프·Issue·push 계약 문서화. 코드/시그니처 변경 없음. harness 73/96행, PRD 178줄 및 graft 블록 보존, PRD:5 주입 포인터를 harness.md:183으로 갱신. AC 17줄 종료 0, 실행기 100개와 가드 54/54 통과. 설계 목록과 코드 차이 반영: 번들 플러그인은 브라우저/컴퓨터 관련 3개만 비활성화; pending 재개 시 오류/시각 필드 삭제는 코드상 선택; spec 위반 전에도 복구/prepare는 수행 가능; env/새 무시 경로 검사는 AC 전이고 AC 후는 HEAD/tree만 검사; 임시 add -A는 AC tree 비교에도 사용; 재기동 첫 재개 프롬프트에는 직전 실패 사유 없음; 완료 phase --push도 기동/spec 검증 후 구현·리뷰만 생략; MCP preflight 목록 호출 timeout은 120초.",
+      "completed_at": "2026-09-22T21:10:37+09:00"
+    }
+  ],
+  "review": {
+    "status": "passed",
+    "end_sha": "398c3be842007b5279027787b00974e101a56e54",
+    "round": 4,
+    "fixes": 0
+  },
+  "completed_at": "2026-09-23T13:46:14+09:00"
+}

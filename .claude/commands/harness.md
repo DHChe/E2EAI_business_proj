@@ -40,22 +40,39 @@ description: Issue를 자기완결 step 지시서로 내려 phase를 설계한�
 
 1. `phases/index.json` — 없으면 만들고, 있으면 `phases` 배열에 항목 추가
 2. `phases/{이슈번호}-{slug}/index.json` — step 상태 기계
-3. `phases/{이슈번호}-{slug}/step{N}.md` — step마다 하나
+3. `phases/{이슈번호}-{slug}/step{N}.md` — step마다 하나. 각 파일에 `## 변경 허용 경로` 절을 둔다.
+
+승인된 phase 파일(두 index와 `step*.md`)을 **한 chore 커밋으로 커밋한다.**
+실행기는 HEAD에 커밋된 step 파일만 읽는다. 생성 이후 두 index는 실행기가 관리한다.
 
 그런 다음 Issue 본문 맨 아래에 `Phase: phases/{이슈번호}-{slug}/` 한 줄을 추가한다
 (`gh issue edit`). Issue 번호가 없는 작업이면 먼저 Issue를 만들 것을 제안한다.
 
-**타임스탬프 필드(`created_at`, `started_at`, `completed_at`, `failed_at`, `blocked_at`)는
-넣지 않는다. 실행기가 기록한다.**
+**타임스탬프 필드(`created_at`, `completed_at`, `failed_at`, `blocked_at`)는
+넣지 않는다. 실행기가 기록한다.** `base_commit`과 `review`도 실행기가 초기화한다.
+`started_at`은 생성하지 않으며 실행기도 기록하지 않는다.
 
 ## E. 실행
 
-기술 스택 확정 전까지 `scripts/execute.py`는 없다. phase를 손으로 실행한다:
+저장소 루트에서 `python3 scripts/execute.py <phase_dir>`로 실행한다(`--push`는 선택).
+구현은 Codex, 리뷰는 Claude·Grok이며 재시도·롤백·커밋·Issue 결과 반영은 실행기가 맡는다.
+
+| 종료 코드 | 사람이 할 일 |
+| --- | --- |
+| 0 | 완료 요약과 리뷰 결과를 확인하고 Issue close와 병합을 한다 |
+| 1 | 원인을 고치고 `docs/agents/harness.md` 복구 절차에 따라 해당 error step을 pending으로 되돌려 재실행한다. 수정 unit의 ④·⑤ error는 index를 고치지 말고 원인(`.env` 복원, 허용 경로 밖 무시 경로 정리, Git 설정 확인)만 해결해 재실행하며 완료한 수정 수는 유지한다. 내부 실패는 marker 진단을 확인한다. Git 설정 복원 실패로 `git-guard.json`이 있으면 설정을 확인·복원한 뒤 출력된 guard 파일을 지운다(그 전에는 기동이 멈춘다). 리뷰 기준선 실패는 AC 원인을 해결하며(코드 수정은 `feat-{phase}`에 직접 커밋한 뒤 재실행), push만 실패했다면 completed를 유지하고 `--push`로 재실행한다 |
+| 2 | blocked 사유를 해결하고 복구 절차에 따라 step 또는 `review.status`를 pending으로 되돌려 재실행한다 |
+| 3 | `.run/review-r*` 원문에서 리뷰 실패·unverifiable 사유를 확인하고 해결한 뒤 재실행한다. 코드 수정은 `feat-{phase}`에 직접 커밋한 뒤 재실행 |
+
+수동 재개 때는 phase index의 해당 오류 필드·시각만 복구 절차대로 지운다.
+`phases/index.json`은 사람이 고치지 않는다. close와 병합은 실행기가 하지 않는다.
+
+손 실행은 실행기가 없거나 쓸 수 없을 때만 한다(예: 실행기 자체를 만드는 phase).
+이 경우 상태 기록과 커밋은 구현 세션 밖의 사람이 맡는다:
 
 1. `feat-{phase}` 브랜치를 만든다.
-2. step 파일을 순서대로 하나씩, 가급적 별도 세션에서 실행한다.
-3. 각 step이 끝나면 **AC 커맨드를 직접 돌려서** 통과를 확인한 뒤에만
-   `index.json`의 status를 `completed`로 바꾼다. AC를 안 돌리고 completed를 쓰지 않는다.
-4. `blocked`가 나오면 즉시 멈추고 사용자에게 사유를 보고한다. 재시도하지 않는다.
-5. phase 전체가 끝나면 `/review`를 돌리고, 통과하면
-   `gh issue close <n> --comment "<phase 요약>"`.
+2. step 파일을 순서대로 하나씩, 가급적 별도 세션에서 실행한다. 세션은 한 시도와 result 보고만 한다.
+3. 각 step이 끝나면 **AC 각 줄을 `bash -o pipefail -c '<줄>'`로 따로 직접 실행**해 모두 종료 0임을 확인한 뒤에만 사람이 index의 status를 completed로 확정한다. AC 없이 completed를 쓰지 않는다.
+4. blocked가 나오면 즉시 멈추고 사용자에게 사유를 보고한다. 재시도하지 않는다.
+
+손 실행으로도 phase 전체가 끝나면 `/review`를 돌린다. 통과 후 Issue close와 병합은 사람이 한다.
