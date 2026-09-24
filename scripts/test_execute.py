@@ -1379,6 +1379,91 @@ sys.exit(scenario.get('exit', 0))
         self.assertIn('④ .env 링크 대상 변경: 수동 복원 필요', out.reason)
         self.assertEqual(target.read_bytes(), b'changed\n')
 
+    def test_git_change_with_env_link_change_requires_manual_restore(self):
+        ex, counter, _ = self.fixture([{'files': {'.git/config': '[core]\n\tfsmonitor = false\n',
+                                                   '.env': 'changed'}}])
+        target = self.temp_dir / 'linked-env-target'
+        target.write_bytes(b'original')
+        (ex.root / '.env').symlink_to(target)
+        out = self.attempt(ex)
+        self.assertEqual((out.status, counter.read_text()), ('error', '1'))
+        self.assertIn('④ Git 설정 변경 감지·복원', out.reason)
+        self.assertIn('④ .env 링크 대상 변경: 수동 복원 필요', out.reason)
+        self.assertEqual(os.readlink(ex.root / '.env'), str(target))
+
+    def test_git_change_in_ac_checks_env_link_and_mode(self):
+        ex, _, _ = self.fixture()
+        target = self.temp_dir / 'linked-env-target'
+        target.write_bytes(b'original')
+        (ex.root / '.env').symlink_to(target)
+        (ex.root / '.env.local').write_text('secret')
+        (ex.root / '.env.local').chmod(0o600)
+        out = self.attempt(ex, ['echo changed > .env && chmod 644 .env.local'
+                                ' && git config core.fsmonitor false'])
+        self.assertEqual(out.status, 'error')
+        self.assertIn('④ Git 설정 변경 감지·복원', out.reason)
+        self.assertIn('④ .env 링크 대상 변경: 수동 복원 필요 (AC 뒤)', out.reason)
+        self.assertEqual((ex.root / '.env.local').stat().st_mode & 0o777, 0o600)
+
+    def test_git_change_restores_env_mode_only_change(self):
+        ex, _, _ = self.fixture()
+        (ex.root / '.env.local').write_text('secret')
+        (ex.root / '.env.local').chmod(0o600)
+        out = self.attempt(ex, ['chmod 644 .env.local && git config core.fsmonitor false'])
+        self.assertEqual(out.reason, '④ Git 설정 변경 감지·복원')
+        self.assertEqual((ex.root / '.env.local').stat().st_mode & 0o777, 0o600)
+
+    def test_env_directory_change_requires_manual_restore(self):
+        for ac in ('rm -r .env.d && echo file > .env.d', 'mkdir .env.new'):
+            with self.subTest(ac=ac):
+                ex, _, _ = self.fixture()
+                (ex.root / '.env.d').mkdir()
+                (ex.root / '.env.d/secret').write_text('nested')
+                out = self.attempt(ex, [ac])
+                self.assertEqual(out.status, 'error')
+                self.assertIn('④ .env 디렉토리 변경: 수동 복원 필요 (AC 뒤)', out.reason)
+
+    def test_env_capture_skips_real_directories(self):
+        ex, _, _ = self.fixture()
+        (ex.root / '.env.d').mkdir()
+        (ex.root / '.env.d/secret').write_text('nested')
+        (ex.root / '.env').write_text('file')
+        (ex.root / '.env.link').symlink_to(self.temp_dir)
+        self.assertEqual(sorted(ex.capture_env()), ['.env', '.env.link'])
+        ex.restore_env(ex.capture_env())
+        self.assertEqual((ex.root / '.env.d/secret').read_text(), 'nested')
+
+    def test_interrupt_during_git_guard_keeps_pending(self):
+        for stage in ('compare', 'restore', 'guard'):
+            with self.subTest(stage=stage):
+                ex, _, _ = self.fixture()
+                config = ex.root / '.git/config'
+                original = config.read_bytes()
+                before = ex.capture_git_guard()
+                ex._guard_pending = before
+                config.open('a').write('\n[core]\n\tfsmonitor = false\n')
+                interrupt = mock.patch.object(execute, 'write_json_atomic',
+                                              side_effect=execute.HarnessInterrupted('신호 15'))
+                if stage == 'guard':
+                    with mock.patch.object(ex, 'restore_path', side_effect=OSError('cannot')), \
+                            interrupt, self.assertRaises(execute.HarnessInterrupted):
+                        ex.git_guard_failed(before)
+                    self.assertIs(ex._guard_pending, before)
+                    with mock.patch.object(ex, 'restore_path', side_effect=OSError('cannot')):
+                        self.assert_exit(1, ex.restore_pending_git_guard)
+                    self.assertIsNone(ex._guard_pending)
+                    self.assertTrue(ex.git_guard_path.exists())
+                    continue
+                target = 'git_fingerprint' if stage == 'compare' else 'restore_path'
+                with mock.patch.object(ex, target, side_effect=execute.HarnessInterrupted('신호 15')):
+                    with self.assertRaises(execute.HarnessInterrupted):
+                        ex.git_guard_failed(before)
+                self.assertIs(ex._guard_pending, before)
+                ex.restore_pending_git_guard()
+                self.assertIsNone(ex._guard_pending)
+                self.assertEqual(config.read_bytes(), original)
+                self.assertFalse(ex.git_guard_path.exists())
+
     def test_feat_done_crash_env_change_rolls_back_and_errors(self):
         ex, _, _ = self.fixture()
         ex.prepare()
@@ -2081,6 +2166,16 @@ if mode == 'exit':
             self.assertEqual(resumed.run(), 1)
             recover.assert_not_called()
 
+    def test_baseline_git_change_with_env_link_requires_manual_restore(self):
+        ex = self.fixture(ac=['echo changed > .env', 'git config core.fsmonitor false'])
+        target = self.temp_dir / 'linked-env-target'
+        target.write_bytes(b'original')
+        (ex.root / '.env').symlink_to(target)
+        self.assertEqual(ex.run(), 1)
+        comments = [' '.join(args) for args in self.calls('gh')]
+        self.assertTrue(any('④ 기준선 Git 설정 변경 감지·복원' in c and '수동 복원 필요' in c
+                            for c in comments))
+
     def test_reports_use_memory_despite_file_tampering(self):
         ex = self.fixture({'claude': ['failed']})
         self.assertEqual(self.review(ex), 'failed')
@@ -2158,7 +2253,8 @@ if mode == 'exit':
         self.assertNotIn('--bare', expected)
         grok = ex.review_argv('grok', scope)
         self.assertEqual(grok[:2], ['grok', '-p'])
-        self.assertEqual(grok[3:], ['--permission-mode', 'dontAsk', '--output-format', 'json'])
+        self.assertEqual(grok[3:], ['--permission-mode', 'dontAsk', '--deny', 'Write',
+                                    '--deny', 'Edit', '--output-format', 'json'])
         for value in ('Unique review body', scope, 'REVIEW_RESULT: passed'):
             self.assertIn(value, grok[2])
         self.assertNotIn('hidden metadata', grok[2])

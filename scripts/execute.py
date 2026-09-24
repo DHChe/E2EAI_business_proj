@@ -500,6 +500,9 @@ class Executor:
                 value = path.read_bytes()
             elif path.is_symlink() or (os.path.lexists(path) and not path.is_dir()):
                 value = repr(self.capture_path(path)).encode()
+            elif path.is_dir():
+                result[path.name] = "dir"  # Presence only; real directories are never captured.
+                continue
             else:
                 continue
             result[path.name] = hashlib.sha256(value).hexdigest()
@@ -580,9 +583,11 @@ class Executor:
             path.unlink(missing_ok=True)
 
     def capture_env(self) -> dict:
+        # Files, links and special files only; real .env directories are left alone.
         return {p.name: self.capture_path(p) for p in self.root.iterdir()
                 if (p.name == ".env" or p.name.startswith(".env."))
-                and p.name != ".env.example" and os.path.lexists(p)}
+                and p.name != ".env.example" and os.path.lexists(p)
+                and (p.is_symlink() or not p.is_dir())}
 
     def restore_env(self, saved: dict) -> None:
         for name in self.capture_env().keys() | saved.keys():
@@ -596,10 +601,18 @@ class Executor:
         changed = {name for name in before.keys() | after.keys()
                    if before.get(name) != after.get(name)}
         self.restore_env(saved)
+        suffix = f" ({context})" if context else ""
+        if any("dir" in (before.get(name), after.get(name)) for name in changed):
+            return f"④ .env 디렉토리 변경: 수동 복원 필요{suffix}"
         if any(saved.get(name) and saved[name][0] == "link" for name in changed):
-            suffix = f" ({context})" if context else ""
             return f"④ .env 링크 대상 변경: 수동 복원 필요{suffix}"
         return regular_reason
+
+    def git_env_reason(self, git_reason: str, before: dict[str, str], saved: dict,
+                       regular_reason: str, context: str = "") -> str:
+        env_reason = self.restore_env_change(before, saved, regular_reason, context)
+        self.restore_env(saved)  # Also mode-only changes, which the fingerprint misses.
+        return f"{git_reason}\n{env_reason}" if env_reason else git_reason
 
     def git_fingerprint(self) -> dict:
         if self._git_guard_paths is None:
@@ -629,9 +642,12 @@ class Executor:
                              for name, path in (self._git_guard_paths or {}).items()}
 
     def git_guard_failed(self, before) -> bool:
+        # Keep the guard pending until the comparison settles, so a signal mid-way
+        # still leaves it for restore_pending_git_guard.
         fingerprint, saved = before
         try:
             if self.git_fingerprint() == fingerprint:
+                self.settle_git_guard(before)
                 return False
             for name, entry in saved.items():
                 self.restore_path(self._git_guard_paths[name], entry)
@@ -640,13 +656,16 @@ class Executor:
         except (OSError, ValueError) as exc:
             self.git_guard_path.parent.mkdir(parents=True, exist_ok=True)
             write_json_atomic(self.git_guard_path, {"baseline": fingerprint, "reason": str(exc)})
+            self.settle_git_guard(before)
             raise HarnessExit(EXIT_ERROR,
                 f"Git 설정이 복원되지 않았다. 확인 뒤 {self.git_guard_path}를 지워라") from exc
-        finally:
-            if self._guard_pending is before:
-                self._guard_pending = None
         self._git_guard_changed = True
+        self.settle_git_guard(before)
         return True
+
+    def settle_git_guard(self, before) -> None:
+        if self._guard_pending is before:
+            self._guard_pending = None
 
     def restore_pending_git_guard(self) -> None:
         if self._guard_pending is not None:
@@ -719,9 +738,10 @@ class Executor:
                     self.clear_marker()
                 raise
             if self.git_guard_failed(git_before):
-                self.restore_env(env_saved)
+                reason = self.git_env_reason("④ Git 설정 변경 감지·복원", env_before, env_saved,
+                                             "④ .env 지문 변경: 복원됨")
                 self.rollback(unit, k, pre_sha)
-                return AttemptOutcome("error", reason="④ Git 설정 변경 감지·복원", attempts=k)
+                return AttemptOutcome("error", reason=reason, attempts=k)
             self.save_marker(self.marker)
             env_reason = self.restore_env_change(
                 env_before, env_saved, "④ .env 지문 변경: 복원됨")
@@ -762,9 +782,11 @@ class Executor:
                 else:
                     failure = self.run_ac(ac)
                     if self.git_guard_failed(git_before) or (failure and failure.startswith("④ Git")):
-                        self.restore_env(env_saved)
+                        reason = self.git_env_reason(
+                            "④ Git 설정 변경 감지·복원", env_before, env_saved,
+                            "④ .env 지문 변경: AC 뒤 복원됨", "AC 뒤")
                         self.rollback(unit, k, pre_sha)
-                        return AttemptOutcome("error", reason="④ Git 설정 변경 감지·복원", attempts=k)
+                        return AttemptOutcome("error", reason=reason, attempts=k)
                     env_reason = self.restore_env_change(
                         env_before, env_saved, "④ .env 지문 변경: AC 뒤 복원됨", "AC 뒤")
                     if env_reason is not None:
@@ -1204,7 +1226,8 @@ class Executor:
         else:
             body += f"\n리뷰 범위: {scope}\n"
         return ["grok", "-p", body.rstrip() + "\n" + REVIEW_CONTRACT,
-                "--permission-mode", "dontAsk", "--output-format", "json"]
+                "--permission-mode", "dontAsk", "--deny", "Write", "--deny", "Edit",
+                "--output-format", "json"]
 
     def run_reviewer(self, reviewer: str, round_no: int, end_sha: str, scope: str) -> str:
         unit = f"review-r{round_no}-{reviewer}"
@@ -1279,9 +1302,10 @@ class Executor:
         for spec in sorted(specs, key=lambda item: item.step):
             failure = self.run_ac(spec.ac)
             if self.git_guard_failed(git_before) or (failure and failure.startswith("④ Git")):
-                self.restore_env(env_saved)
+                reason = self.git_env_reason("④ 기준선 Git 설정 변경 감지·복원", env_before, env_saved,
+                                             "④ 기준선 .env 지문 변경: 복원됨", "기준선")
                 self.rollback(f"baseline-step{spec.step}", 1, end_sha)
-                return "④ 기준선 Git 설정 변경 감지·복원"
+                return reason
             if failure and "⑦" in failure:
                 self.rollback(f"baseline-step{spec.step}", 1, end_sha)
             env_reason = self.restore_env_change(
