@@ -157,6 +157,7 @@ step AC는 phase 끝까지 참이어야 한다.
 - push·gh 쓰기·외부 게시·원격 DB 변경을 하지 마라. 이유: 구현 세션의 책임 밖이다.
 - 기존 무시 파일을 고치지 마라. 이유: 롤백으로 복원되지 않는다(result 보고와 허용 경로 안 새 산출물은 예외).
 - 기존 테스트를 깨뜨리지 마라.
+- 루트에 `.env`·`.env.*` 실제 값 파일이나 그 이름의 디렉토리를 만들지 마라(`.env.example`만, 가상환경은 `.venv`). 이유: 실제 값은 사람이 채우고, 실행기는 이 이름들을 보호 대상으로 보고 재시도 없이 멈춘다.
 ````
 
 허용 경로 절에는 설명·목록 기호 없이 **한 줄에 경로 하나**를 적는다. 정확한 파일 경로나
@@ -221,7 +222,7 @@ env의 토큰 변수 제거와 credential.helper 비우기. 파일·키체인의
 ④는 세션 종료 뒤와 AC 뒤 모두 검사한다. 시도·기준선 시작 때 루트 `.env`·`.env.*`(`.env.example` 제외) 중 파일·링크·특수 파일을 메모리에 보관하고(실제 디렉토리는 보관·복원하지 않고 존재만 지문에 넣어, 생기거나 사라지거나 종류가 바뀌면 `수동 복원 필요`로 확정한다) 불일치면 수정·삭제를 복원하고 새 파일은 제거한 뒤 재시도 없이 error로 확정한다. AC 뒤에는 ⑦도 검사한다. ⑤의 무시 경로 기준선은 unit 첫 시도 직전에 한 번만 잡아 marker에 보존하며 재시도·크래시 복구에서도 유지한다. 이전 버전 marker에 기준선이 없으면 재개 첫 시도 직전 값을 쓴다.
 자식(세션·AC·기준선 AC·리뷰어) 시작 전에 저장소 공용 config 바이트와 hooks·info의 모든 항목(종류·바이트/링크 대상·권한)을 메모리에 보관한다. config 비교는 저장소 밖 임시 cwd에서 `git config --file <path> --null --list`의 (키, 값) 목록 중 `branch.*`를 뺀 전부로 한다. hooks·info는 링크를 따라가지 않는 내용 해시다. 차이는 다른 git 호출 전에 보관본으로 복원하고 다시 비교한다. 복원 성공 시 시도는 스냅샷·롤백 후 step/fix error와 두 index를 chore 커밋하고 marker를 지워 exit 1, 기준선은 phase error를 커밋해 exit 1이다. 복원 실패면 두 index를 쓰지 않고 기준 해시·사유를 기동 때 계산한 `--git-path harness/{phase}/git-guard.json`에 남겨 exit 1이다. 다음 기동은 잠금 직후 recover·prepare·다른 git 호출 전에 guard 파일을 확인해 멈추며, 설정을 확인·복원한 사람이 그 파일을 지운 뒤 재개한다. 전역 `~/.gitconfig`는 검사 밖이다.
 자식 실행 중 SIGTERM·SIGHUP·SIGINT나 실행 예외가 발생해도 메모리 보관본을 먼저 비교·복원한다. 비교·복원 도중에 신호가 와도 비교가 끝날 때(일치, 복원 후 일치, guard 기록)까지는 대기로 남아 종료 전에 다시 비교·복원한다. 다만 SIGKILL과 정전은 프로세스가 정리 코드를 실행할 수 없으므로 이 보장을 제공하지 못한다.
-④에서 심볼릭 링크인 `.env`는 링크 자체만 보관하며 대상 내용은 복원하지 않는다. 대상 지문이 바뀌면 `수동 복원 필요`로 확정한다. Git 설정 변경으로 먼저 끝나는 시도·기준선도 이 판정을 거쳐 사유에 덧붙인다.
+④에서 심볼릭 링크인 `.env`는 링크 자체만 보관하며 대상 내용은 복원하지 않는다. 대상 지문이 바뀌면 `수동 복원 필요`로 확정한다. 새 파일 제거와 디렉토리 변경 사유에는 `.env` 역할 분담 안내(AI는 `.env.example`만, 가상환경은 `.venv`)를 덧붙인다. 사람은 값을 실행 전이나 종료 코드로 끝난 뒤에 채운다. 신호·크래시 뒤라면 재기동해 복구를 끝낸 뒤 채운다(복구는 달라진 `.env`를 error로 확정한다). Git 설정 변경으로 먼저 끝나는 시도·기준선도 이 판정을 거쳐 사유에 덧붙인다.
 
 ### 재시도·롤백·커밋
 
@@ -250,7 +251,7 @@ prepare chore에는 허용된 phase 파일도 포함할 수 있다.
 `phases/.run/lock`에 flock을 건다. 같은 worktree의 두 번째 실행기는 phase가 달라도 exit 1이다.
 marker는 시도 중이거나 feat와 chore 사이일 때만 존재하고, unit을 확정하는 경로는 chore 뒤 지운다.
 신호·내부 실패로 중단되면 복구할 marker를 남길 수 있다.
-`git rev-parse --git-path harness/{dir}/attempt.json`에 marker를 두고 필요하면 디렉토리를 만든다. 필드는 `{unit, k, pre_sha, stage, feat_sha, pgid, ignored_before, allowed, env_before}`다.
+`git rev-parse --git-path harness/{dir}/attempt.json`에 marker를 두고 필요하면 디렉토리를 만든다. 필드는 `{unit, k, pre_sha, stage, feat_sha, pgid, ignored_before, allowed, env_before, env_dirs}`다. `env_dirs: true`는 `env_before`가 `.env*` 디렉토리 존재를 담는다는 표시다. 이 표시가 없는 이전 버전 marker로 재개할 때는 현재 지문의 디렉토리 항목을 비교에서 뺀다.
 Codex 샌드박스는 `.git`을 쓸 수 없다. 기존 `.run/attempt.json`은 읽지 않는다. 프롬프트 생성은 marker 기록 전이며, spawn 전 예외는 marker를 지워 시도를 소모하지 않는다.
 
 | 기동 시 marker | 복구 |
