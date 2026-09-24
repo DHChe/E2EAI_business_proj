@@ -12,6 +12,10 @@
 
 Single-context: 저장소 루트에 `CONTEXT.md` 하나와 `docs/adr/`를 둔다. `docs/agents/domain.md` 참고.
 
+### 인용
+
+인용은 원문의 연속 부분문자열로만 한다. 괄호 머리말·주어 같은 스코프 표지를 자르지 않고, 두 줄을 이어 한 문장으로 만들지 않는다(#15, ADR-0036).
+
 ### Harness
 
 작업은 GitHub Issue(WHAT: 스펙·논의·승인)와 `phases/`(HOW: step 지시서·실행 상태)로 나눠

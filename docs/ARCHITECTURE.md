@@ -193,7 +193,7 @@ flowchart LR
 - 답변은 조각의 목록이다. 숫자와 인용은 렌더러가 계산 기록과 조항 원문에서 채운다. 금액·기한·결재선·판정의 방향을 단정하는 문장은 서버 템플릿에서만 나온다. 모델은 이음말만 쓴다(U2).
 - 재량 조항이 걸린 질문은 판단하지 않고 되돌린다. `facts_to_ask`·`decided_by`는 코드가 조항 블록에서 복사한다(`docs/PRD.md:45`, `docs/adr/0005-policy-source-of-truth.md:76-77`).
 - 도구는 계산 기록(입력 revision 포함)과 조항 원문을 읽는 셋이다(C2). 셋을 어떻게 나누고 무엇이라 부를지는 `[설계 가정]`이다(ADR-0020 "세 도구의 나눔").
-- 루프 상한은 설정값이다. 초기값은 `[설계 가정]`이고 #11이 반증한다 — 레인 제안은 codex 요청 3회·도구 6회, grok 턴 4회·도구 8회, claude 요청 4회였다(A5).
+- 루프 상한은 설정값이다. 초기값은 `[설계 가정]`이고 #11이 반증한다 — 레인 제안은 codex 요청 3회·도구 6회, grok 턴 4회·도구 8회, claude 요청 4회였다(A5). #11은 초기값을 요청 4회·도구 8회로 정했다 `[설계 가정]`. 이 상한으로 한 번 실측하고, 요청 3회·도구 6회였으면 잘렸을 질문을 센다(`docs/EVAL.md` §3·§10, ADR-0020 결정 7의 보완).
 - 검증을 통과한 완성 답변만 보인다. 실패하면 원기록과 조항만 보이고, 새 사람 확인을 자동으로 만들지 않는다(ADR-0020 결정 8).
 
 ```ts
@@ -201,7 +201,7 @@ flowchart LR
 type AnswerSegment =
   | { kind: "text"; text: string }                                   // 이음말. 숫자 리터럴·권고·방향 단정 없음
   | { kind: "calc"; ref: { calcId: string; path: string } }          // 렌더러가 계산 기록의 값으로 채운다
-  | { kind: "quote"; clause: { code: string; edition: number; id: string }; span: [number, number] } // 원문에서 잘라 채운다
+  | { kind: "quote"; clause: { code: string; edition: number; id: string } } // 그 판의 조항 전문을 붙인다. 범위(span) 없음 — ADR-0036
   | { kind: "template"; templateId: string; calcId: string };        // [설계 가정] 방향 단정 문장. 계산 기록의 의미 태그에 대응
 
 type HoldAnswer = {
@@ -586,10 +586,10 @@ stateDiagram-v2
 | #26(닫힘) | ~~`CardLine`의 가맹점 업종 칸. 여행사 결제가 걸리는 카드와 그 줄의 짝 확인 담당~~ 가맹점 업종 칸은 두지 않는다. 여행사 결제는 총무팀 관리 카드에 걸리고 그 줄의 짝 확인(경쟁·대조 불가·후보 복수·고른 줄을 잃음)은 총무 예약 담당이다 `[설계 가정]` | 비교 문서 `:67`, `:164`, `:214`, [ADR-0031](adr/0031-reconciliation-pending-states-and-input-driven-rerun.md) 결정 6–7 |
 | #26(닫힘) | ~~일별 이용 내역(U4)과 `CardLine`의 타입 공백. 이용 내역은 `billedKrw`가 없어 현행 입력 계약과 바로 호환되지 않는다. 청구 전 대사 입력과 청구 후 값의 구분~~ `CardLine`은 대사 입력, 청구 원화는 `CardBilling`. 미도착은 `명세 대기` | 비교 문서 `:178`, [ADR-0031](adr/0031-reconciliation-pending-states-and-input-driven-rerun.md) 결정 4 |
 | #20 | #26에서: 재무합의자 0명 정산의 값 모순 짝 확인. 그때까지 그 정산의 승인은 `UNDEFINED_BY_26` | [ADR-0031](adr/0031-reconciliation-pending-states-and-input-driven-rerun.md) 결정 8 |
-| #22 · #25 · #11 | #26에서: 완료 뒤 대사 변동의 표시 이름(#22). 짝 확인 화면과 낡은 확인을 다시 여는 표시(#25). 선결제 숙박처럼 결제일과 이용일이 다른 짝의 누락 건수, 묶음 재질문, 묶음이 멈춘 시간(#11) | [ADR-0031](adr/0031-reconciliation-pending-states-and-input-driven-rerun.md) 결과 |
+| #22 · #25 · #11(닫힘) | #26에서: 완료 뒤 대사 변동의 표시 이름(#22). 짝 확인 화면과 낡은 확인을 다시 여는 표시(#25). ~~선결제 숙박처럼 결제일과 이용일이 다른 짝의 누락 건수, 묶음 재질문, 묶음이 멈춘 시간(#11)~~ #11의 몫은 `docs/EVAL.md` §3의 ADR-0031 반증 조건 행이 잰다 | [ADR-0031](adr/0031-reconciliation-pending-states-and-input-driven-rerun.md) 결과, `docs/EVAL.md` §3 |
 | #18 후속 | 방향 분류기 실행 자산의 검증 | A13 |
 | #22 | 상신 뒤 짝 보류·값 모순 짝 확인·재량 관문을 한 이름("열린 의무")으로 올릴지(C3). 수기 확정의 정의 보정(C9, `CONTEXT.md:315`) | 비교 문서 `:193`, `:199` |
 | #22 | #21에서: "판단 전"·"두 갈래"·"판단 이월"·청구액·인정액의 표시 이름 | [ADR-0029](adr/0029-approval-line-from-claimed-values.md)·[ADR-0030](adr/0030-discretion-judged-by-last-in-role.md) 결과 |
 | #12 | #21에서: 두 갈래 카드(재량 조항이 여럿이면 그 조합)와 판단 이월의 화면 표현. 청구액·인정액·본인 부담액을 나란히 보이는 표현 | [ADR-0029](adr/0029-approval-line-from-claimed-values.md)·[ADR-0030](adr/0030-discretion-judged-by-last-in-role.md) 결과 |
-| #11 | #21에서: ADR-0029·ADR-0030 반증 조건의 측정 — 청구 기준 결재선의 과잉 검토, 앞 단계가 두 갈래를 보는지, 뒤집힌 이월, 두 번째 재무합의자의 확인 도장 | [ADR-0029](adr/0029-approval-line-from-claimed-values.md)·[ADR-0030](adr/0030-discretion-judged-by-last-in-role.md) 결과 |
-| #11 | codex의 구현 검증 계약 7개(미배정 차단, 주입 문장, 방향 반대 서술 등). 루프 상한·회전각 칸의 측정 | codex §11, 비교 문서 `:160`, `:194` |
+| #11(닫힘) | ~~#21에서: ADR-0029·ADR-0030 반증 조건의 측정 — 청구 기준 결재선의 과잉 검토, 앞 단계가 두 갈래를 보는지, 뒤집힌 이월, 두 번째 재무합의자의 확인 도장~~ `docs/EVAL.md` §3의 ADR-0029·ADR-0030 행이 측정 가능 여부와 지표를 정한다. 실제 승인자의 행동은 `실사용 전 미측정`이다([ADR-0032](adr/0032-pass-judged-by-deterministic-checks-and-human-sample.md) 결정 5) | [ADR-0029](adr/0029-approval-line-from-claimed-values.md)·[ADR-0030](adr/0030-discretion-judged-by-last-in-role.md) 결과, `docs/EVAL.md` §3 |
+| #11(닫힘) | ~~codex의 구현 검증 계약 7개(미배정 차단, 주입 문장, 방향 반대 서술 등). 루프 상한·회전각 칸의 측정~~ 계약 7개는 `docs/EVAL.md` §13. 루프 상한은 초기값 요청 4회·도구 8회 `[설계 가정]`로 한 번 실측한다(§4.3). 회전각 칸의 측정 후보는 `docs/EVAL.md`가 다룬다. 평가 규칙은 [ADR-0032](adr/0032-pass-judged-by-deterministic-checks-and-human-sample.md)~[ADR-0036](adr/0036-hold-answer-quotes-whole-clause.md) | codex §11, 비교 문서 `:160`, `:194`, `docs/research/eval-plan-comparison.md:181` |
