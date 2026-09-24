@@ -8,7 +8,7 @@
 
 #11은 PRD 성공 기준 S1~S16과 ADR의 반증 조건을 무엇으로 재는지 정한다(`docs/PRD.md:147`). 무엇으로 재느냐보다 먼저, 합격을 **누가** 정하느냐가 문제다.
 
-- **모델의 자기 판단은 게이트가 되지 못한다.** [ADR-0008](0008-extraction-uncertainty-is-first-class.md)은 자기보고 신뢰도를 "단독 게이트로 쓸 수 없다"고 적었다(`docs/adr/0008-extraction-uncertainty-is-first-class.md:42`). LLM이 제품 출력을 채점하면 같은 약점이 평가 쪽으로 옮겨 온다.
+- **모델의 자기 판단은 게이트가 되지 못한다.** [ADR-0008](0008-extraction-uncertainty-is-first-class.md)은 모델의 자기보고 신뢰도가 과신하고 모델마다 편차가 커서 단독 게이트로 쓸 수 없다고 판단했다(`docs/adr/0008-extraction-uncertainty-is-first-class.md:39-42`). LLM이 제품 출력을 채점하면 같은 약점이 평가 쪽으로 옮겨 온다.
 - **두 생산자의 합의는 검증이 아니다.** #15에서 한 인용이 스코프 표지를 떨어뜨렸다. 다른 갈래는 그 페이지를 인용하지 않았으므로 잡지 못했을 것이다. #11 코멘트("#15에서 관찰된 실패 하나")는 이것을 "병렬 독립 생산의 합의는 검증이 아니다"라고 적었다.
 - **같은 함수를 두 번 부르면 독립이 아니다.** [ADR-0013](0013-postgres-object-storage-isolated-by-world-id.md) 결정 8은 독립 재계산을 위해 입력을 모두 저장하고, "제품 함수를 두 번 부르는 것은 독립이 아니다"라고 정했다(`docs/adr/0013-postgres-object-storage-isolated-by-world-id.md:37`). 아키텍처의 경계 표는 제품이 무대의 정답을 읽으면 독립 재계산과 #11의 판정이 오염된다고 적었다(`docs/ARCHITECTURE.md:151`).
 

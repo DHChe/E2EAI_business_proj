@@ -82,7 +82,7 @@
 - 자세한 것은 `docs/EVAL.md`에 있다 — 분포 집합은 §5, 함정 집합은 §6, 증빙 이미지는 §7, 재해석은 §11, 실패 → 처방은 §14.
 - 넘기는 것: 합성 데이터의 범위를 적는 소관 문구는 #1. 분포 집합 구성의 변경은 새 이슈다.
 - 기존 결정과의 관계.
-  - [ADR-0010](0010-human-routing-bounded-by-structure-measured-by-ratio.md): 결정 4는 H·R 두 층을 #11에 합격 기준 후보로 넘겼다(`:39`). #11은 H 층의 하드 규칙을 함정 집합의 합격 조건으로 받고, `[초기 검증 가정]`인 R1~R4는 분포 집합의 반증 대상으로 받는다(A7). 결정 3의 실행 중 멈춤은 그대로다.
+  - [ADR-0010](0010-human-routing-bounded-by-structure-measured-by-ratio.md): 결정 4는 H·R 두 층을 #11에 합격 기준 후보로 넘겼다(`:39`). #11은 H 층 중 하드 규칙·구조 상한인 H1~H8·H11을 함정 집합의 합격 조건으로 받고, 비율인 H9·H10(`[설계 가정]`)과 R1~R4(`[초기 검증 가정]`)는 분포 집합의 반증 대상으로 받는다(A7). 결정 3의 실행 중 멈춤은 그대로다.
   - [ADR-0013](0013-postgres-object-storage-isolated-by-world-id.md) 반증 4, [ADR-0022](0022-policy-amendment-by-ceo-no-in-app-publishing.md) 반증 1: 판 전환 시나리오를 넣지 않으므로 이 평가에서는 열리지 않는다.
   - [ADR-0017](0017-public-demo-single-vm-replay-default-capped-live.md): 후속의 "업무 날짜를 규정 시행일에 맞춘다"를 분포 집합의 기간이 따른다.
   - `docs/PRD.md:120`: 재해석을 결정 7의 문장이 한다.
