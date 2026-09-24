@@ -2227,25 +2227,37 @@ export function commonPrefixLength(left: string, right: string): number {
   모든 이유가 닫혀 같은 지출이라고 확인되면 짝이 선다(아래 `closeAffirmedPair`) — 금액이 맞으면 `대사 완료`, 같은 통화에서 어긋나면 `대사 불일치`(차액)이고
   짝의 근거는 `사람 선택`이다(확인한 사람이 행위자로 남는다). 보인 줄이 이 증빙의 것이 아니라고 하면 그 줄만 빼고 대사를 다시 돌린다 — 남은 후보가 없으면 `짝 없음(증빙)`이다.
   **경쟁 확인은 "이 카드 줄은 어느 증빙인가"를 정한다**(#26). 그 줄을 노린 증빙(`claims`) 모두에 기록을 남긴다 — 고른 증빙은 `같은 지출`, 나머지는 `이 줄 아님`이고, `후보 복수`인 증빙도 든다.
-  진 증빙은 그 줄만 잃고 남은 후보로 다시 대사한다. 진 기록은 이긴 증빙이 그 줄의 `같은 지출`을 지키는 동안만 효력이 있다 — 이긴 쪽이 뒤의 확인(값 모순)에서 그 줄을 거절하면 진 증빙이 그 줄을 되찾는다.
+  진 증빙은 그 줄만 잃고 남은 후보로 다시 대사한다. 진 기록은 이긴 증빙이 그 줄에 짝을 세운(`닫힘`) 동안만 효력이 있다 — 이긴 쪽의 확인이 남은 동안(`다음 단계`) 진 증빙은 그 줄을 노린 채 중간 상태로 남고,
+  이긴 쪽이 뒤의 확인(값 모순)에서 그 줄을 거절하면 진 증빙이 그 줄을 되찾는다.
   이긴 증빙의 결과는 같은 명령의 `이 줄 아님`을 반영해 정하므로(`afterCandidateChoice`) 같은 경쟁을 다시 묻지 않는다.
+  **확인 사슬은 묶음마다 하나씩 진행한다**(#26, 검수 뒤 사용자 결정). 묶음에 확인이 남은 증빙(가장 최근 기록이 `같은 지출`·`다음 단계`)이 있으면 그 증빙의 다음 확인 말고는 묶음의 짝 확인을 열지 않는다.
+  그 증빙은 확인이 끝날 때까지 자기 후보를 모두 노린 것으로 센다(효력 있는 `이 줄 아님`과 다른 증빙에 선 줄은 뺀다). 그래서 그 사슬에 기대는 증빙은 중간 상태로 남고,
+  사슬이 어떻게 끝나도 이미 나온 결과(`대사 완료`·`대사 불일치`·`짝 없음(증빙)`)는 뒤집히지 않는다 `[유도]` — 사슬이 끝나면 후보와 경쟁 목록은 줄기만 한다.
+  대가는 사슬이 재무합의자를 기다리는 동안(재무합의자가 없어 `UNDEFINED_BY_26`이면 #20이 정할 때까지) 같은 묶음의 다른 정산도 짝 확인을 기다린다는 것이다(ADR-0031 반증 조건 8).
+  **확인 요청은 연 때의 묶음 판을 싣는다**(`PairCheck.groupRevision` — 묶음의 `inputSeq`와 효력 있는 기록 수). 답할 때 판이 다르면 `STALE_REVISION`으로 거절하고 지금 판으로 다시 연다 —
+  연 뒤에 바뀐 경쟁을 아무도 보지 않은 채 결정이 서지 않는다. 같은 묶음의 확인 둘이 함께 열려 있으면 먼저 닫힌 쪽이 나머지를 낡게 만든다.
   **사람의 결정은 경쟁 묶음 단위로 효력을 갖는다**(#26, §10 `MatchGroup`·`reconcileGroup`). 경쟁 묶음은 사람의 결정으로 좁히기 전의 후보로 이어진 증빙과 카드 줄이다.
-  결정 뒤 묶음에 닿는 입력이 한 번도 바뀌지 않은 동안 결정은 효력이 있고, 대사가 다시 돌아도 같은 짝을 다시 묻지 않는다. 입력이 바뀌면 — 묶음 안 증빙 필드나 카드 줄의 revision, 묶음에 새로 닿거나 떠나는 증빙·줄 — 묶음의 모든 결정이 함께 효력을 잃고 되살아나지 않는다 `[유도]`.
+  결정 뒤 묶음에 닿는 입력이 한 번도 바뀌지 않은 동안 결정은 효력이 있고, 대사가 다시 돌아도 같은 짝을 다시 묻지 않는다. 입력이 바뀌면 — 묶음 안 증빙의 대사 입력 필드(`EvidenceForMatch`의 칸)나 카드 줄의 revision, 묶음에 새로 닿거나 떠나는 증빙·줄 — 묶음의 모든 결정이 함께 효력을 잃고 되살아나지 않는다 `[유도]`.
+  공급 분류·기간처럼 대사 입력이 아닌 필드의 수기 확정은 결정을 무르지 않는다. 짝이 선 뒤의 수기 확정은 시스템 연동이 닫은 대사 입력 필드를 묻지 않으므로(H3) 대개 묶음을 바꾸지 않는다.
   효력 있는 결정은 이렇게 쓴다 — `닫힘`으로 짝이 선 줄은 다른 증빙의 후보에서 빠지고, `claims`는 좁힌 후보로 모으며 짝이 선 증빙은 그 줄에만 든다. 그래서 한 카드 줄에 짝이 둘 서지 않고, 이미 선 증빙이 다른 줄의 경쟁을 만들지 않는다.
   묶음에 `명세 대기`인 증빙이 있으면 묶음의 짝 확인은 열지 않는다 — 경쟁 후보가 더 올 수 있다.
-  대가는 새 증빙이나 새 줄이 묶음에 닿으면 이미 정한 짝도 다시 묻는다는 것이다. 드물 것으로 보고 #11이 잰다(ADR-0031 반증 조건 2).
+  다만 날짜 후보가 여럿인(모호한 날짜) `명세 대기` 증빙은 기안자의 수기 확정을 먼저 보낸다 — 늦은 날짜 후보가 기다림의 원인일 수 있고, 날짜가 닫히면 대사를 다시 돌린다(§10 `routeToHuman`, 검수 뒤 사용자 결정).
+  대가는 새 증빙·새 줄이나 대사 입력 필드의 변경이 묶음에 닿으면 이미 정한 짝도 다시 묻는다는 것이다. 드물 것으로 보고 #11이 잰다(ADR-0031 반증 조건 2).
+  `명세 대기`나 진행 중인 확인 사슬이 묶음의 다른 정산을 멈추는 시간도 #11이 잰다(반증 조건 8).
   **통화가 다른 짝**을 재무합의자가 같은 거래로 확인하면 `대사 불일치`로 닫되 차액은 계산하지 않는다 —
   차액 칸은 "통화 다름 — 산출하지 않음"이고, 증빙 금액과 카드 줄 원거래 금액을 둘 다 그대로 남긴다.
   원화 환산은 #16 `TRV-14`가 정책 대조에서 한다(`PolicyFacts.reconciliation`으로 넘어간다). 환율 기준일은 #16이 `TRV-14-1`에서 지출일로 정했다(§3.9).
   0 차액, 임의 환율, `대사 완료`로 닫지 않는다. 예: 해외 가맹점이 원화로 청구하는 DCC(증빙 JPY, 카드 줄 원거래 KRW).
   화면은 원본과 카드 줄(`후보 복수`면 후보 줄 전부)을 함께 보이고, `짝 보류`는 막힌 조건(`blockedBy`)도 보인다.
   결정이 기댄 입력이 바뀌면 효력을 잃는 것은 승인이 승인자가 읽은 카드에 묶이는 것과 같은 모양이다([ADR-0024](../adr/0024-rejection-resubmission-and-card-bound-approvals.md) 결정 6).
-- **대사는 입력이 바뀔 때만 다시 돈다**(#26). 입력은 증빙 필드 revision, 카드 줄 revision, 이용 내역의 수집 기준일이다. 문서 상태와 관계없다 — `완료`나 지급 뒤에 도착한 카드 줄도 그때 대사를 돌린다.
+- **대사는 입력이 바뀔 때만 다시 돈다**(#26). 입력은 증빙의 대사 입력 필드(`EvidenceForMatch`의 칸) revision, 카드 줄 revision, 이용 내역의 수집 기준일이다. 문서 상태와 관계없다 — `완료`나 지급 뒤에 도착한 카드 줄도 그때 대사를 돌린다.
   다시 도는 단위는 경쟁 묶음이다. 입력이 바뀌면 그 입력이 닿은 묶음을 — 바뀌기 전의 묶음과 뒤의 묶음 모두 — 통째로 다시 대사한다. 사람의 짝 확인 기록이 남으면 그 묶음을 다시 대사한다.
   이용 내역을 가져올 때마다 `명세 대기`가 든 묶음도 다시 돈다. 수집 기준일의 전진은 결정을 무르는 변경으로 세지 않는다(§10 `MatchGroup`).
   같은 입력이면 결과도 같으므로, 값이나 카드 줄이 바뀌지 않은 이의 플래그는 대사를 다시 돌리지 않는다([ADR-0027](../adr/0027-reopen-returns-to-first-finance-consent.md) 결정 8을 닫는다).
   `완료`·`지급 처리됨`·`반환 대기`에서 대사 결과가 바뀌면 문서는 움직이지 않는다. 바뀐 사실은 내부감사에게 보이고, 재심은 이의 플래그가 연다. 그 표시 이름은 #22다.
   결과가 중간 상태로 바뀌어도(새 줄로 `후보 복수` 등) 짝 확인을 열지 않는다 — 재심이 열리면 그 안에서 연다 `[유도]`.
+  다만 같은 경쟁 묶음에 완료되지 않은 문서의 증빙이 있으면 묶음의 짝 확인을 연다(검수 뒤 사용자 결정) — 완료 문서의 증빙에도 기록을 남기고 그 증빙의 다음 확인 단계도 열지만,
+  그 문서는 움직이지 않고 바뀐 결과는 위처럼 내부감사에게 보인다. 다른 정산이 누군가의 이의 플래그를 기다리며 멈추지 않게 하려는 것이다.
   재심의 "바뀐 카드"는 원 승인이 읽은 카드와 지금 카드의 차이다 — 재심 전에 대사가 바꾼 것도 든다([ADR-0024](../adr/0024-rejection-resubmission-and-card-bound-approvals.md) 결정 6).
   그래서 그런 건의 재심은 재심 중 다른 것이 바뀌지 않아도 복귀점으로 돌아가지 않고, [ADR-0027](../adr/0027-reopen-returns-to-first-finance-consent.md) 결정 7대로 새 `완료`에 닿는다 `[유도]`.
 - **"영수증 없음"** = 증빙이 붙지 않은 카드 줄이다. 증빙 한 장의 결과가 아니라 카드 줄 쪽 결과다(`UnmatchedCardLine`).
@@ -2333,7 +2345,9 @@ export function closeAffirmedPair(evidenceAmount: Money | null, line: CardLine):
 
 /**
  * `후보 복수`에서 사람이 고른 줄로 짝을 다시 본다(#26). 고른 줄 하나를 후보로 대사를 다시 돌린다.
- * `claims`는 이 결정과 같은 명령의 기록까지 반영해 좁힌 것이다(`reconcileGroup`) — 경쟁 확인이 고른 증빙이면 진 증빙이 빠져 같은 경쟁을 다시 묻지 않는다.
+ * `claims`는 `reconcileGroup`이 좁힌 후보로 모은 것에서, 같은 명령이 고른 줄의 `이 줄 아님`을 남긴 증빙을 그 줄 항목에서 뺀 것이다 —
+ * 경쟁 확인이 고른 증빙이면 진 증빙이 빠져 같은 경쟁을 다시 묻지 않는다. 진 기록은 이긴 쪽이 `닫힘`이어야 효력이 있는데 그 `닫힘`을 이 함수가 정하므로,
+ * `reconcileGroup`이 낸 `claims`를 그대로 넘기면 진 증빙이 남는다.
  * 막힌 조건이 남으면(경쟁·값 모순 등) 그것이 `remaining`이고 보통 순서대로 다음 사람에게 간다(§7.4). 없으면 짝이 닫히고 짝의 근거는 `사람 선택`이다.
  * 고른 줄이라고 경쟁·값 모순을 건너뛰지 않는다 — 한 카드 줄에 짝이 둘 서지 않고, 모순은 재무합의자가 본다.
  */
@@ -2522,8 +2536,13 @@ export type PairCheck = {
   actor: PairCheckRole;
   /** 남은 막힌 조건 전부. 화면에 함께 보인다. `후보 복수`면 비어 있다. */
   blockedBy: AutoConfirmBlock[];
+  /** 연 때의 경쟁 묶음 판. 답하는 명령의 기대 판이고, 지금 판과 다르면 `STALE_REVISION`이다(§7.4). */
+  groupRevision: GroupRevision;
   openedAt: string;
 };
+
+/** 경쟁 묶음의 판(#26) — 입력 변경 순번과 그 순번에서 효력 있는 짝 확인 기록의 수. 사람의 결정도 판을 바꾼다. */
+export type GroupRevision = { inputSeq: number; standingEntries: number };
 
 /**
  * 짝 확인 한 단계의 기록(#26). 사람이 `후보 복수`·`짝 보류`를 닫는 행위마다 하나다.
@@ -2561,7 +2580,10 @@ export type PairCheckEntry = {
         /** 경쟁에서 져서 남은 기록이면 이긴 증빙. 이긴 증빙이 그 줄의 `같은 지출`을 잃으면 이 기록도 효력을 잃는다. */
         lostTo: string | null;
       };
-  /** 결정 때 경쟁 묶음의 `inputSeq`(`MatchGroup`). 같은 동안만 효력이 있다 — 대사가 다시 돌아도 이 결정을 다시 묻지 않는다(`reconcileGroup`). */
+  /**
+   * 확인 요청을 연 때의 묶음 `inputSeq`(`PairCheck.groupRevision`). 답할 때 판이 달랐으면 이 기록은 생기지 않는다(`STALE_REVISION`).
+   * 지금 `MatchGroup.inputSeq`와 같은 동안만 효력이 있다 — 대사가 다시 돌아도 이 결정을 다시 묻지 않는다(`reconcileGroup`).
+   */
   groupInputSeq: number;
   /** 원본을 펼쳐 봤는가([ADR-0009](../adr/0009-evidence-is-crop-plus-original-toggle.md)). `ConfirmationEntry`처럼 지표의 원천이다(§11). */
   originalViewed: boolean;
@@ -2574,11 +2596,12 @@ export type PairCheckEntry = {
  * 사람의 짝 결정은 묶음 단위로 효력을 갖는다 — 묶음에 닿는 입력이 한 번이라도 바뀌면 묶음의 모든 결정이 함께 효력을 잃고 되살아나지 않는다.
  */
 export type MatchGroup = {
+  /** 대사에 드는 증빙. §7.3 마지막 행의 중복 문서와 보조 문서는 빠진다 — 같은 짝에 붙을 뿐 카드 줄을 노리지 않는다. */
   evidence: EvidenceForMatch[];
   /** 증빙마다 `candidateLines`·`narrowByMerchant`가 낸 후보 — 사람의 결정으로 좁히기 전이다. */
   rawCandidates: ReadonlyMap<string, CardLine[]>;
   /**
-   * 이 묶음에 닿은 마지막 입력 변경의 순번. 세계에서 단조 증가한다. 묶음 안 증빙 필드·카드 줄의 revision, 묶음에 새로 닿거나
+   * 이 묶음에 닿은 마지막 입력 변경의 순번. 세계에서 단조 증가한다. 묶음 안 증빙의 대사 입력 필드(이 타입의 칸)·카드 줄의 revision, 묶음에 새로 닿거나
    * 묶음을 떠난 증빙·줄이 변경이다. 수집 기준일은 변경으로 세지 않는다 — 묶음에 `명세 대기`가 있으면 짝 확인을 열지 않으므로 기댈 결정이 없다.
    */
   inputSeq: number;
@@ -2588,13 +2611,15 @@ export type MatchGroup = {
  * 묶음 하나를 대사한다(#26). 결정 때의 `groupInputSeq`가 지금 `inputSeq`와 같은 기록만 쓴다. `entries`는 이 묶음의 기록이고 오래된 것부터다.
  * 1 증빙의 가장 최근 기록이 `같은 지출`이면 그 결정이 선 자리다 — `닫힘`이면 그 결과, `다음 단계`면 남은 조건의 `짝 보류`.
  * 2 그 밖의 증빙은 효력 있는 `이 줄 아님`의 줄과, `닫힘`으로 다른 증빙에 선 줄을 후보에서 빼고 대사한다.
- *   경쟁에서 진 기록(`lostTo`)은 이긴 증빙의 가장 최근 기록이 그 줄의 `같은 지출`인 동안만 효력이 있다.
+ *   경쟁에서 진 기록(`lostTo`)은 이긴 증빙의 가장 최근 기록이 그 줄의 `같은 지출`·`닫힘`인 동안만 효력이 있다.
  * 3 `claims`는 좁힌 후보로 모은다. `닫힘`으로 선 증빙은 그 줄에만 든다 — 한 카드 줄에 짝이 둘 서지 않고, 선 증빙이 다른 줄의 경쟁을 만들지 않는다.
+ *   확인이 남은 증빙(`다음 단계`)은 2처럼 좁힌 후보를 모두 노린다 — 사슬이 끝나면 후보와 `claims`는 줄기만 하므로, 그동안 나온 결과는 사슬이 어떻게 끝나도 그대로다(§7.4).
+ * `coveredThrough`는 증빙마다 그 후보 풀의 수집 기준일이다 — 총무 카드 줄로 이어진 묶음에서는 출장자마다 다르다.
  */
 export function reconcileGroup(
   group: MatchGroup,
   entries: readonly PairCheckEntry[],
-  coveredThrough: string,
+  coveredThrough: ReadonlyMap<string, string>,
 ): Map<string, MatchOutcome> {
   const latest = new Map<string, PairCheckEntry>();
   for (const entry of entries) {
@@ -2603,10 +2628,6 @@ export function reconcileGroup(
     }
   }
 
-  const affirmedLine = (evidenceId: string): string | null => {
-    const decision = latest.get(evidenceId)?.decision;
-    return decision?.kind === "같은 지출" ? decision.cardLineId : null;
-  };
   const closedLine = (evidenceId: string): string | null => {
     const decision = latest.get(evidenceId)?.decision;
     return decision?.kind === "같은 지출" && decision.result.kind === "닫힘" ? decision.cardLineId : null;
@@ -2619,7 +2640,7 @@ export function reconcileGroup(
         continue;
       }
       const { lostTo } = decision;
-      if (lostTo !== null && decision.cardLineIds.some((id) => affirmedLine(lostTo) !== id)) {
+      if (lostTo !== null && decision.cardLineIds.some((id) => closedLine(lostTo) !== id)) {
         continue;
       }
       for (const id of decision.cardLineIds) {
@@ -2671,9 +2692,14 @@ export function reconcileGroup(
       continue;
     }
 
+    const covered = coveredThrough.get(evidence.evidenceId);
+    if (covered === undefined) {
+      throw new Error(`증빙 ${evidence.evidenceId}의 수집 기준일이 없다`);
+    }
+
     outcomes.set(
       evidence.evidenceId,
-      decideMatch(evidence, narrowed.get(evidence.evidenceId) ?? [], claims, coveredThrough),
+      decideMatch(evidence, narrowed.get(evidence.evidenceId) ?? [], claims, covered),
     );
   }
 
@@ -2707,6 +2733,7 @@ function pairCheck(
   evidenceId: string,
   reconciliation: MatchOutcome,
   holders: ReadonlyMap<string, CardHolder>,
+  groupRevision: GroupRevision,
   now: string,
 ): PairCheck | null {
   switch (reconciliation.kind) {
@@ -2716,6 +2743,7 @@ function pairCheck(
         cardLineIds: reconciliation.cardLineIds,
         actor: nonContradictionRole(reconciliation.cardLineIds, holders),
         blockedBy: [],
+        groupRevision,
         openedAt: now,
       };
     case "짝 보류": {
@@ -2729,6 +2757,7 @@ function pairCheck(
         cardLineIds,
         actor: nonContradictionFirst ? nonContradictionRole(cardLineIds, holders) : "재무합의자",
         blockedBy: reconciliation.blockedBy,
+        groupRevision,
         openedAt: now,
       };
     }
@@ -2746,8 +2775,10 @@ function pairCheck(
  *    경쟁·대조 불가·`후보 복수`는 기안자(보이는 카드 줄이 모두 총무팀 관리 카드면 총무 예약 담당)의, 값 모순은 재무합의자의 짝 확인이다.
  *    그 단계가 닫히면 대사를 다시 돌리고 이 함수를 다시 부른다.
  *    `명세 대기`는 보내지 않는다 — 이용 내역이 들어오면 대사를 다시 돌리고 이 함수를 다시 부른다(#26).
+ *    다만 날짜 후보가 여럿이면 수기 확정을 먼저 보낸다 — 늦은 날짜 후보가 기다림의 원인일 수 있다(#26).
  *    재무합의자가 없는 정산의 값 모순도 보내지 않는다 — 결재권자의 승인이 `UNDEFINED_BY_26`로 막힌다(#26).
  *    같은 경쟁 묶음에 `명세 대기`가 있으면 짝 확인을 열지 않는다 — 경쟁 후보가 더 올 수 있다(#26).
+ *    같은 묶음에서 다른 증빙의 확인 사슬이 진행 중이면 짝 확인을 열지 않는다 — 사슬은 묶음마다 하나씩이다(#26, §7.4).
  * ③ 시스템 연동이 같은 사실을 갖고 있으면 보내지 않는다.
  * ④ 그 경로에서 판정 입력이 아닌 필드는 보내지 않는다.
  */
@@ -2763,6 +2794,10 @@ export function routeToHuman(
     hasFinanceConsenter: boolean;
     /** 이 증빙의 경쟁 묶음(`MatchGroup`)에 `명세 대기`인 증빙이 있는가. */
     groupAwaitingStatement: boolean;
+    /** 그 묶음에서 확인 사슬이 진행 중인 증빙(가장 최근 효력 있는 기록이 `같은 지출`·`다음 단계`). 없으면 null. */
+    groupPairInProgress: string | null;
+    /** 그 묶음의 지금 판. 여는 짝 확인에 싣는다. */
+    groupRevision: GroupRevision;
     now: string;
   },
 ): HumanRouting {
@@ -2776,7 +2811,9 @@ export function routeToHuman(
     };
   }
 
-  if (reconciliation.kind === "명세 대기") {
+  const dateAmbiguous = states.some((state) => state.field === "issueDate" && state.candidates.length > 1);
+
+  if (reconciliation.kind === "명세 대기" && !dateAmbiguous) {
     return {
       kind: "보내지 않는다",
       reason: "카드 이용 내역이 증빙 날짜를 아직 덮지 않았다 — 들어오면 대사를 다시 돌린다",
@@ -2809,8 +2846,17 @@ export function routeToHuman(
     };
   }
 
+  const rivalChain = options.groupPairInProgress !== null && options.groupPairInProgress !== evidenceId;
+
+  if (unresolved.length === 0 && pendingPair && rivalChain) {
+    return {
+      kind: "보내지 않는다",
+      reason: "같은 경쟁 묶음에서 다른 증빙의 확인 사슬이 진행 중이다 — 사슬이 끝나면 대사를 다시 돌린다",
+    };
+  }
+
   if (unresolved.length === 0) {
-    const check = pairCheck(evidenceId, reconciliation, options.holders, options.now);
+    const check = pairCheck(evidenceId, reconciliation, options.holders, options.groupRevision, options.now);
 
     if (check !== null && check.actor === "재무합의자" && !options.hasFinanceConsenter) {
       return {
