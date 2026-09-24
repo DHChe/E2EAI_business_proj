@@ -192,15 +192,15 @@ D11은 "고른 ID가 정답 목록 안에 있는지"만 적었다. 그래서 목
 ## 7. 후속
 
 1. **원문 보존.** → 완료(2026-09-24). #11 세 레인 브랜치를 origin에 push했다. #10 레인 커밋 셋(`97d1dd9`·`46e5540`·`a30c5f7`)은 가리키는 브랜치가 없어 git이 청소할 때 지워질 수 있었다. 그래서 원래 이름(`DHChe/frontier-10-arch-{codex,grok,claude}`)으로 브랜치를 다시 만들어 함께 push했다. 같은 이유로 조사 문서와 이슈가 가리키던 원문 브랜치 15개도 되살려 push했다. #8 프로토타입 둘(`frontier-8-proto-{codex,claude}`, codex는 통합안 `ad7dcfa`가 끝), #9 레인 셋(`frontier-9-stack-*`), #17 레인 셋(`frontier-17-states-*`), #10·#17 검수 넷(`frontier-{10,17}-review-{codex,grok}`)이다. 이름이 문서에 없던 재확인 커밋 셋은 `frontier-10-recheck-codex`·`frontier-17-recheck-codex`·`frontier-17-recheck2-codex`로 붙였다.
-2. **작성.** `docs/EVAL.md`와 ADR 0032~를 쓴다. 함께 고칠 문서:
+2. **작성.** → 완료(2026-09-25, `706ca9e`). `docs/EVAL.md`와 ADR 0032~0036을 썼다. 함께 고친 문서:
    - PRD S3·S10·S4·S12
    - ADR-0016 보완 표시(C7)
    - ADR-0020 결정 1 보완 표시(A4)
    - `docs/ARCHITECTURE.md:204`의 `span` 삭제(F14), `:589`·`:594-595`의 #11 행
    - `AGENTS.md` 인용 규칙 한 줄(D14)
    - `CONTEXT.md` 용어
-3. **독립 검수.** 저자와 다른 모델이 검수하고, 한 레인만 찾은 것(§4)을 교차 검증한다.
+3. **독립 검수.** → 완료(2026-09-25). codex·grok이 따로 검수하고 §4를 교차 검증했다(둘 다 F1~F15 중 자기 레인 밖 항목을 확인·부분으로 판정, 반박 0). 결함은 codex 6·grok 3이었다. 반영 뒤 codex가 세 번 다시 확인했다. 새 결함은 2 → 2 → 1로 줄었고, 마지막 1건은 검수자의 고칠 안 그대로 반영했다(`7d3fa24`·`99b8c16`·`9986760`·`f73594f`). 원문은 `DHChe/frontier-11-review-{codex,grok}`(`431c991`·`5f235de`), `DHChe/frontier-11-recheck-codex`(`a2bcf23`), `-recheck2-codex`(`7991f2a`), `-recheck3-codex`(`94ce074`) 브랜치의 `docs/research/`에 있다.
 4. **닫기.** develop에 병합하고 map #1을 갱신한다. #11 코멘트의 낡은 포인터(F6)는 코멘트로 정정한다.
 5. **다른 티켓으로 넘길 것.**
-   - 하네스: 실행기가 리뷰어 합의값을 정답 파일로 옮기는 기능(F2, U5에 따라).
+   - 하네스: 실행기가 리뷰어 합의값을 정답 파일로 옮기는 기능(F2, U5에 따라). → #34.
    - #1: 실물 30장의 개인정보 처리(D4). 합성 데이터 범위의 소관 문구.
