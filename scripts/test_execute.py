@@ -1355,6 +1355,54 @@ sys.exit(scenario.get('exit', 0))
         self.assertIsNone(resumed.resume)
         self.assertTrue(any('수동 복원 필요' in ' '.join(args) for args in self.calls('gh')))
 
+    def test_crash_env_directory_compat_with_marker_version(self):
+        for env_dirs in (False, True):
+            with self.subTest(env_dirs=env_dirs):
+                ex, _, _ = self.fixture()
+                ex.prepare()
+                if not env_dirs:
+                    (ex.root / '.env.d').mkdir()  # Existed before an older executor's marker.
+                marker = {'unit': 'step0', 'k': 1, 'stage': 'running', 'pre_sha': ex.head(),
+                          'feat_sha': None, 'pgid': None, 'allowed': ['src/'],
+                          'ignored_before': sorted(ex.ignored_paths()),
+                          'env_before': {k: v for k, v in ex.env_fingerprint().items() if v != 'dir'}}
+                if env_dirs:
+                    marker['env_dirs'] = True
+                ex.save_marker(marker)
+                if env_dirs:
+                    (ex.root / '.env.d').mkdir()  # Created during the crash.
+                resumed = self.make_executor(ex.root)
+                with mock.patch.object(resumed, '_kill_stale_codex'):
+                    if env_dirs:
+                        self.assert_exit(1, resumed.recover)
+                        self.assertEqual(resumed.load_index()['steps'][0]['status'], 'error')
+                    else:
+                        resumed.recover()
+                        self.assertEqual(resumed.resume, {'unit': 'step0', 'next_k': 2})
+
+    def test_attempt_marker_records_env_dirs(self):
+        ex, _, _ = self.fixture()
+        seen = []
+        original = ex.run_codex
+        def session(*args, **kw):
+            child = original(*args, **kw)
+            seen.append(execute.read_json(ex.marker_path))
+            return child
+        with mock.patch.object(ex, 'run_codex', side_effect=session):
+            self.attempt(ex)
+        self.assertIs(seen[0]['env_dirs'], True)
+
+    def test_env_creation_reasons_explain_ownership(self):
+        ex, _, _ = self.fixture([{'files': {'.env.local': 'API_KEY=guess'}}])
+        out = self.attempt(ex)
+        self.assertIn("새 파일 제거 ['.env.local']", out.reason)
+        self.assertIn('.env.example만 만든다', out.reason)
+        self.assertFalse((ex.root / '.env.local').exists())
+        ex, _, _ = self.fixture()
+        out = self.attempt(ex, ['mkdir .env'])
+        self.assertIn("수동 복원 필요 (AC 뒤) ['.env']", out.reason)
+        self.assertIn('.venv', out.reason)
+
     def test_env_deletion_and_creation_restore_original_set(self):
         ex, counter, _ = self.fixture([{'files': {'.env.new': 'new secret'}}])
         (ex.root / '.env').write_bytes(b'original secret')

@@ -364,7 +364,12 @@ class Executor:
         except (OSError, ValueError, HarnessExit) as exc:
             raise HarnessExit(EXIT_ERROR, f"복구 거부 {self.marker_path}: {exc}") from exc
         self.marker = marker
-        env_changed = "env_before" in marker and self.env_fingerprint() != marker["env_before"]
+        env_changed = False
+        if "env_before" in marker:
+            env_now = self.env_fingerprint()
+            if "env_dirs" not in marker:  # Older markers never recorded .env directories.
+                env_now = {name: value for name, value in env_now.items() if value != "dir"}
+            env_changed = env_now != marker["env_before"]
         if "ignored_before" in marker:
             self._ignored_baselines[marker["unit"]] = set(marker["ignored_before"])
         if marker["stage"] == "feat_done" and not env_changed:
@@ -602,10 +607,17 @@ class Executor:
                    if before.get(name) != after.get(name)}
         self.restore_env(saved)
         suffix = f" ({context})" if context else ""
-        if any("dir" in (before.get(name), after.get(name)) for name in changed):
-            return f"④ .env 디렉토리 변경: 수동 복원 필요{suffix}"
+        dirs = sorted(name for name in changed if "dir" in (before.get(name), after.get(name)))
+        if dirs:
+            return (f"④ .env 디렉토리 변경: 수동 복원 필요{suffix} {dirs}. .env·.env.*는 사람이 두는"
+                    " 비밀 파일 자리다(가상환경은 .venv). 디렉토리를 확인·정리하고, step error면"
+                    " pending으로 되돌린 뒤 재실행하라")
         if any(saved.get(name) and saved[name][0] == "link" for name in changed):
             return f"④ .env 링크 대상 변경: 수동 복원 필요{suffix}"
+        created = sorted(name for name in changed if name not in before)
+        if created:
+            return (f"{regular_reason} (새 파일 제거 {created}. 실제 값 파일은 사람이 만들고"
+                    " AI(세션·AC)는 .env.example만 만든다)")
         return regular_reason
 
     def git_env_reason(self, git_reason: str, before: dict[str, str], saved: dict,
@@ -721,7 +733,7 @@ class Executor:
             self.save_marker({"unit": unit, "k": k, "pre_sha": pre_sha,
                               "stage": "running", "feat_sha": None, "pgid": None,
                               "ignored_before": sorted(ignored_before), "allowed": list(allowed),
-                              "env_before": env_before})
+                              "env_before": env_before, "env_dirs": True})
             spawned = False
 
             def on_spawn(pgid: int) -> None:
