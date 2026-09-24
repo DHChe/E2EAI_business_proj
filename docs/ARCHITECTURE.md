@@ -409,7 +409,7 @@ stateDiagram-v2
 ```
 
 이름은 `CONTEXT.md:303`, `:310`, `:317`과 `docs/adr/0013-postgres-object-storage-isolated-by-world-id.md:38`에 있던 것이다. 두 축은 가드로 이어진다. 정산 상신은 판정 입력 필드가 모두 닫혀야 하고(`PRC-11-2`), 상신 뒤 짝 보류는 현재 단계의 승인·동의만 막는다.
-`명세 대기`는 이용 내역이 그 날짜를 아직 덮지 않은 중간 상태이고 사람에게 가지 않는다. 상신 뒤에는 짝 보류와 같은 가드를 따른다. 대사는 입력(필드·카드 줄 revision, 이용 내역의 수집 기준일)이 바뀔 때만 다시 돌고, 이의 플래그만으로는 돌지 않는다. 사람의 짝 확인은 그것이 기댄 대사 입력 — 이 증빙·후보 줄·경쟁한 증빙의 revision이고 수집 기준일은 빼고 — 이 그대로인 동안 효력이 있다. 재심의 "바뀐 카드"는 원 승인이 읽은 카드와 지금 카드의 차이이고 재심 전에 대사가 바꾼 것도 든다 — 그런 건의 재심은 아래 재심 행에서 바뀐 카드가 있는 쪽을 따른다([ADR-0031](adr/0031-reconciliation-pending-states-and-input-driven-rerun.md) 결정 3–5).
+`명세 대기`는 이용 내역이 그 날짜를 아직 덮지 않은 중간 상태이고 사람에게 가지 않는다. 상신 뒤에는 짝 보류와 같은 가드를 따른다. 대사는 입력(필드·카드 줄 revision, 이용 내역의 수집 기준일)이 바뀔 때만 다시 돌고, 이의 플래그만으로는 돌지 않는다. 사람의 짝 확인은 그 경쟁 묶음(좁히기 전 후보로 이어진 증빙·카드 줄)의 입력이 결정 뒤 바뀌지 않은 동안 효력이 있고, 바뀌면 묶음의 결정이 함께 효력을 잃는다. 수집 기준일의 전진은 결정을 무르지 않는다. 재심의 "바뀐 카드"는 원 승인이 읽은 카드와 지금 카드의 차이이고 재심 전에 대사가 바꾼 것도 든다 — 그런 건의 재심은 아래 재심 행에서 바뀐 카드가 있는 쪽을 따른다([ADR-0031](adr/0031-reconciliation-pending-states-and-input-driven-rerun.md) 결정 3–5).
 값 변경이 문서를 되돌리는지는 그 변경을 수락하는 system 전이가 정한다(아래 표의 "변경 수락" 행).
 
 **전이 표.** 문서 축의 전이 전부다. 모든 명령은 기대 revision을 싣고, 어긋나면 `STALE_REVISION`이다(§5). 표에 없는 명령 — 자기 결재, 협조자·총무·재무팀·내부감사·기안자의 반려, `기안`·`반려`·`철회`에서의 이의 플래그 같은 것 — 은 §5의 권한·상태 거부다.
@@ -465,7 +465,7 @@ stateDiagram-v2
 | --- | --- | --- | --- | --- |
 | 기안 초안 채택·상신 | 기안자 | 판독기의 초안을 고쳐 상신한다 | 문서 상태 `기안`. 초안은 판정 입력이 아니다 | U6 |
 | 수기 확정 | 기안자 | `추출 불확실`을 백지 입력으로 닫는다 | 필드가 열려 있고 정산 상신이 막힌다 | `CONTEXT.md:315-317`, `PRC-11-2` |
-| 짝 확인(경쟁·대조 불가·후보 복수) | 기안자. 보인 카드 줄이 모두 총무팀 관리 카드면 배정된 총무 예약 담당 `[설계 가정]` | 같은 지출인지, 어느 줄인지 | 대사 상태 `짝 보류`·`후보 복수`(영속). 판단은 기댄 대사 입력이 그대로인 동안 효력이 있다. 짝이 서지 않은 총무 카드 줄은 어느 정산에도 귀속하지 않고 총무 예약 담당의 목록에 드러난다 | `CONTEXT.md:310`, `docs/adr/0013-postgres-object-storage-isolated-by-world-id.md:38`, [ADR-0031](adr/0031-reconciliation-pending-states-and-input-driven-rerun.md) 결정 3·7 |
+| 짝 확인(경쟁·대조 불가·후보 복수) | 기안자. 보인 카드 줄이 모두 총무팀 관리 카드면 배정된 총무 예약 담당 `[설계 가정]` | 같은 지출인지, 어느 줄인지 | 대사 상태 `짝 보류`·`후보 복수`(영속). 판단은 그 경쟁 묶음의 입력이 그대로인 동안 효력이 있다. 짝이 서지 않은 총무 카드 줄은 어느 정산에도 귀속하지 않고 총무 예약 담당의 목록에 드러난다 | `CONTEXT.md:310`, `docs/adr/0013-postgres-object-storage-isolated-by-world-id.md:38`, [ADR-0031](adr/0031-reconciliation-pending-states-and-input-driven-rerun.md) 결정 3·7 |
 | 짝 확인(값 모순) | 재무합의자 | 같은 거래인지. 같은 거래로 확인하면 사유를 남긴다 | 현재 단계의 승인·동의만 막는다(C3). 확인 담당자는 재무합의자이며 반려·보류는 받는다. 재무합의자 0명 정산이면 `UNDEFINED_BY_26`(#20) | `CONTEXT.md:310`, 비교 문서 `:193`, [ADR-0031](adr/0031-reconciliation-pending-states-and-input-driven-rerun.md) 결정 2·8 |
 | 재량 판단 기록 | 조항의 `decided_by` | 판단과 사유 | `gate=on` — 승인·동의만 막는다 | `docs/adr/0012-transition-audit-provenance-in-one-transaction.md:46` |
 | 결재 | 결재권자 / 재무합의자 | 승인·반려·보류 / 동의·반려·보류. 보류 중에도 답 없이 결정한다 | 문서 상태와 현재 단계 | `docs/adr/0003-approver-actions-three.md:23`, [ADR-0026](adr/0026-hold-answer-deadline-time-changes-no-state.md) 결정 5 |
@@ -527,7 +527,7 @@ stateDiagram-v2
   같은 키·같은 해시는 무동작이고, 같은 키·다른 해시는 정정 revision이 없으면 충돌이다. codex의 "결손 행이 있는 batch는 staging 상태로 남긴다"는 C6으로 받지 않는다.
 - **조직 스냅샷을 가져오지 못하면 기안을 막는다.** 오래된 스냅샷으로 결재선을 계산하지 않는다(claude §4.4.3) `[설계 가정]`.
 
-**§7.5 요구 칸 대조.** `docs/design/receipt-pipeline.md` §7.5(`:2363-2371`)의 일곱 칸은 모두 충족하고, `CardLine`(`:1817-1830`)이 요구하는 둘을 더 준다(ADR-0021 결정 8). `카드 사용자`와 수집 기준일은 #26이 더했다([ADR-0031](adr/0031-reconciliation-pending-states-and-input-driven-rerun.md) 결정 4·7).
+**§7.5 요구 칸 대조.** `docs/design/receipt-pipeline.md` §7.5(`:2369-2377`)의 일곱 칸은 모두 충족하고, `CardLine`(`:1817-1830`)이 요구하는 둘을 더 준다(ADR-0021 결정 8). `카드 사용자`와 수집 기준일은 #26이 더했다([ADR-0031](adr/0031-reconciliation-pending-states-and-input-driven-rerun.md) 결정 4·7).
 
 | 칸 | `CardLine` | 이용 내역 | 청구 명세 | 비고 |
 | --- | --- | --- | --- | --- |
@@ -547,7 +547,7 @@ stateDiagram-v2
 표는 claude §4.5를 옮겼다. 파일 칸의 함정은 `[설계 가정]`이다.
 
 일별 이용 내역에는 청구 원화가 없다. 그래서 `CardLine`은 이용 내역의 칸만 갖는 대사 입력이고, 청구 원화와 할부 회차는 월 청구 명세가 뒤에 붙이는 `CardBilling`이다(`docs/design/receipt-pipeline.md:1836-1842`, [ADR-0031](adr/0031-reconciliation-pending-states-and-input-driven-rerun.md) 결정 4).
-청구 명세의 줄은 이용 내역의 줄에 잇고, 대사 입력 칸이 다르면 카드 줄의 새 revision으로 받아 대사가 다시 돈다(`:2374-2377`) `[설계 가정]`.
+청구 명세의 줄은 이용 내역의 줄에 잇고, 대사 입력 칸이 다르면 카드 줄의 새 revision으로 받아 대사가 다시 돈다(`:2380-2383`) `[설계 가정]`.
 
 ## 10. `job`과 실패 격리
 
