@@ -63,7 +63,7 @@
   그러면 이 결정은 틀렸다. **해시 정규화가 이 ADR의 약한 고리다.**
   [ADR-0009](0009-evidence-is-crop-plus-original-toggle.md)의 pre-resize(`docs/adr/0009-evidence-is-crop-plus-original-toggle.md:27`)가 만든 이미지가 결정적이어야 한다 `[유도]`.
 - 재생한 응답은 **기록 당시의 모델 응답**이다. 재생이 통과한다고 지금 모델의 품질이 입증되지는 않는다. 모델 선택과 품질 검증은 #11이다.
-- 시드를 만들 때(`record-missing`)는 한 번 키가 필요하다. 그 기록은 [ADR-0013](0013-postgres-object-storage-isolated-by-world-id.md)의 PostgreSQL에 두고, 이미지는 sha256으로 객체 저장소를 가리킨다. **보완(#11, 2026-09-25)**: `record-missing`은 사용자가 승인한 실측에서만 쓴다. 하네스는 API를 부르지 않는다([ADR-0035](0035-live-model-runs-only-on-user-approval.md) 결정 1·5).
+- 시드를 만들 때(`record-missing`)는 한 번 키가 필요하다. 그 기록은 [ADR-0013](0013-postgres-object-storage-isolated-by-world-id.md)의 PostgreSQL에 두고, 이미지는 sha256으로 객체 저장소를 가리킨다. **보완(#11, 2026-09-25)**: `record-missing`은 사용자가 승인한 실측에서만 쓴다. 하네스는 API를 부르지 않는다([ADR-0035](0035-live-model-runs-only-on-user-approval.md) 결정 1·5). **보완(#32, 2026-09-25)**: 하네스 시험은 저장소 `fixtures/replay/`의 요청 해시별 JSON 파일에서 기록을 적재한다. 파일은 승인 실측만 만들고 step 변경 허용 경로에 넣지 않는다([ADR-0037](0037-harness-ac-in-docker-copy-with-compose-postgres.md) 결정 6).
 - 재생에서 나온 판독값의 출처 표기는 이 ADR이 새로 정하지 않는다. 출처는 3값뿐이고([ADR-0012](0012-transition-audit-provenance-in-one-transaction.md)), 재생 여부는 run 메타데이터가 가른다(결정 5).
 - 감사 이벤트가 `model_call`을 참조하면(ADR-0012의 `model_call_id` 예시) 한 판독값에서 그 요청·응답까지 거슬러 갈 수 있다.
 - 기존 결정과의 관계.
