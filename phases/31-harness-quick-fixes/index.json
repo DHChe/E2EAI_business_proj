@@ -34,7 +34,9 @@
     {
       "step": 4,
       "name": "harness-docs-sync",
-      "status": "pending"
+      "status": "completed",
+      "summary": "PRD 5행의 낡은 포인터를 절 이름으로 고치고 harness 183행의 phase index 검사, 276행의 리뷰어 .env 복원, 285행의 리뷰 라운드 연속성을 명문화함",
+      "completed_at": "2026-09-25T10:18:13+09:00"
     }
   ],
   "created_at": "2026-09-25T09:45:53+09:00",
