@@ -20,7 +20,9 @@
     {
       "step": 2,
       "name": "review-round-continuity",
-      "status": "pending"
+      "status": "completed",
+      "summary": "review_gate 일반 진입을 review.round+1로 변경; test_unverifiable_rerun_continues_round 추가 및 test_fix2_completed_crash_resume_has_no_new_budget 수정",
+      "completed_at": "2026-09-25T10:08:45+09:00"
     },
     {
       "step": 3,
