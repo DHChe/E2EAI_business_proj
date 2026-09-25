@@ -27,7 +27,9 @@
     {
       "step": 3,
       "name": "ac-tree-flag",
-      "status": "pending"
+      "status": "completed",
+      "summary": "run_ac를 (사유, mutated) 반환으로 바꾸고 attempt_unit·run_baseline 호출부를 갱신했으며 test_baseline_seventh_in_output_keeps_tree를 추가했다",
+      "completed_at": "2026-09-25T10:16:12+09:00"
     },
     {
       "step": 4,
