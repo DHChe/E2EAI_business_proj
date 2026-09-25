@@ -6,7 +6,9 @@
     {
       "step": 0,
       "name": "phase-index-check",
-      "status": "pending"
+      "status": "completed",
+      "summary": "Executor.load_step_specs에 phase index 구조·번호·이름 중복·phase/issue 일치 검사를 추가하고 test_phase_index_rejects_empty_steps와 test_phase_index_rejects_inconsistent_fields를 추가함",
+      "completed_at": "2026-09-25T09:53:38+09:00"
     },
     {
       "step": 1,
