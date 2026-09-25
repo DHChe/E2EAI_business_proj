@@ -1,0 +1,32 @@
+{
+  "project": "E2EAI_business_proj",
+  "phase": "31-harness-quick-fixes",
+  "issue": 31,
+  "steps": [
+    {
+      "step": 0,
+      "name": "phase-index-check",
+      "status": "pending"
+    },
+    {
+      "step": 1,
+      "name": "reviewer-env-restore",
+      "status": "pending"
+    },
+    {
+      "step": 2,
+      "name": "review-round-continuity",
+      "status": "pending"
+    },
+    {
+      "step": 3,
+      "name": "ac-tree-flag",
+      "status": "pending"
+    },
+    {
+      "step": 4,
+      "name": "harness-docs-sync",
+      "status": "pending"
+    }
+  ]
+}
