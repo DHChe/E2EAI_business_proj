@@ -2450,6 +2450,26 @@ if mode == 'exit':
         self.assertTrue(ex.git('for-each-ref', '--format=%(refname)',
                                f'refs/harness/{PHASE}/review-r1-claude/').stdout.strip())
 
+    def test_reviewer_env_restored_new_file_kept(self):
+        ex = self.fixture()
+        (ex.root / '.env').write_bytes(b'original')
+        (ex.root / '.env.old').write_bytes(b'old')
+        self.fake_bin('claude', """
+Path('.env').write_bytes(b'changed')
+Path('.env.old').unlink()
+Path('.env.local').write_bytes(b'new')
+print(json.dumps({'result': 'Review body\\nREVIEW_RESULT: passed'}))
+""")
+
+        self.assertEqual(ex.review_gate(ex.load_step_specs()), 3)
+        self.assertEqual((ex.root / '.env').read_bytes(), b'original')
+        self.assertEqual((ex.root / '.env.old').read_bytes(), b'old')
+        self.assertEqual((ex.root / '.env.local').read_bytes(), b'new')
+        self.assertEqual(ex.load_index()['review']['status'], 'unverifiable')
+        report = (ex.run_dir / 'review-r1-claude.txt').read_text(encoding='utf-8')
+        self.assertIn('.env.local', report)
+        self.assertNotIn('수동 확인', report)
+
 
 class FixLoopTests(HarnessTestCase):
     def fixture(self, reviews=None, blocked=None, push=False):

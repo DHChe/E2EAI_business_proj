@@ -594,28 +594,34 @@ class Executor:
                 and p.name != ".env.example" and os.path.lexists(p)
                 and (p.is_symlink() or not p.is_dir())}
 
-    def restore_env(self, saved: dict) -> None:
-        for name in self.capture_env().keys() | saved.keys():
+    def restore_env(self, saved: dict, *, keep_new: bool = False) -> None:
+        names = saved.keys() if keep_new else self.capture_env().keys() | saved.keys()
+        for name in names:
             self.restore_path(self.root / name, saved.get(name))
 
     def restore_env_change(self, before: dict[str, str], saved: dict,
-                           regular_reason: str, context: str = "") -> str | None:
+                           regular_reason: str, context: str = "", *,
+                           keep_new: bool = False) -> str | None:
         after = self.env_fingerprint()
         if after == before:
             return None
         changed = {name for name in before.keys() | after.keys()
                    if before.get(name) != after.get(name)}
-        self.restore_env(saved)
+        self.restore_env(saved, keep_new=keep_new)
         suffix = f" ({context})" if context else ""
+        created = sorted(name for name in changed if name not in before)
+        kept_new = (f" (리뷰어가 만든 새 파일은 지우지 않았다: 사람이 확인 {created})"
+                    if keep_new and created else "")
         dirs = sorted(name for name in changed if "dir" in (before.get(name), after.get(name)))
         if dirs:
             return (f"④ .env 디렉토리 변경: 수동 복원 필요{suffix} {dirs}. .env·.env.*는 사람이 두는"
                     " 비밀 파일 자리다(가상환경은 .venv). 디렉토리를 확인·정리하고, step error면"
-                    " pending으로 되돌린 뒤 재실행하라")
+                    f" pending으로 되돌린 뒤 재실행하라{kept_new}")
         if any(saved.get(name) and saved[name][0] == "link" for name in changed):
-            return f"④ .env 링크 대상 변경: 수동 복원 필요{suffix}"
-        created = sorted(name for name in changed if name not in before)
+            return f"④ .env 링크 대상 변경: 수동 복원 필요{suffix}{kept_new}"
         if created:
+            if keep_new:
+                return f"{regular_reason}{kept_new}"
             return (f"{regular_reason} (새 파일 제거 {created}. 실제 값 파일은 사람이 만들고"
                     " AI(세션·AC)는 .env.example만 만든다)")
         return regular_reason
@@ -1296,6 +1302,7 @@ class Executor:
                     or self.head() != end_sha or self.git("status", "--porcelain").stdout):
                 raise HarnessExit(EXIT_ERROR, "리뷰 실행 전 브랜치/HEAD/작업 트리 불일치")
             fingerprint = self.env_fingerprint()
+            env_saved = self.capture_env()
             git_before = self.capture_git_guard()
             try:
                 self._guard_pending = git_before
@@ -1319,16 +1326,23 @@ class Executor:
             if self.git_guard_failed(git_before):
                 terminal = True
                 reasons.append("Git 설정 변경 감지·복원")
+            env_changed = self.env_fingerprint() != fingerprint
+            env_reason = self.restore_env_change(
+                fingerprint, env_saved, "④ 리뷰어 .env 변경 감지·복원", "리뷰어",
+                keep_new=True)
+            if env_reason:
+                terminal = True
+                reasons.append(env_reason)
             branch = self.git("symbolic-ref", "-q", "HEAD", check=False)
             if branch.returncode or branch.stdout.decode().strip() != f"refs/heads/{self.branch}":
                 ref = self.snapshot(unit, 1, end_sha)
                 branch_error = f"리뷰어가 브랜치를 바꿨다: {ref}"
                 reasons.append(branch_error)
             elif (self.head() != end_sha or bool(self.git("status", "--porcelain").stdout)
-                  or self.env_fingerprint() != fingerprint):
+                  or env_changed):
                 ref = self.rollback(unit, 1, end_sha)
                 terminal = True
-                reasons.append(f"리뷰어가 작업 트리 또는 .env를 바꿔 되돌림: {ref} (.env는 수동 확인)")
+                reasons.append(f"리뷰어가 작업 트리 또는 .env를 바꿔 되돌림: {ref}")
             if child.timed_out:
                 reasons.append("리뷰어 timeout")
             if child.returncode != 0:
