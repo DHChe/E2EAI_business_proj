@@ -13,7 +13,9 @@
     {
       "step": 1,
       "name": "reviewer-env-restore",
-      "status": "pending"
+      "status": "completed",
+      "summary": "restore_env(keep_new)·restore_env_change(keep_new)·run_reviewer 복원 적용 및 test_reviewer_env_restored_new_file_kept 추가",
+      "completed_at": "2026-09-25T10:00:43+09:00"
     },
     {
       "step": 2,
