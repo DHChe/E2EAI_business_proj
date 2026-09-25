@@ -152,11 +152,22 @@ def rule_find_delete(tok, ctx):
     return None
 
 
+# 값을 다음 토큰으로 받는 git 전역 옵션. `--git-dir=.git`처럼 붙여 쓰면 한 토큰이다.
+# git 2.50·2.52에서 `git <옵션> <값> version`으로 실측했다. git이 옵션을 늘리면 다시 잰다.
+GIT_OPTS_WITH_VALUE = {"-C", "-c", "--git-dir", "--work-tree", "--namespace",
+                       "--config-env", "--attr-source", "--shallow-file"}
+
+
 def rule_git(tok, ctx):
     if base(tok[0]) != "git" or len(tok) < 2:
         return None
-    sub = next((t for t in tok[1:] if not t.startswith("-")), None)
-    short, long_, _ = split_flags(tok[2:])
+    i = 1
+    while i < len(tok) and tok[i].startswith("-"):
+        i += 2 if tok[i] in GIT_OPTS_WITH_VALUE else 1
+    if i >= len(tok):
+        return None
+    sub = tok[i]
+    short, long_, _ = split_flags(tok[i + 1:])
     if sub == "push":
         if "force" in long_ or "f" in short:
             if "force-with-lease" in long_:
