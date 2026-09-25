@@ -42,9 +42,10 @@
   "created_at": "2026-09-25T09:45:53+09:00",
   "base_commit": "7a905e98ecf7800c93770c870175671705535306",
   "review": {
-    "status": "pending",
-    "end_sha": null,
-    "round": 0,
+    "status": "passed",
+    "end_sha": "64e4d9c0f3077bf1cd7450adcdb1fb5d5e0e75a5",
+    "round": 1,
     "fixes": 0
-  }
+  },
+  "completed_at": "2026-09-25T10:42:56+09:00"
 }
