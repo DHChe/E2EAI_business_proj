@@ -1446,7 +1446,7 @@ class Executor:
         if (any(step["status"] != "completed" for step in data["steps"])
                 or data.get("review", {}).get("status") == "passed"):
             raise HarnessExit(EXIT_ERROR, "리뷰 관문 진입 조건 불일치")
-        round_no, fixes_used, start_k = 1, data["review"].get("fixes", 0), 1
+        round_no, fixes_used, start_k = data["review"]["round"] + 1, data["review"].get("fixes", 0), 1
         if self.resume and re.fullmatch(r"fix[1-9]\d*", self.resume["unit"]):
             round_no = max(int(self.resume["unit"][3:]), data["review"]["round"])
             start_k = self.resume["next_k"]
@@ -1454,8 +1454,6 @@ class Executor:
             if start_k > MAX_ATTEMPTS:
                 return self.finish_fix(round_no, AttemptOutcome("error", reason="재개 시 시도 소진"))
             # Reports in .run are untrusted. Re-review, preserving the fix/attempt budget.
-        elif data["review"]["status"] == "pending" or fixes_used:
-            round_no = data["review"]["round"] + 1
         while True:
             end_sha = self.head()
             failure = self.run_baseline(specs)

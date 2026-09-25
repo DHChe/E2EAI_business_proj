@@ -2546,6 +2546,20 @@ print(json.dumps({'result' if name == 'claude' else 'text': text}))
         self.assertIn('claude original report 3', comments)
         self.assertIn('grok original report 3', comments)
 
+    def test_unverifiable_rerun_continues_round(self):
+        ex = self.fixture({'claude': ['missing', 'missing', 'passed']})
+        self.assertEqual(ex.run(), 3)
+        self.assertEqual(ex.load_index()['review']['status'], 'unverifiable')
+        self.assertEqual(ex.load_index()['review']['round'], 1)
+        first_report = ex.run_dir / 'review-r1-claude.txt'
+        first_content = first_report.read_text(encoding='utf-8')
+        ex._lock_file.close()
+        rerun = self.make_executor(ex.root)
+        self.assertEqual(rerun.run(), 0)
+        self.assertEqual(rerun.load_index()['review']['round'], 2)
+        self.assertEqual(first_report.read_text(encoding='utf-8'), first_content)
+        self.assertTrue((rerun.run_dir / 'review-r2-claude.txt').exists())
+
     def test_fix_blocked_exits_2(self):
         ex = self.fixture({'claude': ['failed']}, blocked='fix1')
         self.assertEqual(ex.run(), 2)
@@ -2749,7 +2763,8 @@ print(json.dumps({'result' if name == 'claude' else 'text': text}))
         # A new invocation after finalized failure receives a fresh two-fix budget.
         resumed._lock_file.close()
         self.assertEqual(self.make_executor(ex.root).run(), 3)
-        self.assertEqual(self.units(), ['fix1', 'fix2'])
+        self.assertEqual(self.units(), ['fix4', 'fix5'])
+        self.assertEqual(resumed.load_index()['review']['round'], 6)
 
     def test_fix_resume_exhausted_and_missing_reports(self):
         for exhausted in (True, False):
