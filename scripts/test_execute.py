@@ -5,6 +5,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import execute
 
 import copy
+import io
 import json
 import os
 import shutil
@@ -416,6 +417,59 @@ class StepSpecTests(HarnessTestCase):
         with mock.patch.object(executor, "git", side_effect=AssertionError("reread")):
             self.assertIs(executor.load_step_specs(), specs)
         self.assertFalse((root / "ran.txt").exists())
+
+    def test_phase_index_rejects_empty_steps(self):
+        self.fake_bin("claude", "print(json.dumps({'result': 'REVIEW_RESULT: passed'}))\n")
+        self.fake_bin("grok", "print(json.dumps({'text': 'REVIEW_RESULT: passed'}))\n")
+        root = self.make_repo(steps=[], files={".claude/commands/review.md": "Review.\n"})
+        executor = self.make_executor(root)
+        with mock.patch("sys.stderr", new_callable=io.StringIO) as stderr:
+            self.assertEqual(executor.run(), 1)
+        self.assertIn("steps", stderr.getvalue())
+        for name in ("codex", "claude", "grok"):
+            self.assertEqual(self.calls(name), [])
+        self.assertNotEqual(executor.load_index()["review"]["status"], "passed")
+        self.assertNotEqual(executor.load_top_index()["phases"][0]["status"], "completed")
+
+    def test_phase_index_rejects_inconsistent_fields(self):
+        for case in ("step_gap", "step_starts_at_one", "duplicate_name",
+                     "phase", "issue", "missing_top_phase"):
+            with self.subTest(case=case):
+                source_steps = [{"name": "alpha"}, {"name": "beta"}]
+                if case == "step_starts_at_one":
+                    source_steps = source_steps[:1]
+                phase_index = {"project": "sample", "phase": PHASE, "issue": ISSUE,
+                               "steps": [{"step": n, "name": step["name"], "status": "pending"}
+                                         for n, step in enumerate(source_steps)]}
+                top_index = {"phases": [{"dir": PHASE, "issue": ISSUE,
+                                         "status": "pending"}]}
+                if case == "step_gap":
+                    phase_index["steps"][1]["step"] = 2
+                    message = "steps[1].step: 1이 필요하다; 실제 2"
+                elif case == "step_starts_at_one":
+                    phase_index["steps"][0]["step"] = 1
+                    message = "steps[0].step: 0이 필요하다; 실제 1"
+                elif case == "duplicate_name":
+                    phase_index["steps"][1]["name"] = "alpha"
+                    message = "중복 'alpha'"
+                elif case == "phase":
+                    phase_index["phase"] = "other-phase"
+                    message = "phase index phase: '7-sample'이 필요하다; 실제 'other-phase'"
+                elif case == "issue":
+                    phase_index["issue"] = 99
+                    message = "phase index issue 99와 같아야 한다; 실제 7"
+                else:
+                    top_index["phases"] = []
+                    message = "dir='7-sample' 항목이 정확히 하나 필요하다; 실제 0개"
+                root = self.make_repo(steps=source_steps, files={
+                    f"phases/{PHASE}/index.json": json.dumps(phase_index),
+                    "phases/index.json": json.dumps(top_index)})
+                executor = self.make_executor(root)
+                with mock.patch("sys.stderr", new_callable=io.StringIO) as stderr:
+                    self.assertEqual(executor.run(), 1)
+                self.assertIn(message, stderr.getvalue())
+                for name in ("codex", "claude", "grok"):
+                    self.assertEqual(self.calls(name), [])
 
     def test_invalid_spec_runs_nothing(self):
         root = self.make_repo(steps=[

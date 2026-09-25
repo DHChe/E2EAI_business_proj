@@ -980,7 +980,51 @@ class Executor:
             return self.specs
         specs = []
         errors = []
-        for step in self.load_index()["steps"]:
+        index = self.load_index()
+        top_index = self.load_top_index()
+        steps = index.get("steps")
+        steps_valid = isinstance(steps, list) and bool(steps)
+        if not steps_valid:
+            errors.append(f"phase index steps: 비어 있지 않은 list가 필요하다; 실제 {steps!r}")
+        else:
+            names = []
+            for position, step in enumerate(steps):
+                if not isinstance(step, dict):
+                    errors.append(f"phase index steps[{position}]: 객체가 필요하다; 실제 {step!r}")
+                    steps_valid = False
+                    continue
+                number = step.get("step")
+                if type(number) is not int or number != position:
+                    errors.append(f"phase index steps[{position}].step: {position}이 필요하다; "
+                                  f"실제 {number!r}")
+                    steps_valid = False
+                name = step.get("name")
+                if name is None:
+                    errors.append(f"phase index steps[{position}].name: 이름이 필요하다; "
+                                  f"실제 {name!r}")
+                    steps_valid = False
+                elif name in names:
+                    errors.append(f"phase index steps[{position}].name: 고유한 이름이 필요하다; "
+                                  f"중복 {name!r}")
+                    steps_valid = False
+                else:
+                    names.append(name)
+
+        if index.get("phase") != self.phase_dir:
+            errors.append(f"phase index phase: {self.phase_dir!r}이 필요하다; "
+                          f"실제 {index.get('phase')!r}")
+        phases = top_index.get("phases")
+        matches = ([phase for phase in phases if isinstance(phase, dict)
+                    and phase.get("dir") == self.phase_dir]
+                   if isinstance(phases, list) else [])
+        if len(matches) != 1:
+            errors.append(f"phases/index.json phases: dir={self.phase_dir!r} 항목이 정확히 "
+                          f"하나 필요하다; 실제 {len(matches)}개")
+        elif matches[0].get("issue") != index.get("issue"):
+            errors.append(f"phases/index.json issue: phase index issue "
+                          f"{index.get('issue')!r}와 같아야 한다; 실제 {matches[0].get('issue')!r}")
+
+        for step in steps if steps_valid else []:
             path = f"phases/{self.phase_dir}/step{step['step']}.md"
             result = self.git("show", f"HEAD:{path}", check=False)
             if result.returncode:
