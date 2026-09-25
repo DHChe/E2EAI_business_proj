@@ -83,7 +83,7 @@ SQLite를 쓰지 않으므로 사실 검증 2(SQLite WAL-reset 버그)는 기록
   3. 한 세계의 명령이나 조회가 다른 `world_id`의 행을 읽거나 바꾼 사례가 하나라도 나온다. 격리를 코드가 지키기로 한 이 선택의 대가가 현실이 된 것이다 `[유도]`.
   4. #11이 판이 여럿 동시에 살아야 하는 시나리오를 넣는다. 그러면 옛 판의 자리를 먼저 정한다(claude §7 ADR-G).
 - **후속.**
-  - 하네스 AC와 #11 평가가 PostgreSQL 인스턴스를 어떻게 얻는지(compose 서비스, 테스트용 임시 DB 등)는 구현 phase가 정한다. 세계 격리는 `world_id`다.
+  - 하네스 AC와 #11 평가가 PostgreSQL 인스턴스를 어떻게 얻는지(compose 서비스, 테스트용 임시 DB 등)는 구현 phase가 정한다. 세계 격리는 `world_id`다. **보완(#32, 2026-09-25)**: 하네스 AC는 인터넷 없는 Docker 컨테이너 안의 작업 트리 사본에서 돌고, 같은 내부 네트워크의 compose PostgreSQL에 붙는다([ADR-0037](0037-harness-ac-in-docker-copy-with-compose-postgres.md) 결정 1–3).
   - 대사 내부 상태의 타입 정리는 #18 후속이다(`82f02d8`의 `docs/design/receipt-pipeline.md:68`에는 있고 `ReconciliationOutcome` `:835-839`에는 없다, claude §11 모순 8). **보완(#26, 2026-09-23)**: #26에서 닫았다([ADR-0031](0031-reconciliation-pending-states-and-input-driven-rerun.md) 결정 3).
 - 기존 결정과의 관계.
   - [ADR-0005](0005-policy-source-of-truth.md) ④는 판을 "문서 단위와 조항 단위 둘 다"(`docs/adr/0005-policy-source-of-truth.md:81`)로 두고(조항 단위는 `:84`의 `TRV-15-2`), `PRC-2-2`는 한 출장에 사전승인 기안일의 판을 정산까지 적용한다(`docs/company/travel-procedure.md:33`).
