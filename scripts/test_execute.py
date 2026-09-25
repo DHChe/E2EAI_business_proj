@@ -1049,9 +1049,10 @@ sys.exit(scenario.get('exit', 0))
         startup = self.temp_dir / 'startup'
         startup.write_text('exit 0\n')
         os.environ.update(BASH_ENV=str(startup), ENV=str(startup), ORCA_TOKEN='secret')
-        reason = ex.run_ac(['echo RAN; exit 1'])
+        reason, mutated = ex.run_ac(['echo RAN; exit 1'])
         self.assertIn('\nRAN\n', reason)
         self.assertIn('종료 코드 1', reason)
+        self.assertFalse(mutated)
         for key in ('BASH_ENV', 'ENV', 'ORCA_TOKEN'):
             self.assertNotIn(key, ex.child_env())
 
@@ -1723,10 +1724,16 @@ sys.exit(scenario.get('exit', 0))
 
     def test_ac_separate_shells_timeout_and_head_change(self):
         ex, _, _ = self.fixture()
-        self.assertIsNone(ex.run_ac(['export AC_LOCAL_ONLY=value', 'test -z "$AC_LOCAL_ONLY"']))
+        reason, mutated = ex.run_ac(['export AC_LOCAL_ONLY=value', 'test -z "$AC_LOCAL_ONLY"'])
+        self.assertIsNone(reason)
+        self.assertFalse(mutated)
         ex.ac_timeout = 0.1
-        self.assertIn('timeout', ex.run_ac(['echo AC-TIMEOUT; sleep 60']))
-        self.assertIn('⑦', ex.run_ac(['git commit --allow-empty -qm ac-change']))
+        reason, mutated = ex.run_ac(['echo AC-TIMEOUT; sleep 60'])
+        self.assertIn('timeout', reason)
+        self.assertFalse(mutated)
+        reason, mutated = ex.run_ac(['git commit --allow-empty -qm ac-change'])
+        self.assertIn('⑦', reason)
+        self.assertTrue(mutated)
 
 
 
@@ -2192,6 +2199,14 @@ if mode == 'exit':
         self.assertEqual(ex.load_top_index()['phases'][0]['status'], 'error')
         self.assertIn('step0', self.calls('gh')[0][-1])
         self.assertEqual(ex.load_index()['review']['status'], 'pending')
+
+    def test_baseline_seventh_in_output_keeps_tree(self):
+        ex = self.fixture(ac=["echo '⑦ AC가 작업 트리를 바꿨다 (HEAD 또는 tree 변경)'; false"])
+        with mock.patch.object(ex, 'rollback', wraps=ex.rollback) as rollback:
+            self.assertEqual(ex.review_gate(ex.load_step_specs()), 1)
+        rollback.assert_not_called()
+        self.assertFalse(ex.git('for-each-ref', 'refs/harness/').stdout)
+        self.assertEqual(ex.load_top_index()['phases'][0]['status'], 'error')
 
     def test_baseline_env_and_tree_mutation(self):
         for command in ('echo changed > .env', 'echo changed > src/keep.txt',
