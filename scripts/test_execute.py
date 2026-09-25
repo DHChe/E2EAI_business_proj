@@ -5,6 +5,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import execute
 
 import copy
+import io
 import json
 import os
 import shutil
@@ -416,6 +417,59 @@ class StepSpecTests(HarnessTestCase):
         with mock.patch.object(executor, "git", side_effect=AssertionError("reread")):
             self.assertIs(executor.load_step_specs(), specs)
         self.assertFalse((root / "ran.txt").exists())
+
+    def test_phase_index_rejects_empty_steps(self):
+        self.fake_bin("claude", "print(json.dumps({'result': 'REVIEW_RESULT: passed'}))\n")
+        self.fake_bin("grok", "print(json.dumps({'text': 'REVIEW_RESULT: passed'}))\n")
+        root = self.make_repo(steps=[], files={".claude/commands/review.md": "Review.\n"})
+        executor = self.make_executor(root)
+        with mock.patch("sys.stderr", new_callable=io.StringIO) as stderr:
+            self.assertEqual(executor.run(), 1)
+        self.assertIn("steps", stderr.getvalue())
+        for name in ("codex", "claude", "grok"):
+            self.assertEqual(self.calls(name), [])
+        self.assertNotEqual(executor.load_index()["review"]["status"], "passed")
+        self.assertNotEqual(executor.load_top_index()["phases"][0]["status"], "completed")
+
+    def test_phase_index_rejects_inconsistent_fields(self):
+        for case in ("step_gap", "step_starts_at_one", "duplicate_name",
+                     "phase", "issue", "missing_top_phase"):
+            with self.subTest(case=case):
+                source_steps = [{"name": "alpha"}, {"name": "beta"}]
+                if case == "step_starts_at_one":
+                    source_steps = source_steps[:1]
+                phase_index = {"project": "sample", "phase": PHASE, "issue": ISSUE,
+                               "steps": [{"step": n, "name": step["name"], "status": "pending"}
+                                         for n, step in enumerate(source_steps)]}
+                top_index = {"phases": [{"dir": PHASE, "issue": ISSUE,
+                                         "status": "pending"}]}
+                if case == "step_gap":
+                    phase_index["steps"][1]["step"] = 2
+                    message = "steps[1].step: 1이 필요하다; 실제 2"
+                elif case == "step_starts_at_one":
+                    phase_index["steps"][0]["step"] = 1
+                    message = "steps[0].step: 0이 필요하다; 실제 1"
+                elif case == "duplicate_name":
+                    phase_index["steps"][1]["name"] = "alpha"
+                    message = "중복 'alpha'"
+                elif case == "phase":
+                    phase_index["phase"] = "other-phase"
+                    message = "phase index phase: '7-sample'이 필요하다; 실제 'other-phase'"
+                elif case == "issue":
+                    phase_index["issue"] = 99
+                    message = "phase index issue 99와 같아야 한다; 실제 7"
+                else:
+                    top_index["phases"] = []
+                    message = "dir='7-sample' 항목이 정확히 하나 필요하다; 실제 0개"
+                root = self.make_repo(steps=source_steps, files={
+                    f"phases/{PHASE}/index.json": json.dumps(phase_index),
+                    "phases/index.json": json.dumps(top_index)})
+                executor = self.make_executor(root)
+                with mock.patch("sys.stderr", new_callable=io.StringIO) as stderr:
+                    self.assertEqual(executor.run(), 1)
+                self.assertIn(message, stderr.getvalue())
+                for name in ("codex", "claude", "grok"):
+                    self.assertEqual(self.calls(name), [])
 
     def test_invalid_spec_runs_nothing(self):
         root = self.make_repo(steps=[
@@ -995,9 +1049,10 @@ sys.exit(scenario.get('exit', 0))
         startup = self.temp_dir / 'startup'
         startup.write_text('exit 0\n')
         os.environ.update(BASH_ENV=str(startup), ENV=str(startup), ORCA_TOKEN='secret')
-        reason = ex.run_ac(['echo RAN; exit 1'])
+        reason, mutated = ex.run_ac(['echo RAN; exit 1'])
         self.assertIn('\nRAN\n', reason)
         self.assertIn('종료 코드 1', reason)
+        self.assertFalse(mutated)
         for key in ('BASH_ENV', 'ENV', 'ORCA_TOKEN'):
             self.assertNotIn(key, ex.child_env())
 
@@ -1669,10 +1724,16 @@ sys.exit(scenario.get('exit', 0))
 
     def test_ac_separate_shells_timeout_and_head_change(self):
         ex, _, _ = self.fixture()
-        self.assertIsNone(ex.run_ac(['export AC_LOCAL_ONLY=value', 'test -z "$AC_LOCAL_ONLY"']))
+        reason, mutated = ex.run_ac(['export AC_LOCAL_ONLY=value', 'test -z "$AC_LOCAL_ONLY"'])
+        self.assertIsNone(reason)
+        self.assertFalse(mutated)
         ex.ac_timeout = 0.1
-        self.assertIn('timeout', ex.run_ac(['echo AC-TIMEOUT; sleep 60']))
-        self.assertIn('⑦', ex.run_ac(['git commit --allow-empty -qm ac-change']))
+        reason, mutated = ex.run_ac(['echo AC-TIMEOUT; sleep 60'])
+        self.assertIn('timeout', reason)
+        self.assertFalse(mutated)
+        reason, mutated = ex.run_ac(['git commit --allow-empty -qm ac-change'])
+        self.assertIn('⑦', reason)
+        self.assertTrue(mutated)
 
 
 
@@ -2139,6 +2200,14 @@ if mode == 'exit':
         self.assertIn('step0', self.calls('gh')[0][-1])
         self.assertEqual(ex.load_index()['review']['status'], 'pending')
 
+    def test_baseline_seventh_in_output_keeps_tree(self):
+        ex = self.fixture(ac=["echo '⑦ AC가 작업 트리를 바꿨다 (HEAD 또는 tree 변경)'; false"])
+        with mock.patch.object(ex, 'rollback', wraps=ex.rollback) as rollback:
+            self.assertEqual(ex.review_gate(ex.load_step_specs()), 1)
+        rollback.assert_not_called()
+        self.assertFalse(ex.git('for-each-ref', 'refs/harness/').stdout)
+        self.assertEqual(ex.load_top_index()['phases'][0]['status'], 'error')
+
     def test_baseline_env_and_tree_mutation(self):
         for command in ('echo changed > .env', 'echo changed > src/keep.txt',
                         'git commit --allow-empty -qm ac-mutation'):
@@ -2396,6 +2465,26 @@ if mode == 'exit':
         self.assertTrue(ex.git('for-each-ref', '--format=%(refname)',
                                f'refs/harness/{PHASE}/review-r1-claude/').stdout.strip())
 
+    def test_reviewer_env_restored_new_file_kept(self):
+        ex = self.fixture()
+        (ex.root / '.env').write_bytes(b'original')
+        (ex.root / '.env.old').write_bytes(b'old')
+        self.fake_bin('claude', """
+Path('.env').write_bytes(b'changed')
+Path('.env.old').unlink()
+Path('.env.local').write_bytes(b'new')
+print(json.dumps({'result': 'Review body\\nREVIEW_RESULT: passed'}))
+""")
+
+        self.assertEqual(ex.review_gate(ex.load_step_specs()), 3)
+        self.assertEqual((ex.root / '.env').read_bytes(), b'original')
+        self.assertEqual((ex.root / '.env.old').read_bytes(), b'old')
+        self.assertEqual((ex.root / '.env.local').read_bytes(), b'new')
+        self.assertEqual(ex.load_index()['review']['status'], 'unverifiable')
+        report = (ex.run_dir / 'review-r1-claude.txt').read_text(encoding='utf-8')
+        self.assertIn('.env.local', report)
+        self.assertNotIn('수동 확인', report)
+
 
 class FixLoopTests(HarnessTestCase):
     def fixture(self, reviews=None, blocked=None, push=False):
@@ -2471,6 +2560,20 @@ print(json.dumps({'result' if name == 'claude' else 'text': text}))
         comments = str(self.calls('gh'))
         self.assertIn('claude original report 3', comments)
         self.assertIn('grok original report 3', comments)
+
+    def test_unverifiable_rerun_continues_round(self):
+        ex = self.fixture({'claude': ['missing', 'missing', 'passed']})
+        self.assertEqual(ex.run(), 3)
+        self.assertEqual(ex.load_index()['review']['status'], 'unverifiable')
+        self.assertEqual(ex.load_index()['review']['round'], 1)
+        first_report = ex.run_dir / 'review-r1-claude.txt'
+        first_content = first_report.read_text(encoding='utf-8')
+        ex._lock_file.close()
+        rerun = self.make_executor(ex.root)
+        self.assertEqual(rerun.run(), 0)
+        self.assertEqual(rerun.load_index()['review']['round'], 2)
+        self.assertEqual(first_report.read_text(encoding='utf-8'), first_content)
+        self.assertTrue((rerun.run_dir / 'review-r2-claude.txt').exists())
 
     def test_fix_blocked_exits_2(self):
         ex = self.fixture({'claude': ['failed']}, blocked='fix1')
@@ -2675,7 +2778,8 @@ print(json.dumps({'result' if name == 'claude' else 'text': text}))
         # A new invocation after finalized failure receives a fresh two-fix budget.
         resumed._lock_file.close()
         self.assertEqual(self.make_executor(ex.root).run(), 3)
-        self.assertEqual(self.units(), ['fix1', 'fix2'])
+        self.assertEqual(self.units(), ['fix4', 'fix5'])
+        self.assertEqual(resumed.load_index()['review']['round'], 6)
 
     def test_fix_resume_exhausted_and_missing_reports(self):
         for exhausted in (True, False):

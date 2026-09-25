@@ -1,0 +1,51 @@
+{
+  "project": "E2EAI_business_proj",
+  "phase": "31-harness-quick-fixes",
+  "issue": 31,
+  "steps": [
+    {
+      "step": 0,
+      "name": "phase-index-check",
+      "status": "completed",
+      "summary": "Executor.load_step_specs에 phase index 구조·번호·이름 중복·phase/issue 일치 검사를 추가하고 test_phase_index_rejects_empty_steps와 test_phase_index_rejects_inconsistent_fields를 추가함",
+      "completed_at": "2026-09-25T09:53:38+09:00"
+    },
+    {
+      "step": 1,
+      "name": "reviewer-env-restore",
+      "status": "completed",
+      "summary": "restore_env(keep_new)·restore_env_change(keep_new)·run_reviewer 복원 적용 및 test_reviewer_env_restored_new_file_kept 추가",
+      "completed_at": "2026-09-25T10:00:43+09:00"
+    },
+    {
+      "step": 2,
+      "name": "review-round-continuity",
+      "status": "completed",
+      "summary": "review_gate 일반 진입을 review.round+1로 변경; test_unverifiable_rerun_continues_round 추가 및 test_fix2_completed_crash_resume_has_no_new_budget 수정",
+      "completed_at": "2026-09-25T10:08:45+09:00"
+    },
+    {
+      "step": 3,
+      "name": "ac-tree-flag",
+      "status": "completed",
+      "summary": "run_ac를 (사유, mutated) 반환으로 바꾸고 attempt_unit·run_baseline 호출부를 갱신했으며 test_baseline_seventh_in_output_keeps_tree를 추가했다",
+      "completed_at": "2026-09-25T10:16:12+09:00"
+    },
+    {
+      "step": 4,
+      "name": "harness-docs-sync",
+      "status": "completed",
+      "summary": "PRD 5행의 낡은 포인터를 절 이름으로 고치고 harness 183행의 phase index 검사, 276행의 리뷰어 .env 복원, 285행의 리뷰 라운드 연속성을 명문화함",
+      "completed_at": "2026-09-25T10:18:13+09:00"
+    }
+  ],
+  "created_at": "2026-09-25T09:45:53+09:00",
+  "base_commit": "7a905e98ecf7800c93770c870175671705535306",
+  "review": {
+    "status": "passed",
+    "end_sha": "64e4d9c0f3077bf1cd7450adcdb1fb5d5e0e75a5",
+    "round": 1,
+    "fixes": 0
+  },
+  "completed_at": "2026-09-25T10:42:56+09:00"
+}

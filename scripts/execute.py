@@ -594,28 +594,34 @@ class Executor:
                 and p.name != ".env.example" and os.path.lexists(p)
                 and (p.is_symlink() or not p.is_dir())}
 
-    def restore_env(self, saved: dict) -> None:
-        for name in self.capture_env().keys() | saved.keys():
+    def restore_env(self, saved: dict, *, keep_new: bool = False) -> None:
+        names = saved.keys() if keep_new else self.capture_env().keys() | saved.keys()
+        for name in names:
             self.restore_path(self.root / name, saved.get(name))
 
     def restore_env_change(self, before: dict[str, str], saved: dict,
-                           regular_reason: str, context: str = "") -> str | None:
+                           regular_reason: str, context: str = "", *,
+                           keep_new: bool = False) -> str | None:
         after = self.env_fingerprint()
         if after == before:
             return None
         changed = {name for name in before.keys() | after.keys()
                    if before.get(name) != after.get(name)}
-        self.restore_env(saved)
+        self.restore_env(saved, keep_new=keep_new)
         suffix = f" ({context})" if context else ""
+        created = sorted(name for name in changed if name not in before)
+        kept_new = (f" (리뷰어가 만든 새 파일은 지우지 않았다: 사람이 확인 {created})"
+                    if keep_new and created else "")
         dirs = sorted(name for name in changed if "dir" in (before.get(name), after.get(name)))
         if dirs:
             return (f"④ .env 디렉토리 변경: 수동 복원 필요{suffix} {dirs}. .env·.env.*는 사람이 두는"
                     " 비밀 파일 자리다(가상환경은 .venv). 디렉토리를 확인·정리하고, step error면"
-                    " pending으로 되돌린 뒤 재실행하라")
+                    f" pending으로 되돌린 뒤 재실행하라{kept_new}")
         if any(saved.get(name) and saved[name][0] == "link" for name in changed):
-            return f"④ .env 링크 대상 변경: 수동 복원 필요{suffix}"
-        created = sorted(name for name in changed if name not in before)
+            return f"④ .env 링크 대상 변경: 수동 복원 필요{suffix}{kept_new}"
         if created:
+            if keep_new:
+                return f"{regular_reason}{kept_new}"
             return (f"{regular_reason} (새 파일 제거 {created}. 실제 값 파일은 사람이 만들고"
                     " AI(세션·AC)는 .env.example만 만든다)")
         return regular_reason
@@ -693,7 +699,7 @@ class Executor:
             return None
         return result
 
-    def run_ac(self, lines: Sequence[str]) -> str | None:
+    def run_ac(self, lines: Sequence[str]) -> tuple[str | None, bool]:
         before = self.head()
         tree = self.worktree_tree(before)
         failure = None
@@ -703,7 +709,7 @@ class Executor:
             result = self.run_child(["bash", "-o", "pipefail", "-c", line],
                                     env=self.child_env(), timeout=self.ac_timeout)
             if self.git_guard_failed(git_before):
-                return "④ Git 설정 변경 감지·복원"
+                return "④ Git 설정 변경 감지·복원", False
             if result.timed_out or result.returncode != 0:
                 code = "timeout" if result.timed_out else f"종료 코드 {result.returncode}"
                 failure = f"⑥ AC 실패: {line}\n{code}\n{(result.stdout + result.stderr)[-2000:]}"
@@ -711,8 +717,8 @@ class Executor:
         after = self.head()
         if after != before or self.worktree_tree(after) != tree:
             mutation = "⑦ AC가 작업 트리를 바꿨다 (HEAD 또는 tree 변경)"
-            return f"{failure}\n{mutation}" if failure else mutation
-        return failure
+            return (f"{failure}\n{mutation}" if failure else mutation), True
+        return failure, False
 
     def attempt_unit(self, unit: str, task_text: str, allowed: Sequence[str],
                      ac: Sequence[str], *, start_k: int = 1) -> AttemptOutcome:
@@ -792,7 +798,7 @@ class Executor:
                     return AttemptOutcome("error", reason=(
                         f"⑤ 허용 경로 밖 새 무시 경로: 수동 정리 필요 {sorted(new_ignored)}"), attempts=k)
                 else:
-                    failure = self.run_ac(ac)
+                    failure, _ = self.run_ac(ac)
                     if self.git_guard_failed(git_before) or (failure and failure.startswith("④ Git")):
                         reason = self.git_env_reason(
                             "④ Git 설정 변경 감지·복원", env_before, env_saved,
@@ -980,7 +986,51 @@ class Executor:
             return self.specs
         specs = []
         errors = []
-        for step in self.load_index()["steps"]:
+        index = self.load_index()
+        top_index = self.load_top_index()
+        steps = index.get("steps")
+        steps_valid = isinstance(steps, list) and bool(steps)
+        if not steps_valid:
+            errors.append(f"phase index steps: 비어 있지 않은 list가 필요하다; 실제 {steps!r}")
+        else:
+            names = []
+            for position, step in enumerate(steps):
+                if not isinstance(step, dict):
+                    errors.append(f"phase index steps[{position}]: 객체가 필요하다; 실제 {step!r}")
+                    steps_valid = False
+                    continue
+                number = step.get("step")
+                if type(number) is not int or number != position:
+                    errors.append(f"phase index steps[{position}].step: {position}이 필요하다; "
+                                  f"실제 {number!r}")
+                    steps_valid = False
+                name = step.get("name")
+                if name is None:
+                    errors.append(f"phase index steps[{position}].name: 이름이 필요하다; "
+                                  f"실제 {name!r}")
+                    steps_valid = False
+                elif name in names:
+                    errors.append(f"phase index steps[{position}].name: 고유한 이름이 필요하다; "
+                                  f"중복 {name!r}")
+                    steps_valid = False
+                else:
+                    names.append(name)
+
+        if index.get("phase") != self.phase_dir:
+            errors.append(f"phase index phase: {self.phase_dir!r}이 필요하다; "
+                          f"실제 {index.get('phase')!r}")
+        phases = top_index.get("phases")
+        matches = ([phase for phase in phases if isinstance(phase, dict)
+                    and phase.get("dir") == self.phase_dir]
+                   if isinstance(phases, list) else [])
+        if len(matches) != 1:
+            errors.append(f"phases/index.json phases: dir={self.phase_dir!r} 항목이 정확히 "
+                          f"하나 필요하다; 실제 {len(matches)}개")
+        elif matches[0].get("issue") != index.get("issue"):
+            errors.append(f"phases/index.json issue: phase index issue "
+                          f"{index.get('issue')!r}와 같아야 한다; 실제 {matches[0].get('issue')!r}")
+
+        for step in steps if steps_valid else []:
             path = f"phases/{self.phase_dir}/step{step['step']}.md"
             result = self.git("show", f"HEAD:{path}", check=False)
             if result.returncode:
@@ -1252,6 +1302,7 @@ class Executor:
                     or self.head() != end_sha or self.git("status", "--porcelain").stdout):
                 raise HarnessExit(EXIT_ERROR, "리뷰 실행 전 브랜치/HEAD/작업 트리 불일치")
             fingerprint = self.env_fingerprint()
+            env_saved = self.capture_env()
             git_before = self.capture_git_guard()
             try:
                 self._guard_pending = git_before
@@ -1275,16 +1326,23 @@ class Executor:
             if self.git_guard_failed(git_before):
                 terminal = True
                 reasons.append("Git 설정 변경 감지·복원")
+            env_changed = self.env_fingerprint() != fingerprint
+            env_reason = self.restore_env_change(
+                fingerprint, env_saved, "④ 리뷰어 .env 변경 감지·복원", "리뷰어",
+                keep_new=True)
+            if env_reason:
+                terminal = True
+                reasons.append(env_reason)
             branch = self.git("symbolic-ref", "-q", "HEAD", check=False)
             if branch.returncode or branch.stdout.decode().strip() != f"refs/heads/{self.branch}":
                 ref = self.snapshot(unit, 1, end_sha)
                 branch_error = f"리뷰어가 브랜치를 바꿨다: {ref}"
                 reasons.append(branch_error)
             elif (self.head() != end_sha or bool(self.git("status", "--porcelain").stdout)
-                  or self.env_fingerprint() != fingerprint):
+                  or env_changed):
                 ref = self.rollback(unit, 1, end_sha)
                 terminal = True
-                reasons.append(f"리뷰어가 작업 트리 또는 .env를 바꿔 되돌림: {ref} (.env는 수동 확인)")
+                reasons.append(f"리뷰어가 작업 트리 또는 .env를 바꿔 되돌림: {ref}")
             if child.timed_out:
                 reasons.append("리뷰어 timeout")
             if child.returncode != 0:
@@ -1312,13 +1370,13 @@ class Executor:
         env_saved = self.capture_env()
         git_before = self.capture_git_guard()
         for spec in sorted(specs, key=lambda item: item.step):
-            failure = self.run_ac(spec.ac)
+            failure, mutated = self.run_ac(spec.ac)
             if self.git_guard_failed(git_before) or (failure and failure.startswith("④ Git")):
                 reason = self.git_env_reason("④ 기준선 Git 설정 변경 감지·복원", env_before, env_saved,
                                              "④ 기준선 .env 지문 변경: 복원됨", "기준선")
                 self.rollback(f"baseline-step{spec.step}", 1, end_sha)
                 return reason
-            if failure and "⑦" in failure:
+            if mutated:
                 self.rollback(f"baseline-step{spec.step}", 1, end_sha)
             env_reason = self.restore_env_change(
                 env_before, env_saved, "④ 기준선 .env 지문 변경: 복원됨", "기준선")
@@ -1388,7 +1446,7 @@ class Executor:
         if (any(step["status"] != "completed" for step in data["steps"])
                 or data.get("review", {}).get("status") == "passed"):
             raise HarnessExit(EXIT_ERROR, "리뷰 관문 진입 조건 불일치")
-        round_no, fixes_used, start_k = 1, data["review"].get("fixes", 0), 1
+        round_no, fixes_used, start_k = data["review"]["round"] + 1, data["review"].get("fixes", 0), 1
         if self.resume and re.fullmatch(r"fix[1-9]\d*", self.resume["unit"]):
             round_no = max(int(self.resume["unit"][3:]), data["review"]["round"])
             start_k = self.resume["next_k"]
@@ -1396,8 +1454,6 @@ class Executor:
             if start_k > MAX_ATTEMPTS:
                 return self.finish_fix(round_no, AttemptOutcome("error", reason="재개 시 시도 소진"))
             # Reports in .run are untrusted. Re-review, preserving the fix/attempt budget.
-        elif data["review"]["status"] == "pending" or fixes_used:
-            round_no = data["review"]["round"] + 1
         while True:
             end_sha = self.head()
             failure = self.run_baseline(specs)

@@ -180,7 +180,7 @@ step AC는 phase 끝까지 참이어야 한다.
 3. phase index의 변경은 위 복구 절의 step 재개 또는 리뷰 blocked 재개만 허용한다. 코드상 오류·시각 필드를 그대로 두는 것도 허용하지만, 복구할 때는 지운다. 두 종류의 재개를 한 diff에 합치거나 다른 필드를 바꾸지 않는다. `review.fixes`의 누락과 0은 같은 값으로 비교하며 완료한 수정 수는 사람이 바꾸지 않는다.
 4. 마지막 비-pending step이 `error`면 exit 1, `blocked`면 exit 2다. `review.status=blocked`도 exit 2다. 허용된 phase 파일 변경은 prepare chore로 커밋한다.
 5. 최초 실행(`created_at` 없음)이면 `created_at`·`base_commit`(prepare 커밋 전 HEAD)·기본 `review`를 기록하고 첫 시도 전에 커밋한다. 상위 index의 해당 phase가 `error`/`blocked`면 실행기가 `pending`으로 돌린다.
-6. HEAD에 커밋된 모든 step 파일의 허용 경로와 AC를 검증해 고정한다. 하나라도 잘못되면 오류를 모아 exit 1이며, 구현 세션과 AC 본 실행을 시작하지 않는다. 앞선 복구·prepare는 이미 수행됐을 수 있다.
+6. HEAD에 커밋된 모든 step 파일의 허용 경로와 AC를 검증해 고정한다. phase index의 `steps`가 비었거나, `step`이 0부터 1씩 늘지 않거나, `name`이 겹치거나, `phase`가 디렉토리명과 다르거나, `phases/index.json`에 그 디렉토리 항목이 정확히 하나가 아니거나 `issue`가 그 항목과 다른 것도 위반이다. 하나라도 잘못되면 오류를 모아 exit 1이며, 구현 세션과 AC 본 실행을 시작하지 않는다. 앞선 복구·prepare는 이미 수행됐을 수 있다.
 7. completed step을 건너뛰고 pending step 실행 → 리뷰 관문·수정 루프 → 선택 push 순서로 진행한다.
 
 - 가드레일 주입 — `AGENTS.md`, `CONTEXT.md`, `docs/adr/*.md`, `docs/PRD.md`를 step 프롬프트에 포함
@@ -273,7 +273,7 @@ Claude와 Grok을 순차로 실행한다. Claude는 `/review <base_commit>..<end
 Grok은 `review.md` 본문(frontmatter 제외)의 `$ARGUMENTS`를 범위로 치환한 것과 계약문을 받는다.
 계약문은 파일 변경·커밋·push·gh 쓰기·외부 게시·원격 DB 변경을 금지한다.
 
-리뷰어 전후 브랜치·HEAD·porcelain·루트 `.env` 및 위 Git 설정 비교·복원 규칙을 적용한다. Git 설정 복원 성공이면 `[executor] Git 설정 변경 감지·복원`을 붙이고 그 리뷰어를 unverifiable로 판정한다. 이후 브랜치·HEAD·porcelain 검사와 필요한 스냅샷·롤백을 수행하고 두 index의 error/unverifiable 기록을 chore 커밋해 exit 3이다. 복원 실패는 앞 절의 guard 파일 규칙대로 두 index를 쓰지 않고 exit 1이다.
+리뷰어 전후 브랜치·HEAD·porcelain·루트 `.env` 및 위 Git 설정 비교·복원 규칙을 적용한다. `.env`는 바뀐 값과 지워진 파일만 보관본으로 되돌리고, 리뷰어가 새로 만든 `.env*`는 지우지 않은 채 이름을 사유에 남기며 그 리뷰어를 unverifiable로 판정한다. Git 설정 복원 성공이면 `[executor] Git 설정 변경 감지·복원`을 붙이고 그 리뷰어를 unverifiable로 판정한다. 이후 브랜치·HEAD·porcelain 검사와 필요한 스냅샷·롤백을 수행하고 두 index의 error/unverifiable 기록을 chore 커밋해 exit 3이다. 복원 실패는 앞 절의 guard 파일 규칙대로 두 index를 쓰지 않고 exit 1이다.
 브랜치가 바뀌면 스냅샷만 남기고 되돌리지 않은 채 exit 1이다.
 나머지 변경은 스냅샷 뒤 롤백하고 그 리뷰어를 `unverifiable`로 판정한다.
 정상 종료와 올바른 JSON 결과(Claude `result`, Grok `text` 필드), 마지막 비어 있지 않은 줄의
@@ -282,7 +282,7 @@ Grok은 `review.md` 본문(frontmatter 제외)의 `$ARGUMENTS`를 범위로 치�
 원문은 반환 시 메모리에 보관해 Issue 댓글·수정 프롬프트에 쓴다. `.run/review-r{r}-{claude|grok}.txt`는 사람용 기록으로만 쓰고 되읽지 않는다. 되돌림(스냅샷 ref 포함)·판정 누락·timeout·비정상 종료 사유는 `[executor] ...`로 원문 끝과 stderr에 남기므로 댓글에도 포함된다.
 
 둘 다 passed면 phase completed, 하나라도 unverifiable이면 수정 없이 phase error·exit 3이다.
-그 밖의 failed에서만 수정 루프를 돌린다. 최대 2회 수정하며 unit은 `fix{r}`다. 남은 예산은 `MAX_FIX_ROUNDS - review.fixes`이고 `review.round`에서 추론하지 않는다. 수정 blocked를 풀고 재개하면 완료한 수정 수만 소모로 센다. spawn 전 실패와 blocked는 소모하지 않으며 이전 완료분도 지우지 않는다. 관문 확정 때 fixes를 0으로 되돌린 뒤의 새 기동만 새 예산을 받으며, fix 도중 크래시 재개나 fix 완료 뒤 pending 재개는 새 예산을 받지 않는다.
+그 밖의 failed에서만 수정 루프를 돌린다. 최대 2회 수정하며 unit은 `fix{r}`다. 남은 예산은 `MAX_FIX_ROUNDS - review.fixes`이고 `review.round`에서 추론하지 않는다. 수정 blocked를 풀고 재개하면 완료한 수정 수만 소모로 센다. spawn 전 실패와 blocked는 소모하지 않으며 이전 완료분도 지우지 않는다. 관문 확정 때 fixes를 0으로 되돌린 뒤의 새 기동만 새 예산을 받으며, fix 도중 크래시 재개나 fix 완료 뒤 pending 재개는 새 예산을 받지 않는다. 라운드 번호는 새 예산을 받은 기동에서도 `review.round + 1`부터 이어 센다.
 전 step 허용 경로의 합집합과 전 step AC를 쓰고 판정·3회 시도·롤백 규칙은 step과 같다.
 수정 통과 → fix 커밋 → 재리뷰다. 2회 수정 뒤에도 failed거나 수정 시도를 소진하면
 `review.status=failed`, phase error, exit 3이다. 수정 blocked면 review와 phase를 blocked로 확정하고 exit 2다.
